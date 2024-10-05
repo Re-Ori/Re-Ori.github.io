@@ -1,0 +1,92 @@
+{
+    "blogs": [
+        {
+            "id": "update-log",
+            "title": "更新日志",
+            "date": "2024-08-31",
+            "special": {
+                "tag": [
+                    "UPDATE LOG",
+                    "#399fff",
+                    "#ffffff"
+                ],
+                "collection": "json/update-log.json"
+            }
+        },
+        {
+            "id": "c++",
+            "title": "C++ 基础(待更新)",
+            "date": "2024-09-16",
+            "special": {
+                "collection": "json/lang.json"
+            }
+        },
+        {
+            "id": "1",
+            "title": "TEST01",
+            "preview": "基于markdown的粗体测试与斜体测试",
+            "coverImage": "img/1.jpg",
+            "date": "2024-08-29",
+            "content": [
+                "# 一级标题",
+                "## 二级标题",
+                "### 三级标题",
+                "**粗体测试**",
+                "*斜体测试*"
+            ]
+        },
+        {
+            "id": "2",
+            "title": "TEST02",
+            "preview": "在TEST01的基础上增加内容",
+            "coverImage": "img/2.jpeg",
+            "date": "2024-08-30",
+            "content": [
+                "# markdown测试",
+                "## 字体测试",
+                "### 粗体测试",
+                "**粗体测试**",
+                "### 斜体测试",
+                "*斜体测试*",
+                "## 链接测试",
+                "<a href='blog.html?id=1'>TEST01</a>"
+            ]
+        },
+        {
+            "id": "3",
+            "title": "UklDS1JPTEw=",
+            "date": "2024-08-30",
+            "content": [
+                "ID->RICK=???"
+            ]
+        },
+        {
+            "id": "file-share-test",
+            "title": "文件分享测试",
+            "preview": "TEST2的封面 Password:test2fm",
+            "date": "2024-08-31",
+            "content": [
+                "<a href='img/2.jpeg'>TEST2的封面.jpeg</a>"
+            ],
+            "special": {
+                "password": "test2fm",
+                "tag": [
+                    "FILE",
+                    "#ffb13c",
+                    "#ffffff"
+                ]
+            }
+        },
+        {
+            "id": "RICK",
+            "title": "RICKROLL",
+            "date": "RICK-RO-LL",
+            "content": [
+                "<iframe src='//player.bilibili.com/player.html?isOutside=true&aid=80433022&bvid=BV1GJ411x7h7&cid=137649199&p=1' scrolling='no' border='0' frameborder='no' framespacing='0' allowfullscreen='true'></iframe>"
+            ],
+            "special": {
+                "hidden": true
+            }
+        }
+    ]
+}

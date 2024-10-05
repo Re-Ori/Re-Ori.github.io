@@ -1,0 +1,101 @@
+body {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.container {
+    display: flex;
+    height: 100vh;
+}
+
+.header {
+    z-index: 99;
+    /*保持显示在最上方*/
+    width: 100%;
+    background-color: #e9f6ffb3;
+    border: 1px solid #c6e8ff;
+    position: fixed;
+    height: 4vh;
+    backdrop-filter: blur(20px);
+}
+
+.left-panel {
+    width: 26%;
+    padding: 2%;
+    background-color: #f4f4f4;
+    border-right: 1px solid #ddd;
+    margin-top: 4vh;
+    position: fixed;
+    height: 96vh;
+    overflow: hidden;
+}
+
+.right-panel {
+    width: 70%;
+    padding: 2%;
+    margin-top: 4vh;
+    margin-left: 30%;
+}
+
+h1,
+h2,
+h3 {
+    margin-top: 0;
+}
+
+p {
+    margin: 10px 0;
+}
+
+.blog-post {
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    padding: 10px;
+    margin-bottom: 10px;
+    background-position: 0px;
+    transition: 0.3s ease;
+}
+
+.blog-post:hover {
+    border: 1px solid #399fff;
+    background: linear-gradient(-45deg, #fcfcfc 25%, #d6e5f3 25%, #d6e5f3 50%, #fcfcfc 50%, #fcfcfc 75%, #d6e5f3 75%);
+    background-position: 5px;
+    background-size: 40px 40px;
+    /* 调整条纹宽度、高度 */
+    padding-left: 15px;
+}
+
+.blog-post:hover h3 {
+    color: #399fff;
+}
+
+a {
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    color: #399fff;
+    transition: 0.3s ease;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+
+a:hover {
+    border: 1px solid #000000;
+    background-color: #399fff;
+    color: #ffffff;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+#refresh-btn:hover {
+    /* 刷新一言按钮 */
+    color: #399fff;
+    transition: 0.3s ease;
+}
+
+#sentence:hover {
+    /* 一言 */
+    color: #399fff;
+    transition: 0.3s ease;
+}

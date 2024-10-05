@@ -1,0 +1,71 @@
+{
+    "blogs": [
+        {
+            "id": "20240925-005",
+            "title": "VER 0.0.5",
+            "coverImage": "img/update/up005.svg",
+            "preview": "搜索优化",
+            "date": "2024-09-25",
+            "content": [
+                "<img src='img/update/up005.svg'>",
+                "搜索blog时字母不区分大小写",
+                "当在搜索框中键入时如果按下[Enter]则直接进入搜索"
+            ]
+        },
+        {
+            "id": "20240916-004",
+            "title": "VER 0.0.4",
+            "coverImage": "img/update/up004.svg",
+            "preview": "追加功能",
+            "date": "2024-09-17",
+            "content": [
+                "<img src='img/update/up004.svg'>",
+                "添加blog组功能,使用方法为添加special标签,key=\"collection\",value=[json文件地址]",
+                "更改搜索blog逻辑:仅筛选当前blog组的内容",
+                "现在支持点击一言时复制到剪切板",
+                "主页左下角版本号点击时会跳转到<a href='blog.html?json=json/update-log.json&id=[COUNT]0'>最新的更新日志</a>,",
+                "当id为'[COUNT]+数字x'时,则跳转到此blog集的第x项(下标从0开始),例如<a href='blog.html?json=json/update-log.json&id=[COUNT]0'>blog.html?json=json/update-log.json&id=[COUNT]0</a>,但此功能不支持访问blog集"
+            ]
+        },
+        {
+            "id": "20240916-003",
+            "title": "VER 0.0.3",
+            "coverImage": "img/update/up003.svg",
+            "preview": "优化功能",
+            "date": "2024-09-16",
+            "content": [
+                "<img src='img/update/up003.svg'>",
+                "优化选择帖子动画",
+                "更改网站图标为<img src='img/icon.svg' height='16px'>",
+                "一言功能显示句子id"
+            ]
+        },
+        {
+            "id": "20240902-002",
+            "title": "VER 0.0.2",
+            "coverImage": "img/update/up002.svg",
+            "preview": "追加功能",
+            "date": "2024-09-12",
+            "content": [
+                "<img src='img/update/up002.svg'>",
+                "搜索blog功能",
+                "筛选标题、预览中出现关键词的帖子(英文区分大小写)",
+                "支持高亮显示出现的关键词"
+            ]
+        },
+        {
+            "id": "20240901-001",
+            "title": "VER 0.0.1",
+            "coverImage": "img/update/up001.svg",
+            "preview": "基础功能",
+            "date": "2024-09-01",
+            "content": [
+                "<img src='img/update/up001.svg'>",
+                "读取并显示blog的模块(script.js,blog.js)",
+                "blog新增speical标签:tag(右上角标签),hidden(不在列表中显示),password(需要秘钥)",
+                "新增6条blog(包括1个隐藏blog)",
+                "新增一言(sentence.js,<a href='json/sentence.json'>sentence.json</a>)"
+            ]
+        }
+    ]
+}
