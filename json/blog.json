@@ -15,8 +15,8 @@
         },
         {
             "id": "c++",
-            "title": "C++ 基础(待更新)",
-            "date": "2024-09-16",
+            "title": "C++ 语言基础",
+            "date": "2024-10-06",
             "special": {
                 "collection": "json/lang.json"
             }

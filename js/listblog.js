@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+    console.log("%c OI Wiki %c e0b02ba7c %c", "background:#35495e ; padding: 1px; border-radius: 3px 0 0 3px;  color: #fff", "background:#41b883 ; padding: 1px; border-radius: 0 3px 3px 0;  color: #fff", "background:transparent")
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('json')) {
         var json_url = urlParams.get('json');
@@ -60,27 +61,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (("coverImage" in blog) && ("preview" in blog)) {
                     blogPost.innerHTML = `
-                        <h3>${blog.title}</h3>
-                        <p style="color:#444444;">${blog.preview}</p>
+                        <h3 style="margin-top:0;">${blog.title}</h3>
+                        <p style="color:#444444;margin: 10px 0;">${blog.preview}</p>
                         <img src="${blog.coverImage}" alt="${blog.coverImage}" style="max-height: 200px; min-width:100px; height: auto;"/>
-                        <p style="color:#999999;">${blog.date}</p>
+                        <p style="color:#999999;margin: 10px 0;">${blog.date}</p>
                     `;
                 } if (!("coverImage" in blog) && ("preview" in blog)) {
                     blogPost.innerHTML = `
-                        <h3>${blog.title}</h3>
+                        <h3 style="margin-top:0;">${blog.title}</h3>
                         <div style="color:#444444;">${blog.preview}</div>
-                        <p style="color:#999999;">${blog.date}</p>
+                        <p style="color:#999999;margin: 10px 0;">${blog.date}</p>
                     `;
                 } if (("coverImage" in blog) && !("preview" in blog)) {
                     blogPost.innerHTML = `
-                        <h3>${blog.title}</h3>
+                        <h3 style="margin-top:0;">${blog.title}</h3>
                         <img src="${blog.coverImage}" alt="${blog.coverImage}" style="max-height: 200px; min-width:100px; height: auto;"/>
-                        <p style="color:#999999;">${blog.date}</p>
+                        <p style="color:#999999;margin: 10px 0;">${blog.date}</p>
                     `;
                 } if (!("coverImage" in blog) && !("preview" in blog)) {
                     blogPost.innerHTML = `
-                        <h3>${blog.title}</h3>
-                        <p style="color:#999999;">${blog.date}</p>
+                        <h3 style="margin-top:0;">${blog.title}</h3>
+                        <p style="color:#999999;margin: 10px 0;">${blog.date}</p>
                     `;
                 }
 

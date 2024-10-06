@@ -38,16 +38,6 @@ body {
     margin-left: 30%;
 }
 
-h1,
-h2,
-h3 {
-    margin-top: 0;
-}
-
-p {
-    margin: 10px 0;
-}
-
 .blog-post {
     cursor: pointer;
     border-radius: 4px;

@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (blogId.slice(0, 7) == "[COUNT]") {
                 // 当输入id为"[COUNT]+数字x"时,则跳转到此blog集的第x项
                 var blog = data.blogs[Number(blogId.slice(7,))];
-            }else{
+            } else {
                 var blog = data.blogs.find(b => b.id === blogId);
             }
             const blogDetail = document.getElementById('blog-detail');
@@ -41,16 +41,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const converter = new showdown.Converter()
-
                 blogDetail.innerHTML = `
-                        <h2>${blog.title}</h2>
-                        <p style="color:#ddd;">${blog.date}</p>
-                    `;
+                    <h2>${blog.title}</h2>
+                    <p style="color:#ddd;">${blog.date}</p>
+                `;
 
-                blog.content.forEach(line => {
-                    const htmlLine = converter.makeHtml(line);
-                    blogDetail.innerHTML += `\n${htmlLine}`;
-                });
+                if ("mdcontent" in blog) {
+                    console.log(blog.mdcontent);
+                    fetch(blog.mdcontent)
+                        .then(response => response.text())
+                        .then(md => {
+                            const htmlMd = converter.makeHtml(md);
+                            blogDetail.innerHTML = `${htmlMd}`;
+                        });
+                } else {
+                    blog.content.forEach(line => {
+                        const htmlLine = converter.makeHtml(line);
+                        blogDetail.innerHTML += `\n${htmlLine}`;
+                    });
+                }
+
             } else {
                 blogDetail.innerHTML = '<h1>404 NOT FOUND</h1><p>BLOG内容未找到。</p><a href="index.html">返回主页</a></span>';
             }

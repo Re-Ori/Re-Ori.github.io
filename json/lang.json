@@ -1,0 +1,22 @@
+{
+    "blogs": [
+        {
+            "id": "helloworld",
+            "title": "Hello,world!",
+            "date": "2024-10-06",
+            "mdcontent": "md/lang/helloworld.md"
+        },
+        {
+            "id": "basic",
+            "title": "C++ 语法基础",
+            "date": "2024-10-06",
+            "mdcontent": "md/lang/basic.md"
+        },
+        {
+            "id": "var",
+            "title": "变量",
+            "date": "2024-10-06",
+            "mdcontent": "md/lang/var.md"
+        }
+    ]
+}

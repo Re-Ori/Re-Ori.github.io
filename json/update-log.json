@@ -1,6 +1,19 @@
 {
     "blogs": [
         {
+            "id": "20240925-006",
+            "title": "VER 0.0.6",
+            "coverImage": "img/update/up006.svg",
+            "preview": "搜索优化",
+            "date": "2024-10-06",
+            "content": [
+                "<img src='img/update/up006.svg'>",
+                "现在blog中可选择[mdcontent]参数此时[content]参数失效",
+                "mdcontent中存储目标的md文件路径,此时加载md文件而不是content中的内容,适合存放较大的blog",
+                "在[C++ 语言基础](/index.html?json=json/lang.json)中添加了3条blog,均使用md文件读取"
+            ]
+        },
+        {
             "id": "20240925-005",
             "title": "VER 0.0.5",
             "coverImage": "img/update/up005.svg",
