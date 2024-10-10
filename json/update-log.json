@@ -11,7 +11,8 @@
                 "现在blog中可选择[mdcontent]参数此时[content]参数失效",
                 "mdcontent中存储目标的md文件路径,此时加载md文件而不是content中的内容,适合存放较大的blog",
                 "在[C++ 语言基础](/index.html?json=json/lang.json)中添加了3条blog,均使用md文件读取",
-                "优化部分blog框右上角tag的显示,鼠标悬停在blog框内时,发生向左8px的位移和颜色变化"
+                "<br>优化部分blog框右上角tag的显示,鼠标悬停在blog框内时,发生向左8px的位移和颜色变化",
+                "<br>添加[accentcolor]和[bgcolor]的special标签,<br>使用时将替换blog框样式:鼠标悬停时blog边框颜色为[accentcolor],标题颜色为[accentcolor],背景条纹颜色为[bgcolor]<br>在0.0.6版本中实装在[C++ 语言基础]"
             ]
         },
         {

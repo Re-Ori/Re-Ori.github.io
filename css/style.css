@@ -49,8 +49,8 @@ body {
 }
 
 .blog-post:hover {
-    border: 1px solid #399fff;
-    background: linear-gradient(-45deg, #fcfcfc 25%, #d6e5f3 25%, #d6e5f3 50%, #fcfcfc 50%, #fcfcfc 75%, #d6e5f3 75%);
+    border: 1px solid var(--accentcolor);
+    background: linear-gradient(-45deg, #fcfcfc 25%, var(--bgcolor) 25%, var(--bgcolor) 50%, #fcfcfc 50%, #fcfcfc 75%, var(--bgcolor) 75%);
     background-position: 5px;
     background-size: 40px 40px;
     /* 调整条纹宽度、高度 */
@@ -58,7 +58,7 @@ body {
 }
 
 .blog-post:hover h3 {
-    color: #399fff;
+    color: var(--accentcolor);
 }
 
 .blog-post .tag {
@@ -68,16 +68,16 @@ body {
     padding: 4px;
     border-radius: 4px;
     z-index: 10;
-    background-color: var(--bgcolor);
-    color: var(--textcolor);
-    border: 1px solid var(--bgcolor);
+    background-color: var(--tagbgcolor);
+    color: var(--tagtextcolor);
+    border: 1px solid var(--tagbgcolor);
     transition: 0.3s ease;
 }
 
 .blog-post:hover .tag {
     right: 4px;
-    background-color: var(--textcolor);
-    color: var(--bgcolor);
+    background-color: var(--tagtextcolor);
+    color: var(--tagbgcolor);
 }
 
 a {

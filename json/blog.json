@@ -23,6 +23,8 @@
                     "#107c41",
                     "#ffffff"
                 ],
+                "accentcolor": "#107c41",
+                "bgcolor": "#c1dfcf",
                 "collection": "json/lang.json"
             }
         },

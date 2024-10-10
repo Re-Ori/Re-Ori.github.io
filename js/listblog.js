@@ -85,6 +85,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                 }
 
+                blogPost.style.setProperty('--accentcolor', "#399fff");
+                blogPost.style.setProperty('--bgcolor', "#d6e5f3");
                 if (("special" in blog)) {
                     if ("hidden" in blog.special) {
                         if (blog.special.hidden) {
@@ -99,10 +101,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         const tag = document.createElement('span');
                         tag.classList.add('tag');
                         tag.textContent = blog.special.tag[0];
-                        tag.style.setProperty('--bgcolor', blog.special.tag[1]);
-                        tag.style.setProperty('--textcolor', blog.special.tag[2]);
+                        tag.style.setProperty('--tagbgcolor', blog.special.tag[1]);
+                        tag.style.setProperty('--tagtextcolor', blog.special.tag[2]);
                         blogPost.style.position = 'relative';
                         blogPost.appendChild(tag);
+                    }
+                    if ("accentcolor" in blog.special) {
+                        blogPost.style.setProperty('--accentcolor', blog.special.accentcolor);
+                    }
+                    if ("bgcolor" in blog.special) {
+                        blogPost.style.setProperty('--bgcolor', blog.special.bgcolor);
                     }
                     if ("collection" in blog.special) {
                         blogPost.addEventListener('click', () => {
