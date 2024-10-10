@@ -23,7 +23,7 @@ body {
 .left-panel {
     width: 26%;
     padding: 2%;
-    background-color: #f4f4f4;
+    background-color: #f0f0f0;
     border-right: 1px solid #ddd;
     margin-top: 4vh;
     position: fixed;
@@ -59,6 +59,25 @@ body {
 
 .blog-post:hover h3 {
     color: #399fff;
+}
+
+.blog-post .tag {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    padding: 4px;
+    border-radius: 4px;
+    z-index: 10;
+    background-color: var(--bgcolor);
+    color: var(--textcolor);
+    border: 1px solid var(--bgcolor);
+    transition: 0.3s ease;
+}
+
+.blog-post:hover .tag {
+    right: 4px;
+    background-color: var(--textcolor);
+    color: var(--bgcolor);
 }
 
 a {

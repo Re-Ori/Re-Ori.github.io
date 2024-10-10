@@ -18,6 +18,11 @@
             "title": "C++ 语言基础",
             "date": "2024-10-06",
             "special": {
+                "tag": [
+                    "WIKI",
+                    "#107c41",
+                    "#ffffff"
+                ],
                 "collection": "json/lang.json"
             }
         },

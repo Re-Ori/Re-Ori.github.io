@@ -97,15 +97,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     if ("tag" in blog.special) {
                         const tag = document.createElement('span');
+                        tag.classList.add('tag');
                         tag.textContent = blog.special.tag[0];
-                        tag.style.position = 'absolute';
-                        tag.style.top = '-4px';
-                        tag.style.right = '-4px';
-                        tag.style.backgroundColor = blog.special.tag[1];
-                        tag.style.color = blog.special.tag[2];
-                        tag.style.padding = '4px';
-                        tag.style.borderRadius = '4px';
-                        tag.style.zIndex = '10';
+                        tag.style.setProperty('--bgcolor', blog.special.tag[1]);
+                        tag.style.setProperty('--textcolor', blog.special.tag[2]);
                         blogPost.style.position = 'relative';
                         blogPost.appendChild(tag);
                     }
