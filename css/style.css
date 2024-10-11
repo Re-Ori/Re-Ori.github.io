@@ -39,6 +39,7 @@ body {
 }
 
 .blog-post {
+    position: relative;
     cursor: pointer;
     border-radius: 4px;
     border: 1px solid #ddd;
@@ -59,6 +60,32 @@ body {
 
 .blog-post:hover h3 {
     color: var(--accentcolor);
+}
+
+.blog-post .goto {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    height: 8px;
+    width: 8px;
+    border-radius: 8px;
+    z-index: 10;
+    font-size: 1px;
+    background-color: var(--accentcolor);
+    /* border: 1px solid var(--bgcolor); */
+    color: #ffffff00;
+    transition: 0.3s ease;
+}
+
+.blog-post:hover .goto {
+    color: var(--accentcolor);
+    background-color: var(--bgcolor);
+    /* border: 1px solid var(--accentcolor); */
+    border-radius: 4px;
+    padding: 4px;
+    font-size: 16px;
+    height: 21px;
+    width: 64px;
 }
 
 .blog-post .tag {

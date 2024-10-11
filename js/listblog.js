@@ -85,6 +85,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                 }
 
+                // blog框右下角提示
+                const goto = document.createElement('span');
+                goto.classList.add('goto');
+                goto.textContent = "点击查看";
+                blogPost.appendChild(goto);
+
                 blogPost.style.setProperty('--accentcolor', "#399fff");
                 blogPost.style.setProperty('--bgcolor', "#d6e5f3");
                 if (("special" in blog)) {
@@ -103,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         tag.textContent = blog.special.tag[0];
                         tag.style.setProperty('--tagbgcolor', blog.special.tag[1]);
                         tag.style.setProperty('--tagtextcolor', blog.special.tag[2]);
-                        blogPost.style.position = 'relative';
+                        
                         blogPost.appendChild(tag);
                     }
                     if ("accentcolor" in blog.special) {

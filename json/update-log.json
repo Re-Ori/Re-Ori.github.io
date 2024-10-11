@@ -11,8 +11,10 @@
                 "现在blog中可选择[mdcontent]参数此时[content]参数失效",
                 "mdcontent中存储目标的md文件路径,此时加载md文件而不是content中的内容,适合存放较大的blog",
                 "在[C++ 语言基础](/index.html?json=json/lang.json)中添加了3条blog,均使用md文件读取",
-                "<br>优化部分blog框右上角tag的显示,鼠标悬停在blog框内时,发生向左8px的位移和颜色变化",
-                "<br>添加[accentcolor]和[bgcolor]的special标签,<br>使用时将替换blog框样式:鼠标悬停时blog边框颜色为[accentcolor],标题颜色为[accentcolor],背景条纹颜色为[bgcolor]<br>在0.0.6版本中实装在[C++ 语言基础]"
+                "<br>优化部分blog框右上角tag的显示,鼠标悬停在blog框内时,发生向左8px的位移和颜色变化(tag背景颜色和文字颜色交换,颜色依据:[v0.0.1更新日志](/blog.html?json=json/update-log.json&id=20240901-001))",
+                "<br>添加[accentcolor]和[bgcolor]的special标签,<br>使用时将替换blog框样式:鼠标悬停时blog边框颜色为[accentcolor],标题颜色为[accentcolor],背景条纹颜色为[bgcolor]<br>在0.0.6版本中实装在[C++ 语言基础]",
+                "[accentcolor]默认为#399fff,[bgcolor]默认为#d6e5f3",
+                "<br>blog框右下角新增一个小圆点,鼠标悬停在blog框上时展开并显示'点击查看'"
             ]
         },
         {
@@ -77,7 +79,7 @@
             "content": [
                 "<img src='img/update/up001.svg'>",
                 "读取并显示blog的模块(script.js,blog.js)",
-                "blog新增speical标签:tag(右上角标签),hidden(不在列表中显示),password(需要秘钥)",
+                "blog新增speical标签:tag(右上角标签)[内容为三项的列表,第一项为tag内容,第二项为tag背景颜色,第三项为tag内容颜色],hidden(不在列表中显示),password(需要秘钥)",
                 "新增6条blog(包括1个隐藏blog)",
                 "新增一言(sentence.js,<a href='json/sentence.json'>sentence.json</a>)"
             ]
