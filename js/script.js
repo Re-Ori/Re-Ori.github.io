@@ -7,6 +7,24 @@ fetch('config.json')
     })
     .catch(error => console.error('Error loading the JSON file:', error));
 
+// 每0.2s将所有未加载完成的图片添加模糊效果,加载完成的移除效果,持续100次
+var count=100;
+setInterval(() => {
+    const images = document.querySelectorAll('img');
+    images.forEach(image => {
+        if (!image.complete) {
+            image.style.filter = 'blur(5px)';
+        } else {
+            image.style.filter = 'blur(0px)';
+        }
+    });
+    count--;
+    if (count==0) {
+        clearInterval();
+    }
+}, 200);
+
+// 一言
 function loadSentence() {
     fetch('json/sentence.json')
         .then(response => response.json())
@@ -40,15 +58,3 @@ document.getElementById('refresh-btn').addEventListener('click', () => {
 });
 
 loadSentence();
-
-//每0.5s将所有未加载完成的图片添加模糊效果,加载完成的移除效果
-setInterval(() => {
-    const images = document.querySelectorAll('img');
-    images.forEach(image => {
-        if (image.complete) {
-            image.style.filter = 'blur(0px)';
-        } else {
-            image.style.filter = 'blur(5px)';
-        }
-    });
-}, 500);
