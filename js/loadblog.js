@@ -10,8 +10,6 @@ document.addEventListener('DOMContentLoaded', () => {
         var json_url = 'json/blog.json';
     }
 
-    console.log(json_url);
-
     fetch(json_url)
         .then(response => response.json())
         .then(data => {

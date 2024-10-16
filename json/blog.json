@@ -24,7 +24,7 @@
                     "#ffffff"
                 ],
                 "accentcolor": "#107c41",
-                "bgcolor": "#c1dfcf",
+                "bgcolor": "#d7ebe0",
                 "collection": "json/lang.json"
             }
         },
@@ -81,7 +81,9 @@
                     "FILE",
                     "#ffb13c",
                     "#ffffff"
-                ]
+                ],
+                "accentcolor": "#ffb13c",
+                "bgcolor": "#f5e9da"
             }
         },
         {

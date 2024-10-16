@@ -4,7 +4,7 @@
             "id": "20240925-006",
             "title": "VER 0.0.6",
             "coverImage": "img/update/up006.svg",
-            "preview": "blog优化,UI优化",
+            "preview": "blog内容引用逻辑更改,UI优化",
             "date": "2024-10-06",
             "content": [
                 "<img src='img/update/up006.svg'>",
@@ -81,7 +81,9 @@
                 "读取并显示blog的模块(script.js,blog.js)",
                 "blog新增speical标签:tag(右上角标签)[内容为三项的列表,第一项为tag内容,第二项为tag背景颜色,第三项为tag内容颜色],hidden(不在列表中显示),password(需要秘钥)",
                 "新增6条blog(包括1个隐藏blog)",
-                "新增一言(sentence.js,<a href='json/sentence.json'>sentence.json</a>)"
+                "新增一言(sentence.js,<a href='json/sentence.json'>sentence.json</a>)",
+                "确定更新图样式:左侧显示版本号,右侧显示更新内容",
+                "确定更新图颜色:增加功能为蓝色,迭代功能为绿色,修改功能为橙色,修复BUG为红色"
             ]
         }
     ]

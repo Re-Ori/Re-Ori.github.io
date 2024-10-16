@@ -1,10 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("%c Re-Ori %c 2024 %c", "background:#35495e ; padding: 1px; border-radius: 3px 0 0 3px;  color: #fff", "background:#41b883 ; padding: 1px; border-radius: 0 3px 3px 0;  color: #fff", "background:transparent")
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('json')) {
         var json_url = urlParams.get('json');
         const leftPanel = document.getElementsByClassName('left-panel')[0];
-        console.log(leftPanel);
         const back = document.createElement('a');
         back.id = "back";
         back.innerText = "返回";
@@ -109,7 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         tag.textContent = blog.special.tag[0];
                         tag.style.setProperty('--tagbgcolor', blog.special.tag[1]);
                         tag.style.setProperty('--tagtextcolor', blog.special.tag[2]);
-                        
                         blogPost.appendChild(tag);
                     }
                     if ("accentcolor" in blog.special) {
@@ -119,6 +116,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         blogPost.style.setProperty('--bgcolor', blog.special.bgcolor);
                     }
                     if ("collection" in blog.special) {
+                        const collection = document.createElement('span');
+                        collection.classList.add('collection');
+                        collection.textContent = `Blog集[${blog.special.collection}]`;
+                        collection.style.color = "#999999";
+                        collection.style.fontSize = "12px";
+                        blogPost.appendChild(collection);
                         blogPost.addEventListener('click', () => {
                             window.location.href = `?json=${blog.special.collection}`;
                         });

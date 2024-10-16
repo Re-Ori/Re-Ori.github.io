@@ -68,7 +68,7 @@ body {
     right: 4px;
     height: 8px;
     width: 8px;
-    border-radius: 8px;
+    border-radius: 4px;
     z-index: 10;
     font-size: 1px;
     background-color: var(--accentcolor);
@@ -97,13 +97,13 @@ body {
     z-index: 10;
     background-color: var(--tagbgcolor);
     color: var(--tagtextcolor);
-    border: 1px solid var(--tagbgcolor);
+    border: 1px solid var(--accentcolor);
     transition: 0.3s ease;
 }
 
 .blog-post:hover .tag {
     right: 4px;
-    background-color: var(--tagtextcolor);
+    background-color: var(--bgcolor);
     color: var(--tagbgcolor);
 }
 
