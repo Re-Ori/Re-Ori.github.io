@@ -47,7 +47,7 @@ setInterval(() => {
     images.forEach(image => {
         if (!image.complete) {
             image.style.filter = 'blur(5px)';
-            image.style.backgroundImage = 'repeating-linear-gradient(-45deg, #aaaaaa 0px, #aaaaaa 20px, #ffffff 20px, #ffffff 40px)';
+            image.style.backgroundImage = 'repeating-linear-gradient(-45deg, #00000044 0px, #00000044 20px, #00000000 20px, #00000000 40px)';
         } else {
             image.style.filter = 'blur(0px)';
             image.style.backgroundImage = 'none';
