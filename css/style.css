@@ -20,6 +20,8 @@ body {
     backdrop-filter: blur(20px);
 }
 
+/* header内部的元素靠在右侧,去除a标签的样式 */
+
 .left-panel {
     width: 26%;
     padding: 2%;
@@ -124,6 +126,24 @@ a:hover {
     padding-right: 10px;
 }
 
+/* 带有"a-no-style"类时取消a的style */
+a.a-no-style {
+    border-radius: 0;
+    border: none;
+    color: inherit;
+    transition: none;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+a.a-no-style:hover {
+    border: none;
+    background-color: transparent;
+    color: inherit;
+    padding-left: 0;
+    padding-right: 0;
+}
+
 #refresh-btn:hover {
     /* 刷新一言按钮 */
     color: #399fff;
@@ -137,6 +157,10 @@ a:hover {
 }
 
 img {
+    /* 加载完成前添加模糊效果,加载完成后由script.js去除模糊效果 */
     filter: blur(5px);
+    /* 加载完成前添加灰白条纹背景,加载完成后由script.js去除 */
+    background-image: repeating-linear-gradient(-45deg, #aaaaaa 0px, #aaaaaa 20px, #ffffff 20px, #ffffff 40px);
+
     transition: 0.3s ease;
 }

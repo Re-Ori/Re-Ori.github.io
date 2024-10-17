@@ -1,15 +1,16 @@
 {
     "blogs": [
         {
-            "id": "20241016-007",
+            "id": "20241017-007",
             "title": "VER 0.0.7",
             "coverImage": "img/update/up007.svg",
             "preview": "UI优化",
-            "date": "2024-10-06",
+            "date": "2024-10-07",
             "content": [
                 "<img src='img/update/up007.svg' alt='更新预览图'>",
-                "添加[config.json],内含version信息,后续添加更多内容,现在主页左下角的版本号从config.json中读取",
-                "图片未加载完成时添加模糊效果"
+                "添加[config.json],内含version和nav信息,后续添加更多内容,",
+                "现在主页左下角的版本号(version)和右上角导航栏(nav)从config.json中读取",
+                "图片未加载完成时添加模糊效果和灰白条纹背景,加载完成时由[/js/script.js]中移除(移除背景的原因是防止图片的透明部分显示异常)"
             ]
         },
         {

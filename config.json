@@ -1,3 +1,13 @@
 {
-    "version": "0.0.6"
+    "version": "0.0.7",
+    "nav": [
+        {
+            "name": "首页",
+            "url": "/"
+        },
+        {
+            "name": "更新日志",
+            "url": "/?json=json/update-log.json"
+        }
+    ]
 }
