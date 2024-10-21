@@ -14,7 +14,7 @@ fetch('config.json')
             link.style.textDecoration = "none";
             link.style.padding = "0 10px";
             link.style.fontSize = "16px";
-            link.style.lineHeight = "40px";
+            link.style.lineHeight = "4vh";
             link.style.verticalAlign = "middle";
             link.style.whiteSpace = "nowrap";
             // 鼠标悬停时添加下划线
@@ -48,9 +48,21 @@ setInterval(() => {
         if (!image.complete) {
             image.style.filter = 'blur(5px)';
             image.style.backgroundImage = 'repeating-linear-gradient(-45deg, #00000044 0px, #00000044 20px, #00000000 20px, #00000000 40px)';
+            // 检查是否已经存在文字元素
+            const existingTextElement = image.querySelector('.image-text');
+            if (!existingTextElement) {
+                // 如果不存在，则创建并添加文字元素
+                const textElement = document.createElement('span');
+                textElement.classList.add('image-text');
+                textElement.textContent = '图片加载中...';
+                image.appendChild(textElement);
+            }
         } else {
             image.style.filter = 'blur(0px)';
             image.style.backgroundImage = 'none';
+            // 如果图片加载完成，移除文字元素
+            const textElements = image.querySelectorAll('.image-text');
+            textElements.forEach(element => element.remove());
         }
     });
     count--;
@@ -58,6 +70,23 @@ setInterval(() => {
         clearInterval();
     }
 }, 200);
+// var count = 100;
+// setInterval(() => {
+//     const images = document.querySelectorAll('img');
+//     images.forEach(image => {
+//         if (!image.complete) {
+//             image.style.filter = 'blur(5px)';
+//             image.style.backgroundImage = 'repeating-linear-gradient(-45deg, #00000044 0px, #00000044 20px, #00000000 20px, #00000000 40px)';
+//         } else {
+//             image.style.filter = 'blur(0px)';
+//             image.style.backgroundImage = 'none';
+//         }
+//     });
+//     count--;
+//     if (count == 0) {
+//         clearInterval();
+//     }
+// }, 200);
 
 // 一言
 function loadSentence() {

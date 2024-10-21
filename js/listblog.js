@@ -27,7 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearSearch.addEventListener('click', () => {
                     window.location.search = `json=${json_url}`;
                 });
-
             } else {
                 blogContent.innerHTML = `<h2>BLOG列表</h2>
                 <input type="text" id="searchInput" placeholder="搜索Blog">
