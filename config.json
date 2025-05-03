@@ -1,5 +1,5 @@
 {
-    "version": "0.0.7",
+    "version": "0.0.8",
     "nav": [
         {
             "name": "首页",
@@ -8,6 +8,10 @@
         {
             "name": "更新日志",
             "url": "/?json=json/update-log.json"
+        },
+        {
+            "name": "Compass",
+            "url": "/Compass/index.html"
         }
     ]
 }
