@@ -158,7 +158,7 @@ a.a-no-style:hover {
 
 img {
     /* 加载完成前添加模糊效果,加载完成后由script.js去除模糊效果 */
-    filter: blur(5px);
+    filter: blur(10px);
     /* 加载完成前添加灰白条纹背景,加载完成后由script.js去除 */
     background-image: repeating-linear-gradient(-45deg, #00000044 0px, #00000044 20px, #00000000 20px, #00000000 40px);
 

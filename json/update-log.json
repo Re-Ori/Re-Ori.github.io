@@ -1,6 +1,17 @@
 {
     "blogs": [
         {
+            "id": "20250503-008",
+            "title": "VER 0.0.8",
+            "coverImage": "img/update/up008.svg",
+            "preview": "新增Compass页面",
+            "date": "2025-05-03",
+            "content": [
+                "<img src='img/update/up008.svg' alt='更新预览图'>",
+                "添加<a href='Compass/index.html'>Compass</a>页面,在右上角可以进入查看",
+                "其中[中考倒计时]板块中的数值按距离2025.6.21计算"
+            ]
+        },{
             "id": "20241017-007",
             "title": "VER 0.0.7",
             "coverImage": "img/update/up007.svg",

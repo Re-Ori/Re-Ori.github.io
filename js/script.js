@@ -40,29 +40,17 @@ fetch('config.json')
     })
     .catch(error => console.error('Error loading the JSON file:', error));
 
-// 每0.2s将所有未加载完成的图片添加模糊效果和灰白条纹背景,加载完成的移除效果,持续100次
-var count = 100;
+// 每0.2s将所有未加载完成的图片添加模糊效果和灰白条纹背景,加载完成的移除效果,持续300次(60s)
+var count = 300;
 setInterval(() => {
     const images = document.querySelectorAll('img');
     images.forEach(image => {
         if (!image.complete) {
-            image.style.filter = 'blur(5px)';
+            image.style.filter = 'blur(10px)';
             image.style.backgroundImage = 'repeating-linear-gradient(-45deg, #00000044 0px, #00000044 20px, #00000000 20px, #00000000 40px)';
-            // 检查是否已经存在文字元素
-            const existingTextElement = image.querySelector('.image-text');
-            if (!existingTextElement) {
-                // 如果不存在，则创建并添加文字元素
-                const textElement = document.createElement('span');
-                textElement.classList.add('image-text');
-                textElement.textContent = '图片加载中...';
-                image.appendChild(textElement);
-            }
         } else {
             image.style.filter = 'blur(0px)';
             image.style.backgroundImage = 'none';
-            // 如果图片加载完成，移除文字元素
-            const textElements = image.querySelectorAll('.image-text');
-            textElements.forEach(element => element.remove());
         }
     });
     count--;
@@ -70,23 +58,6 @@ setInterval(() => {
         clearInterval();
     }
 }, 200);
-// var count = 100;
-// setInterval(() => {
-//     const images = document.querySelectorAll('img');
-//     images.forEach(image => {
-//         if (!image.complete) {
-//             image.style.filter = 'blur(5px)';
-//             image.style.backgroundImage = 'repeating-linear-gradient(-45deg, #00000044 0px, #00000044 20px, #00000000 20px, #00000000 40px)';
-//         } else {
-//             image.style.filter = 'blur(0px)';
-//             image.style.backgroundImage = 'none';
-//         }
-//     });
-//     count--;
-//     if (count == 0) {
-//         clearInterval();
-//     }
-// }, 200);
 
 // 一言
 function loadSentence() {
