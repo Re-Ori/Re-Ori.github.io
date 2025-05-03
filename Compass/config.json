@@ -1,0 +1,11 @@
+{
+    "rows": 9,
+    "columns": 16,
+    "gapSize": 8,
+    "showDividers": false,
+    "background": {
+        "image": "img/bg.png",
+        "filterColor": "rgba(80, 80, 80, 0.3)",
+        "blurRadius": 20
+    }
+}
