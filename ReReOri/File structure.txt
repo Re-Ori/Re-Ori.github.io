@@ -1,0 +1,23 @@
+blogs
+    math
+        三角恒等变换.html
+    update\
+        20260213.html
+    blog1.html
+    blog2.html
+    blog3.html
+css
+    style.css
+data
+    blogs.json
+    math.json
+    navbar.json
+    update.json
+images
+    copy.svg
+    icon.svg
+js
+    main.js
+    navbar.js
+File structure.txt
+index.html

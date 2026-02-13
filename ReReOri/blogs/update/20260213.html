@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>20260213 更新</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="blog-content">
+            <h2>20260213 更新</h2>
+            <p>0.新增博客系统，支持JSON配置显示blog列表，可跳转至blog详情页</p>
+            <p>1.新增自定义blog来源设置</p>
+            <p>在主页地址后添加?blog_list=自定义blog来源JSON文件路径,默认为/data/blogs.json</p>
+            <p>例如：<code>http://主站地址?blog_list=/data/blogs.json</code></p>
+            <p>如果自定义blog来源JSON文件路径不存在,则默认使用/data/blogs.json</p>
+            <p>2.新增自动跳转功能</p>
+            <p>在主页地址后添加?blog_id=自定义blog id,即可在当前bloglist中寻找对应id，重定向至对应blog详情页</p>
+            <p>例如：<code>http://主站地址?blog_list=/data/update.json&blog_id=20260213</code></p>
+            <p>如果自定义blog id不存在,则默认跳转至主页</p>
+            <p>3.新增复制blog地址功能</p>
+            <p>在blog卡片点击复制按钮,即可复制地址,如果此blog来自json配置,则复制http://主站地址?blog_list=来源JSON文件路径&blog_id=blog id</p>
+            <p>在blog详情页点击复制按钮,即可复制当前blog地址</p>
+        </div>
+    </div>
+
+    <script src="/js/navbar.js"></script>
+    <script src="/js/main.js"></script>
+</body>
+
+</html>

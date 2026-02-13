@@ -1,0 +1,20 @@
+{
+    "mainSiteUrl": "http://re-ori.github.io/ReReOri/",
+    "logo": {
+        "src": "/images/icon.svg",
+        "alt": "ReOri Logo",
+        "fixedHeight": "24px",
+        "textFallback": "ReOri Logo[Load Failed]"
+    },
+    "siteName": "ReOri",
+    "navItems": [
+        {
+            "name": "首页",
+            "url": "/index.html"
+        },{
+            "name": "更新日志",
+            "url": "/index.html?blog_list=/data/update.json"
+        }
+    ],
+    "spacing": "16px"
+}

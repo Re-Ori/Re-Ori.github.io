@@ -1,0 +1,37 @@
+[
+  {
+    "id": "blog0",
+    "title": "数学",
+    "description": "有关高中数学的一些内容",
+    "date": "2026-02-13",
+    "url": "/index.html?blog_list=/data/math.json"
+  },
+  {
+    "id": "blog1",
+    "title": "CSS 毛玻璃效果从入门到精通",
+    "description": "此blog由AI生成|教你实现好看又不突兀的模糊背景效果",
+    "date": "2026-02-13",
+    "url": "/blogs/blog1.html"
+  },
+  {
+    "id": "blog2",
+    "title": "JSON 配置化渲染博客系统",
+    "description": "此blog由AI生成|不用改 HTML，只用 JSON 就能新增页面",
+    "date": "2026-02-13",
+    "url": "/blogs/blog2.html"
+  },
+  {
+    "id": "blog3",
+    "title": "URL 参数与页面重定向实战",
+    "description": "此blog由AI生成|实现动态加载博客列表和精准跳转",
+    "date": "2026-02-13",
+    "url": "/blogs/blog3.html"
+  },
+  {
+    "id": "blog-bug",
+    "title": "尝试卡bug",
+    "description": "",
+    "date": "11-45-14",
+    "url": "/?blog_list=data/blogs.json&blog_id=blog-bug"
+  }
+]
