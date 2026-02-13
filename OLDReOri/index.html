@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReOri</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/svg+xml" href="img/icon.svg">
+</head>
+
+<body>
+    <div class="container">
+        <div class="header" style="text-align: right;">
+        </div>
+        <div class="left-panel">
+            <h1>ReOri</h1>
+            <p>你好,这里是Origin的个人主页。</p>
+            <br> <!-- 如果下方出现返回按钮,间隔1行 -->
+        </div>
+        <div id="sentence"
+            style="position: fixed;bottom: 0;margin-bottom: 120px;height:8%;width: 30%;text-align: center;text-align-last:center;padding-block: 10px;border-top: 1px solid #ddd;">
+            - 一言 -
+        </div>
+        <p id="refresh-btn"
+            style="position: fixed;bottom: 0;margin-bottom: 20px;height:40px;width: 30%;text-align: center;text-align-last:center;padding-block: 13px;border-top: 1px solid #ddd;">
+            刷新一言
+        </p>
+        <span
+            style="position: fixed;bottom: 0;height:20px;width: 30%;text-align: center;text-align-last:center;padding-block: 10px;border-top: 1px solid #ddd;">Version
+            <a href="blog.html?json=json/update-log.json&id=[COUNT]0">VERSION</a> <a
+                href="https://github.com/Re-Ori/Re-Ori.github.io/issues"
+                onclick="alert('将要跳转到Github的Issues界面,可能会加载缓慢')">反馈</a> <a
+                href="https://space.bilibili.com/627017102">B站</a></span>
+        <div class="right-panel" id="blog-content">
+            <h2>BLOG列表</h2>
+            <p>[LOADING]</p>
+            <p style="color: #ddd;">若长时间无更新,请尝试刷新网页</p>
+            <!-- 刷新按钮 -->
+            <button id="refresh-btn">刷新blog</button>
+            <!-- 刷新网页按钮 -->
+            <button id="refresh-page-btn">刷新网页</button>
+        </div>
+    </div>
+</body>
+<script src="js/script.js"></script>
+<script src="js/listblog.js"></script>
+
+</html>

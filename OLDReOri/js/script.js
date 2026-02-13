@@ -92,4 +92,10 @@ document.getElementById('refresh-btn').addEventListener('click', () => {
     loadSentence();
 });
 
+// 刷新网页按钮
+document.getElementById('refresh-page-btn').addEventListener('click', () => {
+    location.reload();
+});
+
+
 loadSentence();

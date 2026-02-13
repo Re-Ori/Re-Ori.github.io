@@ -2,7 +2,7 @@
     "rows": 9,
     "columns": 16,
     "gapSize": 8,
-    "showDividers": false,
+    "showDividers": true,
     "background": {
         "image": "img/bg.png",
         "filterColor": "rgba(80, 80, 80, 0.3)",

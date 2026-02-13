@@ -65,6 +65,6 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(error => {
             console.error('Error loading blog data:', error);
-            document.getElementById('blog-detail').innerHTML = `<p>无法加载BLOG内容。[${error}]</p><br><span>尝试<a href="index.html">返回主页</a>或看看控制台有没有报错?</span>`;
+            document.getElementById('blog-detail').innerHTML = `<p>无法加载BLOG内容。[${error}]</p><br><a href="index.html">返回主页</a>或看看控制台有没有报错?</span>`;
         });
 });
