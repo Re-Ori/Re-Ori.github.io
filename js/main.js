@@ -29,6 +29,7 @@ class BlogCardRenderer {
     this.currentListUrl = '/data/blogs.json';
     this.listName = 'ReOri Blog';
     this.currentSentenceText = '';   // 存储当前一言文本，用于复制
+    this.loadingError = false;       // 列表加载失败标志
   }
 
   async init() {
@@ -53,28 +54,46 @@ class BlogCardRenderer {
       this.currentListUrl = params.blog_list;
     }
 
+    // 加载博客数据
     await this.loadBlogsData();
 
+    // 若列表加载失败，直接显示 404 并终止
+    if (this.loadingError) {
+      this.show404();
+      return;
+    }
+
+    // 处理 blog_id 参数
     if (params.blog_id) {
       this.redirectToBlog(params.blog_id);
       return;
     }
 
+    // 更新页面标题
     const titleEl = document.getElementById('page-title');
     if (titleEl) titleEl.textContent = this.listName;
 
+    // 渲染博客卡片
     if (document.getElementById('blog-cards-container')) {
       this.renderBlogCards('blog-cards-container');
     }
 
+    // 初始化 url 框
     this.initUrlBoxes();
+
+    // 初始化内联复制按钮
     this.initInlineCopyButtons();
-    this.addFooter(); // 添加底部一言区域
+
+    // 添加底部一言区域
+    this.addFooter();
   }
 
   async loadBlogsData() {
     try {
       const res = await fetch(this.currentListUrl);
+      if (!res.ok) {
+        throw new Error(`HTTP error ${res.status}`);
+      }
       const data = await res.json();
 
       if (Array.isArray(data)) {
@@ -86,10 +105,36 @@ class BlogCardRenderer {
       } else {
         this.currentBlogList = [];
       }
+
+      // 按优先级稳定排序（优先级大的在前，相同优先级保持原顺序）
+      this.currentBlogList = this.stableSortByPriority(this.currentBlogList);
+      this.loadingError = false; // 成功加载
     } catch (e) {
       console.error('加载博客列表失败:', e);
       this.currentBlogList = [];
+      this.loadingError = true;  // 标记加载失败
     }
+  }
+
+  // 稳定排序：根据 priority 字段降序排列，priority 默认为 0
+  stableSortByPriority(array) {
+    if (!Array.isArray(array) || array.length === 0) return array;
+
+    // 为每个元素添加原始索引
+    const withIndex = array.map((item, idx) => ({ item, idx }));
+
+    // 排序：优先级大的靠前，优先级相同则索引小的靠前（即原顺序）
+    withIndex.sort((a, b) => {
+      const priorityA = typeof a.item.priority === 'number' ? a.item.priority : 0;
+      const priorityB = typeof b.item.priority === 'number' ? b.item.priority : 0;
+      if (priorityB !== priorityA) {
+        return priorityB - priorityA; // 降序
+      }
+      return a.idx - b.idx; // 稳定原顺序
+    });
+
+    // 提取排序后的元素
+    return withIndex.map(w => w.item);
   }
 
   redirectToBlog(blogId) {
@@ -98,22 +143,27 @@ class BlogCardRenderer {
       window.location.href = blog.url;
     } else {
       console.warn(`未找到 ID 为 ${blogId} 的博客`);
-      this.show404();
+      this.show404(); // 未找到则显示404页面
     }
   }
 
   show404() {
     const container = document.getElementById('blog-cards-container');
     if (!container) return;
+
+    // 清空容器
     container.innerHTML = '';
+
+    // 创建 404 卡片
     const errorCard = document.createElement('div');
     errorCard.className = 'blog-card-wrapper';
     errorCard.style.textAlign = 'center';
     errorCard.style.padding = '40px 20px';
+
     errorCard.innerHTML = `
       <div style="font-size: 72px; color: var(--theme-color, #5ca1ff); margin-bottom: 20px;">404</div>
       <div style="font-size: 24px; color: #333; margin-bottom: 10px;">博客未找到</div>
-      <div style="color: #666; margin-bottom: 30px;">您访问的博客 ID 不存在或已被移除</div>
+      <div style="color: #666; margin-bottom: 30px;">您访问的博客列表不存在或已被移除</div>
       <a href="${this.mainSiteUrl}" style="
         display: inline-block;
         background: var(--theme-color, #5ca1ff);
@@ -125,6 +175,7 @@ class BlogCardRenderer {
         transition: background 0.2s;
       " onmouseover="this.style.background='var(--theme-color-dark, #4a90e2)'" onmouseout="this.style.background='var(--theme-color, #5ca1ff)'">返回首页</a>
     `;
+
     container.appendChild(errorCard);
   }
 
@@ -223,7 +274,6 @@ class BlogCardRenderer {
 
   // 添加底部一言区域（不包含刷新按钮）
   addFooter() {
-    // 避免重复添加
     if (document.querySelector('.footer')) return;
 
     const footer = document.createElement('footer');
@@ -231,7 +281,7 @@ class BlogCardRenderer {
 
     const line = document.createElement('div');
     line.className = 'footer__line';
-    line.textContent = '- 再怎么找也没有啦 -';
+    line.textContent = '----再怎么找也没有了----';
 
     const sentenceDiv = document.createElement('div');
     sentenceDiv.className = 'footer__sentence';
@@ -241,7 +291,6 @@ class BlogCardRenderer {
     footer.appendChild(sentenceDiv);
     document.body.appendChild(footer);
 
-    // 加载一言
     fetch('/data/sentence.json')
       .then(response => response.json())
       .then(data => {
@@ -251,9 +300,8 @@ class BlogCardRenderer {
         const from = item.from;
         const displayText = `「${sentence}」\n——${from}`;
         sentenceDiv.textContent = displayText;
-        this.currentSentenceText = `「${sentence}」——${from}`; // 用于复制
+        this.currentSentenceText = `「${sentence}」——${from}`;
 
-        // 点击复制一言
         sentenceDiv.addEventListener('click', () => {
           this.copyToClipboard(this.currentSentenceText);
         });
