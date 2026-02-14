@@ -1,21 +1,23 @@
 blogs
     math
         三角恒等变换.html
-    update\
+    update
         20260213.html
-    blog1.html
-    blog2.html
-    blog3.html
+        20260214.html
+    about.html
+    UklDS1JPTEw=.html
 css
     style.css
 data
     blogs.json
     math.json
     navbar.json
+    sentence.json
     update.json
 images
     copy.svg
     icon.svg
+    url.svg
 js
     main.js
     navbar.js

@@ -1,5 +1,6 @@
 {
-    "mainSiteUrl": "re-ori.github.io/",
+    "mainSiteUrl": "https://re-ori.github.io/",
+    "themeColor": "#399FFF",
     "logo": {
         "src": "/images/icon.svg",
         "alt": "ReOri Logo",
@@ -11,10 +12,16 @@
         {
             "name": "首页",
             "url": "/index.html"
-        },{
+        },
+        {
             "name": "更新日志",
             "url": "/index.html?blog_list=/data/update.json"
-        },{
+        },
+        {
+            "name": "关于",
+            "url": "/blogs/about.html"
+        },
+        {
             "name": "旧版",
             "url": "/OLDReOri/index.html"
         }

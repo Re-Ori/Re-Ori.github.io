@@ -1,9 +1,12 @@
-[
-  {
-    "id": "math0",
-    "title": "三角恒等变换公式",
-    "description": "",
-    "date": "2026-02-13",
-    "url": "/blogs/math/三角恒等变换.html"
-  }
-]
+{
+  "name": "Math",
+  "items": [
+    {
+      "id": "math0",
+      "title": "三角恒等变换公式",
+      "description": "",
+      "date": "2026-02-13",
+      "url": "/blogs/math/三角恒等变换.html"
+    }
+  ]
+}

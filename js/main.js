@@ -13,112 +13,121 @@ function formatMainSiteUrl(url) {
   return url.endsWith('/') ? url : url + '/';
 }
 
+// 工具函数：十六进制颜色转 RGB 字符串
+function hexToRgb(hex) {
+  let c = hex.substring(1);
+  if (c.length === 3) c = c.split('').map(ch => ch + ch).join('');
+  const intVal = parseInt(c, 16);
+  return [(intVal >> 16) & 255, (intVal >> 8) & 255, intVal & 255].join(',');
+}
+
 // 博客渲染类
 class BlogCardRenderer {
   constructor() {
     this.mainSiteUrl = "http://127.0.0.1:5500/";
     this.currentBlogList = [];
-    this.currentListUrl = '/data/blogs.json'; // 默认列表
+    this.currentListUrl = '/data/blogs.json';
+    this.listName = 'ReOri Blog';
+    this.currentSentenceText = '';   // 存储当前一言文本，用于复制
   }
 
-  // 初始化：加载配置 + 处理 URL 参数
   async init() {
-    // 加载主站地址配置
+    // 加载主站地址和主题色配置
     try {
       const res = await fetch('/data/navbar.json');
       const config = await res.json();
       if (config.mainSiteUrl) {
         this.mainSiteUrl = formatMainSiteUrl(config.mainSiteUrl);
       }
+      if (config.themeColor) {
+        document.documentElement.style.setProperty('--theme-color', config.themeColor);
+        document.documentElement.style.setProperty('--theme-color-rgb', hexToRgb(config.themeColor));
+      }
     } catch (e) {
       console.warn('加载主站地址失败，使用默认值:', e);
     }
 
-    // 解析 URL 参数
     const params = getUrlParams();
 
-    // 1. 处理 blog_list 参数：加载指定 JSON
     if (params.blog_list) {
       this.currentListUrl = params.blog_list;
     }
 
-    // 2. 加载博客列表
     await this.loadBlogsData();
 
-    // 3. 处理 blog_id 参数：重定向到对应博客，若找不到则显示404
     if (params.blog_id) {
       this.redirectToBlog(params.blog_id);
-      return; // 无论是否找到，此处返回，避免后续渲染卡片
+      return;
     }
 
-    // 4. 渲染博客列表（主页）
+    const titleEl = document.getElementById('page-title');
+    if (titleEl) titleEl.textContent = this.listName;
+
     if (document.getElementById('blog-cards-container')) {
       this.renderBlogCards('blog-cards-container');
     }
 
-    // 5. 初始化小链接
-    this.initMiniBlogCards();
+    this.initUrlBoxes();
+    this.initInlineCopyButtons();
+    this.addFooter(); // 添加底部一言区域
   }
 
-  // 加载博客数据（支持指定 JSON）
   async loadBlogsData() {
     try {
       const res = await fetch(this.currentListUrl);
       const data = await res.json();
-      this.currentBlogList = Array.isArray(data) ? data : [];
-      return this.currentBlogList;
+
+      if (Array.isArray(data)) {
+        this.currentBlogList = data;
+        this.listName = 'ReOri Blog';
+      } else if (data && typeof data === 'object') {
+        this.listName = data.name || 'ReOri Blog';
+        this.currentBlogList = Array.isArray(data.items) ? data.items : [];
+      } else {
+        this.currentBlogList = [];
+      }
     } catch (e) {
       console.error('加载博客列表失败:', e);
       this.currentBlogList = [];
-      return [];
     }
   }
 
-  // 根据 blog_id 重定向或显示404
   redirectToBlog(blogId) {
     const blog = this.currentBlogList.find(item => item.id === blogId);
     if (blog && blog.url) {
-      window.location.href = blog.url; // 找到则跳转
+      window.location.href = blog.url;
     } else {
       console.warn(`未找到 ID 为 ${blogId} 的博客`);
-      this.show404(); // 未找到则显示404页面
+      this.show404();
     }
   }
 
-  // 显示 404 错误页面（包含返回首页按钮）
   show404() {
     const container = document.getElementById('blog-cards-container');
     if (!container) return;
-
-    // 清空容器
     container.innerHTML = '';
-
-    // 创建 404 卡片
     const errorCard = document.createElement('div');
     errorCard.className = 'blog-card-wrapper';
     errorCard.style.textAlign = 'center';
     errorCard.style.padding = '40px 20px';
-
     errorCard.innerHTML = `
-      <div style="font-size: 72px; color: #5ca1ff; margin-bottom: 20px;">404</div>
+      <div style="font-size: 72px; color: var(--theme-color, #5ca1ff); margin-bottom: 20px;">404</div>
       <div style="font-size: 24px; color: #333; margin-bottom: 10px;">博客未找到</div>
       <div style="color: #666; margin-bottom: 30px;">您访问的博客 ID 不存在或已被移除</div>
       <a href="${this.mainSiteUrl}" style="
         display: inline-block;
-        background: #5ca1ff;
+        background: var(--theme-color, #5ca1ff);
         color: white;
         text-decoration: none;
         padding: 10px 24px;
         border-radius: 8px;
         font-size: 16px;
         transition: background 0.2s;
-      " onmouseover="this.style.background='#4a90e2'" onmouseout="this.style.background='#5ca1ff'">返回首页</a>
+      " onmouseover="this.style.background='var(--theme-color-dark, #4a90e2)'" onmouseout="this.style.background='var(--theme-color, #5ca1ff)'">返回首页</a>
     `;
-
     container.appendChild(errorCard);
   }
 
-  // 渲染博客卡片（原格式，带复制按钮）
   renderBlogCards(containerId) {
     const el = document.getElementById(containerId);
     if (!el || !this.currentBlogList.length) return;
@@ -130,13 +139,11 @@ class BlogCardRenderer {
     });
   }
 
-  // 创建博客卡片（修正按钮布局：copy在阅读左侧，按钮组在右下角）
   createBlogCard(blog) {
     const { id, title, description, date, url } = blog;
     const cardWrapper = document.createElement('div');
     cardWrapper.className = 'blog-card-wrapper';
 
-    // 博客卡片（改为列布局，按钮组在右下角）
     const card = document.createElement('a');
     card.href = url;
     card.className = 'blog-card';
@@ -147,7 +154,6 @@ class BlogCardRenderer {
         <div class="blog-card__date">${date || '未知日期'}</div>
       </div>
       <div class="blog-card__actions">
-        <!-- Copy 在阅读左侧 -->
         <button class="blog-card__copy-btn" title="复制地址">
           <img src="/images/copy.svg" alt="复制" style="height: 16px; width: auto;">
         </button>
@@ -155,14 +161,12 @@ class BlogCardRenderer {
       </div>
     `;
 
-    // 复制按钮逻辑
     const copyBtn = card.querySelector('.blog-card__copy-btn');
     copyBtn.addEventListener('click', (e) => {
-      e.preventDefault(); // 阻止跳转
+      e.preventDefault();
       e.stopPropagation();
 
       let copyUrl = url;
-      // JSON 来源博客：生成带参数的地址
       if (id && this.currentListUrl) {
         const listPath = this.currentListUrl.startsWith('/')
           ? this.currentListUrl.slice(1)
@@ -177,27 +181,92 @@ class BlogCardRenderer {
     return cardWrapper;
   }
 
-  // 初始化小链接
-  initMiniBlogCards() {
-    const miniLinkElements = document.querySelectorAll('[data-blog-mini-title]');
-    miniLinkElements.forEach(el => {
-      const title = el.dataset.blogMiniTitle || '未知链接';
-      const url = el.dataset.blogMiniUrl || '#';
+  // 初始化 url 框（原 mini 链接）
+  initUrlBoxes() {
+    const elements = document.querySelectorAll('[data-url-title]');
+    elements.forEach(el => {
+      const title = el.dataset.urlTitle || '未知链接';
+      const url = el.dataset.url || '#';
 
-      const miniLink = document.createElement('a');
-      miniLink.href = url;
-      miniLink.className = 'blog-card-mini';
-      miniLink.textContent = `→ ${title}`;
-      el.appendChild(miniLink);
+      const link = document.createElement('a');
+      link.href = url;
+      link.className = 'url-card';
+      link.innerHTML = `
+        <img src="/images/url.svg" alt="链接" class="url-card__icon">
+        <span class="url-card__text">${title}</span>
+      `;
+      el.innerHTML = '';
+      el.appendChild(link);
     });
   }
 
-  // 复制到剪贴板（使用 navbar.js 创建的 toast 结构）
+  // 初始化内联复制按钮（带文字）
+  initInlineCopyButtons() {
+    const elements = document.querySelectorAll('[data-copy]');
+    elements.forEach(el => {
+      const copyText = el.dataset.copy;
+      if (!copyText) return;
+
+      const button = document.createElement('button');
+      button.className = 'inline-copy-btn';
+      button.title = '复制内容';
+      button.innerHTML = `<img src="/images/copy.svg" alt="复制">${el.textContent}`;
+
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.copyToClipboard(copyText);
+      });
+
+      el.replaceWith(button);
+    });
+  }
+
+  // 添加底部一言区域（不包含刷新按钮）
+  addFooter() {
+    // 避免重复添加
+    if (document.querySelector('.footer')) return;
+
+    const footer = document.createElement('footer');
+    footer.className = 'footer';
+
+    const line = document.createElement('div');
+    line.className = 'footer__line';
+    line.textContent = '- 再怎么找也没有啦 -';
+
+    const sentenceDiv = document.createElement('div');
+    sentenceDiv.className = 'footer__sentence';
+    sentenceDiv.textContent = '加载一言中...';
+
+    footer.appendChild(line);
+    footer.appendChild(sentenceDiv);
+    document.body.appendChild(footer);
+
+    // 加载一言
+    fetch('/data/sentence.json')
+      .then(response => response.json())
+      .then(data => {
+        const randomIndex = Math.floor(Math.random() * data.length);
+        const item = data[randomIndex];
+        const sentence = item.sentence;
+        const from = item.from;
+        const displayText = `「${sentence}」\n——${from}`;
+        sentenceDiv.textContent = displayText;
+        this.currentSentenceText = `「${sentence}」——${from}`; // 用于复制
+
+        // 点击复制一言
+        sentenceDiv.addEventListener('click', () => {
+          this.copyToClipboard(this.currentSentenceText);
+        });
+      })
+      .catch(error => {
+        console.error('加载一言失败:', error);
+        sentenceDiv.textContent = '一言加载失败';
+      });
+  }
+
   copyToClipboard(text) {
-    // 查找已有的 toast 元素（由 navbar.js 创建）
     let toast = document.querySelector('.copy-toast');
     if (!toast) {
-      // 如果不存在（极少数情况），按相同结构创建
       toast = document.createElement('div');
       toast.className = 'copy-toast';
       toast.innerHTML = '<span class="toast-address"></span><span>复制成功</span>';
@@ -207,7 +276,6 @@ class BlogCardRenderer {
     if (addressSpan) {
       addressSpan.textContent = text + ' ';
     } else {
-      // 兼容旧结构（理论上不会发生）
       toast.textContent = text + ' 复制成功';
     }
 
@@ -227,7 +295,6 @@ class BlogCardRenderer {
   }
 }
 
-// 页面加载后初始化
 document.addEventListener('DOMContentLoaded', () => {
   const blogRenderer = new BlogCardRenderer();
   blogRenderer.init();
