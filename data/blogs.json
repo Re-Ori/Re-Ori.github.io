@@ -17,7 +17,7 @@
     },
     {
       "id": "blog-jump",
-      "title": "重定向到自己",
+      "title": "神秘递归",
       "description": "/tp @s",
       "date": "11-45-14",
       "url": "/?blog_list=data/blogs.json&blog_id=blog-jump"
