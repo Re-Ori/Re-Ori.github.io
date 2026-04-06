@@ -2,18 +2,25 @@
   "name": "ReOri Blog",
   "items": [
     {
-      "id": "blog0",
+      "id": "math",
       "title": "数学",
       "description": "有关高中数学的内容",
       "date": "2026-02-13",
       "url": "/index.html?blog_list=/data/math.json"
     },
     {
-      "id": "blog1",
+      "id": "about",
       "title": "About",
       "description": "Introduction",
       "date": "2026-02-13",
       "url": "/blogs/about.html"
+    },
+    {
+      "id": "file",
+      "title": "文件发布",
+      "description": "",
+      "date": "2026-02-26",
+      "url": "/?blog_list=data/file.json"
     },
     {
       "id": "blog-jump",

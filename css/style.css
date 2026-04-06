@@ -118,6 +118,91 @@ h1 {
   background: color-mix(in srgb, var(--theme-color, #399FFF) 80%, black);
 }
 
+/* ===== 博客卡片悬停动画 ===== */
+.blog-card {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+/* 向右覆盖的半透明主题色层 */
+.blog-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--theme-color, #399FFF);
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.5s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.2s;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.blog-card:hover::before {
+  opacity: 0.15;
+  transform: scaleX(1);
+}
+
+/* 底部主题色条（与圆角同高） */
+.blog-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 8px;                /* 与卡片圆角一致 */
+  background-color: var(--theme-color, #399FFF);
+  border-radius: 0 0 8px 8px; /* 仅底部圆角 */
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1) 0.05s; /* 微微延迟 */
+  z-index: 2;
+  pointer-events: none;
+}
+
+.blog-card:hover::after {
+  transform: scaleX(1);
+}
+
+/* 保证卡片内容在装饰层上方 */
+.blog-card__content,
+.blog-card__actions {
+  position: relative;
+  z-index: 3;
+}
+
+/* ===== 链接悬停增强 ===== */
+.url-card {
+  transition: background 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), color 0.2s;
+}
+
+.url-card:hover {
+  background: rgba(var(--theme-color-rgb, 57,159,255), 0.25);
+}
+
+/* ===== 卡片复制按钮悬停加深 ===== */
+.blog-card__copy-btn {
+  transition: background 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.blog-card__copy-btn:hover {
+  background: rgba(var(--theme-color-rgb, 57,159,255), 0.3);
+}
+
+/* ===== 内联复制按钮主题色文字 + 悬停效果 ===== */
+.inline-copy-btn {
+  color: var(--theme-color, #399FFF);
+  transition: background 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), color 0.2s;
+}
+
+.inline-copy-btn:hover {
+  background: rgba(var(--theme-color-rgb, 57,159,255), 0.25);
+}
+
 /* 博客内容页 */
 .blog-content {
   background: rgba(255,255,255,0.8);

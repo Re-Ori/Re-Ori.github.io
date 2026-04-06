@@ -24,7 +24,7 @@ function hexToRgb(hex) {
 // 博客渲染类
 class BlogCardRenderer {
   constructor() {
-    this.mainSiteUrl = "http://127.0.0.1:5500/";
+    this.mainSiteUrl = "";
     this.currentBlogList = [];
     this.currentListUrl = '/data/blogs.json';
     this.listName = 'ReOri Blog';
@@ -39,15 +39,17 @@ class BlogCardRenderer {
       const config = await res.json();
       if (config.mainSiteUrl) {
         this.mainSiteUrl = formatMainSiteUrl(config.mainSiteUrl);
+      } else {
+        this.mainSiteUrl = formatMainSiteUrl(window.location.origin);
       }
       if (config.themeColor) {
         document.documentElement.style.setProperty('--theme-color', config.themeColor);
         document.documentElement.style.setProperty('--theme-color-rgb', hexToRgb(config.themeColor));
       }
     } catch (e) {
-      console.warn('加载主站地址失败，使用默认值:', e);
+      console.warn('加载主站地址失败，使用当前网站根目录:', e);
+      this.mainSiteUrl = formatMainSiteUrl(window.location.origin);
     }
-
     const params = getUrlParams();
 
     if (params.blog_list) {

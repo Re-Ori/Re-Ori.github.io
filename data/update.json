@@ -16,6 +16,14 @@
         "description": "拓展复制按钮使用范围,新增一言功能,更改了链接样式,添加了404页面,blog优先级排序",
         "date": "2026-02-14",
         "url": "/blogs/update/20260214.html"
+    },
+    {
+        "id": "20260226",
+        "priority": 20260226,
+        "title": "20260226 更新",
+        "description": "新增blog框的悬停动画效果",
+        "date": "2026-02-26",
+        "url": "/blogs/update/20260226.html"
     }
   ]
 }
