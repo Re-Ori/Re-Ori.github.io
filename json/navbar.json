@@ -15,7 +15,7 @@
         },
         {
             "name": "更新日志",
-            "url": "/index.html?blog_list=/data/update.json"
+            "url": "/index.html?blog_list=/blogs/update/update.json"
         },
         {
             "name": "关于",

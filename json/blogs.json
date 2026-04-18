@@ -3,13 +3,15 @@
   "items": [
     {
       "id": "math",
+      "priority": 0,
       "title": "数学",
       "description": "有关高中数学的内容",
       "date": "2026-04-10",
-      "url": "/index.html?blog_list=/data/math.json"
+      "url": "/index.html?blog_list=/blogs/math/math.json"
     },
     {
       "id": "about",
+      "priority": 0,
       "title": "About",
       "description": "Introduction",
       "date": "2026-02-13",
@@ -17,17 +19,19 @@
     },
     {
       "id": "file",
+      "priority": 0,
       "title": "文件发布",
       "description": "",
       "date": "2026-02-26",
-      "url": "/?blog_list=data/file.json"
+      "url": "/?blog_list=/blogs/file/file.json"
     },
     {
       "id": "blog-jump",
+      "priority": 0,
       "title": "神秘递归",
       "description": "/tp @s",
       "date": "11-45-14",
-      "url": "/?blog_list=data/blogs.json&blog_id=blog-jump"
+      "url": "/?blog_list=/json/blogs.json&blog_id=blog-jump"
     }
   ]
 }

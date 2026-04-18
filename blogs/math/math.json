@@ -1,0 +1,22 @@
+{
+  "name": "Math",
+  "description": "本页面的blog可能含有较复杂的Markdown公式,加载可能需要一定时间",
+  "items": [
+    {
+      "id": "math0",
+      "priority": 0,
+      "title": "三角恒等变换公式",
+      "description": "有关三角恒等变换的公式",
+      "date": "2026-04-10",
+      "url": "/blogs/math/sjhdbh.html"
+    },
+    {
+      "id": "math1",
+      "priority": 0,
+      "title": "均值不等式",
+      "description": "有关均值不等式的公式和应用",
+      "date": "2026-04-18",
+      "url": "/blogs/math/jzbds.html"
+    }
+  ]
+}

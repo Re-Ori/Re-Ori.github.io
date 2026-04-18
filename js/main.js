@@ -26,8 +26,9 @@ class BlogCardRenderer {
   constructor() {
     this.mainSiteUrl = "";
     this.currentBlogList = [];
-    this.currentListUrl = '/data/blogs.json';
+    this.currentListUrl = '/json/blogs.json';
     this.listName = 'ReOri Blog';
+    this.listDescription = '';       // 博客集合的描述
     this.currentSentenceText = '';   // 存储当前一言文本，用于复制
     this.loadingError = false;       // 列表加载失败标志
   }
@@ -35,7 +36,7 @@ class BlogCardRenderer {
   async init() {
     // 加载主站地址和主题色配置
     try {
-      const res = await fetch('/data/navbar.json');
+      const res = await fetch('/json/navbar.json');
       const config = await res.json();
       if (config.mainSiteUrl) {
         this.mainSiteUrl = formatMainSiteUrl(config.mainSiteUrl);
@@ -71,9 +72,8 @@ class BlogCardRenderer {
       return;
     }
 
-    // 更新页面标题
-    const titleEl = document.getElementById('page-title');
-    if (titleEl) titleEl.textContent = this.listName;
+    // 更新页面标题和描述
+    this.updatePageTitleAndDescription();
 
     // 渲染博客卡片
     if (document.getElementById('blog-cards-container')) {
@@ -101,20 +101,48 @@ class BlogCardRenderer {
       if (Array.isArray(data)) {
         this.currentBlogList = data;
         this.listName = 'ReOri Blog';
+        this.listDescription = '';
       } else if (data && typeof data === 'object') {
         this.listName = data.name || 'ReOri Blog';
+        this.listDescription = data.description || '';
         this.currentBlogList = Array.isArray(data.items) ? data.items : [];
       } else {
         this.currentBlogList = [];
+        this.listDescription = '';
       }
 
       // 按优先级稳定排序（优先级大的在前，相同优先级保持原顺序）
-      this.currentBlogList = this.stableSortByPriority(this.currentBlogList);
-      this.loadingError = false; // 成功加载
+    this.currentBlogList = this.stableSortByPriority(this.currentBlogList);
+    this.loadingError = false; // 成功加载
     } catch (e) {
       console.error('加载博客列表失败:', e);
       this.currentBlogList = [];
       this.loadingError = true;  // 标记加载失败
+    }
+  }
+
+  // 更新页面标题和描述
+  updatePageTitleAndDescription() {
+    const titleEl = document.getElementById('page-title');
+    if (titleEl) {
+      titleEl.textContent = this.listName;
+    }
+
+    // 添加或更新描述区域
+    let descEl = document.getElementById('page-description');
+    if (this.listDescription) {
+      if (!descEl) {
+        descEl = document.createElement('div');
+        descEl.id = 'page-description';
+        descEl.className = 'page-description';
+        const container = document.querySelector('.container');
+        if (container && titleEl) {
+          container.insertBefore(descEl, titleEl.nextSibling);
+        }
+      }
+      descEl.textContent = this.listDescription;
+    } else if (descEl) {
+      descEl.remove();
     }
   }
 
@@ -142,10 +170,113 @@ class BlogCardRenderer {
   redirectToBlog(blogId) {
     const blog = this.currentBlogList.find(item => item.id === blogId);
     if (blog && blog.url) {
-      window.location.href = blog.url;
+      this.showRedirectProgress(blog.url);
     } else {
       console.warn(`未找到 ID 为 ${blogId} 的博客`);
       this.show404(); // 未找到则显示404页面
+    }
+  }
+
+  // 显示重定向进度条
+  showRedirectProgress(targetUrl) {
+    // 解析目标网站域名用于显示
+    const targetDomain = this.extractDomain(targetUrl);
+    
+    // 创建进度条容器
+    const progressContainer = document.createElement('div');
+    progressContainer.id = 'redirect-progress';
+    progressContainer.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.95);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      font-family: Arial, sans-serif;
+    `;
+
+    // 创建进度条
+    const progressBar = document.createElement('div');
+    progressBar.style.cssText = `
+      width: 300px;
+      height: 6px;
+      background: #f0f0f0;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    `;
+
+    const progressFill = document.createElement('div');
+    progressFill.style.cssText = `
+      width: 0%;
+      height: 100%;
+      background: var(--theme-color, #5ca1ff);
+      border-radius: 3px;
+      transition: width 1s ease-in-out;
+    `;
+
+    // 创建主提示文字
+    const text = document.createElement('div');
+    text.textContent = '正在跳转中...';
+    text.style.cssText = `
+      color: #333;
+      font-size: 18px;
+      margin-bottom: 15px;
+      font-weight: bold;
+    `;
+
+    // 创建目标网站提示
+    const targetInfo = document.createElement('div');
+    targetInfo.textContent = `即将跳转到：${targetDomain}`;
+    targetInfo.style.cssText = `
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 20px;
+      max-width: 300px;
+      text-align: center;
+      word-break: break-all;
+    `;
+
+    // 创建倒计时文字
+    const countdown = document.createElement('div');
+    countdown.textContent = '1秒后自动跳转';
+    countdown.style.cssText = `
+      color: #999;
+      font-size: 12px;
+      margin-top: 10px;
+    `;
+
+    // 组装元素
+    progressBar.appendChild(progressFill);
+    progressContainer.appendChild(text);
+    progressContainer.appendChild(targetInfo);
+    progressContainer.appendChild(progressBar);
+    progressContainer.appendChild(countdown);
+    document.body.appendChild(progressContainer);
+
+    // 开始进度条动画
+    setTimeout(() => {
+      progressFill.style.width = '100%';
+    }, 10);
+
+    // 1秒后跳转
+    setTimeout(() => {
+      window.location.href = targetUrl;
+    }, 1000);
+  }
+
+  // 提取域名函数
+  extractDomain(url) {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.hostname;
+    } catch (e) {
+      return url; // 如果URL解析失败，返回原始URL
     }
   }
 
@@ -164,8 +295,8 @@ class BlogCardRenderer {
 
     errorCard.innerHTML = `
       <div style="font-size: 72px; color: var(--theme-color, #5ca1ff); margin-bottom: 20px;">404</div>
-      <div style="font-size: 24px; color: #333; margin-bottom: 10px;">博客未找到</div>
-      <div style="color: #666; margin-bottom: 30px;">您访问的博客列表不存在或已被移除</div>
+      <div style="font-size: 24px; color: #333; margin-bottom: 10px;">页面未找到</div>
+      <div style="color: #666; margin-bottom: 30px;">您访问的页面不存在或已被移除</div>
       <a href="${this.mainSiteUrl}" style="
         display: inline-block;
         background: var(--theme-color, #5ca1ff);
@@ -293,7 +424,7 @@ class BlogCardRenderer {
     footer.appendChild(sentenceDiv);
     document.body.appendChild(footer);
 
-    fetch('/data/sentence.json')
+    fetch('/json/sentence.json')
       .then(response => response.json())
       .then(data => {
         const randomIndex = Math.floor(Math.random() * data.length);

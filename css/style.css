@@ -74,11 +74,25 @@ h1 {
   color: #555;
   font-size: 14px;
   margin-bottom: 4px;
+  white-space: pre-wrap; /* 保留连续空格和换行 */
 }
 
 .blog-card__date {
   font-size: 12px;
   color: #999;
+}
+
+/* 页面描述样式 */
+.page-description {
+  color: #666;
+  font-size: 16px;
+  text-align: center;
+  margin-bottom: 24px;
+  line-height: 1.5;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+  white-space: pre-wrap; /* 保留连续空格和换行 */
 }
 
 .blog-card__actions {
