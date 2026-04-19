@@ -34,27 +34,43 @@ class BlogCardRenderer {
   }
 
   async init() {
-    // 加载主站地址和主题色配置
-    try {
-      const res = await fetch('/json/navbar.json');
-      const config = await res.json();
-      if (config.mainSiteUrl) {
-        this.mainSiteUrl = formatMainSiteUrl(config.mainSiteUrl);
-      } else {
-        this.mainSiteUrl = formatMainSiteUrl(window.location.origin);
-      }
-      if (config.themeColor) {
-        document.documentElement.style.setProperty('--theme-color', config.themeColor);
-        document.documentElement.style.setProperty('--theme-color-rgb', hexToRgb(config.themeColor));
-      }
-    } catch (e) {
-      console.warn('加载主站地址失败，使用当前网站根目录:', e);
-      this.mainSiteUrl = formatMainSiteUrl(window.location.origin);
-    }
+    // 自动获取主站地址（使用当前域名）
+    this.mainSiteUrl = formatMainSiteUrl(window.location.origin);
+    
+    // 获取URL参数
     const params = getUrlParams();
-
+    
+    // 设置博客列表URL：优先使用URL参数，否则使用配置，最后使用默认值
     if (params.blog_list) {
       this.currentListUrl = params.blog_list;
+    } else {
+      // 尝试从配置文件加载初始博客列表URL
+      try {
+        console.log('正在加载配置文件：/json/config.json');
+        const res = await fetch('/json/config.json');
+        if (!res.ok) {
+          console.warn(`配置文件加载失败，状态码：${res.status}`);
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const config = await res.json();
+        console.log('配置文件加载成功：', config);
+        
+        // 设置主题色
+        if (config.theme && config.theme.color) {
+          document.documentElement.style.setProperty('--theme-color', config.theme.color);
+          document.documentElement.style.setProperty('--theme-color-rgb', hexToRgb(config.theme.color));
+        }
+        
+
+        
+        // 设置初始博客列表URL
+        if (config.blog && config.blog.initialListUrl) {
+          this.currentListUrl = config.blog.initialListUrl;
+        }
+      } catch (e) {
+        console.warn('加载配置文件失败，使用默认配置:', e);
+        // 保持构造函数中设置的默认值：'/json/blogs.json'
+      }
     }
 
     // 加载博客数据
@@ -222,7 +238,7 @@ class BlogCardRenderer {
 
     // 创建主提示文字
     const text = document.createElement('div');
-    text.textContent = '正在跳转中...';
+    text.textContent = '正在重定向';
     text.style.cssText = `
       color: #333;
       font-size: 18px;
@@ -263,6 +279,11 @@ class BlogCardRenderer {
     setTimeout(() => {
       progressFill.style.width = '100%';
     }, 10);
+
+    // 950毫秒后更改倒计时文本为“正在加载”
+    setTimeout(() => {
+      countdown.textContent = '正在加载';
+    }, 950);
 
     // 1秒后跳转
     setTimeout(() => {

@@ -9,6 +9,8 @@ html {
   scroll-behavior: smooth;
 }
 
+
+
 body {
   background: #f5f7fa;
   line-height: 1.6;
@@ -355,4 +357,56 @@ h1 {
 
 .footer__sentence:hover {
   opacity: 0.8;
+}
+
+/* ===== MC百科风格隐藏内容样式 ===== */
+/* 使用示例：
+   <span class="hidden-content" data-tooltip="你知道的太多了">隐藏的文字内容</span>
+   属性说明：
+   - data-tooltip: 鼠标悬停时上方显示的提示文字（默认："你知道的太多了"）
+   - 内部文本: 隐藏的文字内容，默认黑色隐藏，悬停时变为白色显示
+*/
+.hidden-content {
+  position: relative;
+  display: inline-block;
+  background-color: #000;
+  color: #000;
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: default;
+  transition: color 0.3s ease;
+  white-space: nowrap;
+  line-height: 1.4;
+  border: 1px solid #333;
+}
+
+.hidden-content:hover {
+  color: #fff;
+}
+
+/* 提示框样式 */
+.hidden-content[data-tooltip]:not([data-tooltip=""])::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #222;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  z-index: 10;
+  pointer-events: none;
+  border: 1px solid #444;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+.hidden-content[data-tooltip]:not([data-tooltip=""]):hover::before {
+  opacity: 1;
+  visibility: visible;
 }
