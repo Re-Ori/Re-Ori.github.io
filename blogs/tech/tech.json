@@ -1,0 +1,132 @@
+{
+  "name": "技术专栏",
+  "description": "C++ 算法竞赛相关文章",
+  "items": [
+    {
+      "id": "dp-basics",
+      "priority": 8,
+      "title": "动态规划入门",
+      "description": "从斐波那契到 0/1 背包，DP 思想与经典模型详解",
+      "date": "2026-04-20",
+      "url": "/blogs/tech/article.html?id=dp-basics",
+      "tags": ["基础算法"]
+    },
+    {
+      "id": "shortest-path",
+      "priority": 7,
+      "title": "最短路算法全家桶",
+      "description": "Dijkstra、Bellman-Ford、Floyd-Warshall 对比与实现",
+      "date": "2026-04-21",
+      "url": "/blogs/tech/article.html?id=shortest-path",
+      "tags": ["图论"]
+    },
+    {
+      "id": "binary-search",
+      "priority": 6,
+      "title": "二分查找与二分答案",
+      "description": "整数二分、实数二分、最大化最小值问题",
+      "date": "2026-04-22",
+      "url": "/blogs/tech/article.html?id=binary-search",
+      "tags": ["基础算法"]
+    },
+    {
+      "id": "greedy",
+      "priority": 6,
+      "title": "贪心算法经典问题",
+      "description": "区间选点、哈夫曼编码、活动安排等贪心策略分析",
+      "date": "2026-04-23",
+      "url": "/blogs/tech/article.html?id=greedy",
+      "tags": ["基础算法"]
+    },
+    {
+      "id": "stl-containers",
+      "priority": 5,
+      "title": "C++ STL 容器与算法总结",
+      "description": "vector、set、map、priority_queue 等常用容器的用法与坑点",
+      "date": "2026-04-24",
+      "url": "/blogs/tech/article.html?id=stl-containers",
+      "tags": ["C++"]
+    },
+    {
+      "id": "string-algo",
+      "priority": 5,
+      "title": "字符串处理技巧",
+      "description": "KMP、哈希、Trie 树等字符串算法精讲",
+      "date": "2026-04-25",
+      "url": "/blogs/tech/article.html?id=string-algo",
+      "tags": ["字符串"]
+    },
+    {
+      "id": "number-theory",
+      "priority": 4,
+      "title": "数论基础",
+      "description": "素数筛、最大公约数、扩展欧几里得、欧拉函数",
+      "date": "2026-04-26",
+      "url": "/blogs/tech/article.html?id=number-theory",
+      "tags": ["数学"]
+    },
+    {
+      "id": "segment-tree",
+      "priority": 4,
+      "title": "线段树与树状数组",
+      "description": "区间查询、区间修改、懒标记实现与优化",
+      "date": "2026-04-27",
+      "url": "/blogs/tech/article.html?id=segment-tree",
+      "tags": ["数据结构"]
+    },
+    {
+      "id": "sorting",
+      "priority": 6,
+      "title": "排序算法详解",
+      "description": "快速排序、归并排序、堆排序的原理与实现",
+      "date": "2026-04-28",
+      "url": "/blogs/tech/article.html?id=sorting",
+      "tags": ["基础算法"]
+    },
+    {
+      "id": "dfs-bfs",
+      "priority": 6,
+      "title": "DFS 与 BFS 搜索",
+      "description": "深度优先搜索与广度优先搜索的框架与经典应用",
+      "date": "2026-04-28",
+      "url": "/blogs/tech/article.html?id=dfs-bfs",
+      "tags": ["图论"]
+    },
+    {
+      "id": "prefix-diff",
+      "priority": 5,
+      "title": "前缀和与差分数组",
+      "description": "一维/二维前缀和、差分数组的推导与实战",
+      "date": "2026-04-29",
+      "url": "/blogs/tech/article.html?id=prefix-diff",
+      "tags": ["基础算法"]
+    },
+    {
+      "id": "bit-manip",
+      "priority": 5,
+      "title": "位运算基础与应用",
+      "description": "常用位运算技巧、状态压缩与 lowbit 操作",
+      "date": "2026-04-29",
+      "url": "/blogs/tech/article.html?id=bit-manip",
+      "tags": ["基础算法"]
+    },
+    {
+      "id": "stack-queue",
+      "priority": 4,
+      "title": "链表、栈与队列",
+      "description": "手写链表、单调栈与单调队列的经典问题",
+      "date": "2026-04-29",
+      "url": "/blogs/tech/article.html?id=stack-queue",
+      "tags": ["数据结构"]
+    },
+    {
+      "id": "divide-conquer",
+      "priority": 4,
+      "title": "递归与分治算法",
+      "description": "递归思想、分治模板与归并求逆序对等经典例题",
+      "date": "2026-04-29",
+      "url": "/blogs/tech/article.html?id=divide-conquer",
+      "tags": ["基础算法"]
+    }
+  ]
+}

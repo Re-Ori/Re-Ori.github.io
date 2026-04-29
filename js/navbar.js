@@ -96,8 +96,8 @@
         left: 0;
         right: 0;
         height: ${navbarHeight}px;
-        background: rgba(255,255,255, 0.55);
-        backdrop-filter: blur(16px);
+        background: rgba(255,255,255, 0.72);
+        backdrop-filter: blur(12px);
         border-bottom-left-radius: 8px;
         border-bottom-right-radius: 8px;
         box-shadow: 0 2px 12px rgba(0,0,0,0.08);
@@ -111,7 +111,6 @@
       }
       #blog-navbar:hover {
         height: ${navbarHoverHeight}px;
-        align-items: flex-end;
       }
       .navbar-logo-wrap {
         display: flex;
@@ -180,12 +179,12 @@
         height: 100%;
         gap: ${spacing}px;
         padding-right: ${spacing}px;
-        transition: align-items 0.4s cubic-bezier(0.3, 0.9, 0.2, 1) !important;
+        padding-top: 0;
         align-self: flex-end;
+        transition: padding-top 0.4s cubic-bezier(0.3, 0.9, 0.2, 1) !important;
       }
       #blog-navbar:hover .navbar-right-container {
-        align-items: flex-end;
-        padding-bottom: ${spacing}px;
+        padding-top: ${offset}px;
       }
       .navbar-nav {
         display: flex;
@@ -324,6 +323,34 @@
     const rightContainer = document.createElement('div');
     rightContainer.className = 'navbar-right-container';
 
+    // 深色模式切换按钮
+    const themeBtn = document.createElement('button');
+    themeBtn.className = 'navbar-theme-btn';
+    themeBtn.title = '切换深色模式';
+    themeBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+        <path class="sun" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+        <path class="moon" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" style="display:none"/>
+      </svg>
+    `;
+    themeBtn.style.cssText = `
+      background: none; border: none; cursor: pointer; padding: 6px;
+      color: #333; border-radius: 6px; display: flex; align-items: center;
+      transition: color 0.2s, background 0.2s; flex-shrink: 0;
+    `;
+
+    // 初始化深色模式
+    const saved = localStorage.getItem('reori-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark = saved ? saved === 'dark' : prefersDark;
+    if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
+
+    themeBtn.addEventListener('click', () => {
+      const now = document.documentElement.getAttribute('data-theme') === 'dark';
+      document.documentElement.setAttribute('data-theme', now ? '' : 'dark');
+      localStorage.setItem('reori-theme', now ? 'light' : 'dark');
+    });
+
     const ul = document.createElement('ul');
     ul.className = 'navbar-nav';
     (Array.isArray(navbarConfig.navItems) ? navbarConfig.navItems : []).forEach(item => {
@@ -342,13 +369,10 @@
       window.location.href = '/index.html';
     });
 
-    rightContainer.append(ul, siteName);
+    rightContainer.append(themeBtn, ul, siteName);
     nav.append(logoWrap, rightContainer);
 
-    const container = document.querySelector('.container') || document.body;
-    container.firstChild
-      ? container.insertBefore(nav, container.firstChild)
-      : container.append(nav);
+    document.body.insertBefore(nav, document.body.firstChild);
 
     // 进度条
     const progressContainer = document.createElement('div');

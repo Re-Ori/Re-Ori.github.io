@@ -7,6 +7,11 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body {
+  overflow-x: hidden;
 }
 
 
@@ -97,6 +102,29 @@ h1 {
   white-space: pre-wrap; /* 保留连续空格和换行 */
 }
 
+.blog-card__tags {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.blog-card__tag {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: rgba(var(--theme-color-rgb, 57,159,255), 0.1);
+  color: var(--theme-color, #399FFF);
+  border: 1px solid rgba(var(--theme-color-rgb, 57,159,255), 0.2);
+  line-height: 1.6;
+  pointer-events: auto;
+}
+
 .blog-card__actions {
   display: flex;
   gap: 8px;
@@ -161,6 +189,121 @@ h1 {
 .blog-card:hover::before {
   opacity: 0.15;
   transform: scaleX(1);
+}
+
+/* ===== Blog Toolbar (Search + Filter) ===== */
+.blog-toolbar {
+  margin-bottom: 20px;
+}
+
+.blog-search {
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid rgba(var(--theme-color-rgb, 57,159,255), 0.25);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.8);
+  backdrop-filter: blur(8px);
+  font-size: 14px;
+  color: #333;
+  outline: none;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  box-sizing: border-box;
+}
+
+.blog-search:focus {
+  border-color: var(--theme-color, #399FFF);
+  box-shadow: 0 0 0 3px rgba(var(--theme-color-rgb, 57,159,255), 0.1);
+}
+
+.blog-search::placeholder {
+  color: #aaa;
+}
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.filter-chip {
+  padding: 5px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--theme-color-rgb, 57,159,255), 0.25);
+  background: transparent;
+  color: var(--theme-color, #399FFF);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.25s ease;
+  line-height: 1.4;
+}
+
+.filter-chip:hover {
+  background: rgba(var(--theme-color-rgb, 57,159,255), 0.1);
+}
+
+.filter-chip.active {
+  background: var(--theme-color, #399FFF);
+  color: #fff;
+  border-color: var(--theme-color, #399FFF);
+}
+
+/* ===== Filter Mode Toggle (且/或) ===== */
+.filter-mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.filter-mode-label {
+  font-size: 12px;
+  color: #999;
+  margin-right: 2px;
+}
+
+.filter-mode-btn {
+  font-size: 12px;
+  padding: 3px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(var(--theme-color-rgb, 57,159,255), 0.25);
+  background: transparent;
+  color: var(--theme-color, #399FFF);
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1.4;
+}
+
+.filter-mode-btn:hover {
+  background: rgba(var(--theme-color-rgb, 57,159,255), 0.1);
+}
+
+.filter-mode-btn.active {
+  background: var(--theme-color, #399FFF);
+  color: #fff;
+  border-color: var(--theme-color, #399FFF);
+}
+
+/* ===== Page Fade-in Animation ===== */
+@keyframes pageFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.container {
+  animation: pageFadeIn 0.5s ease both;
+}
+
+/* ===== Card Entrance Animation ===== */
+.blog-card-wrapper {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.blog-card-wrapper.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* 底部主题色条（与圆角同高） */
@@ -409,4 +552,155 @@ h1 {
 .hidden-content[data-tooltip]:not([data-tooltip=""]):hover::before {
   opacity: 1;
   visibility: visible;
+}
+
+/* ===== Dark Mode ===== */
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+[data-theme="dark"] body {
+  background: #13141f;
+}
+[data-theme="dark"] h1 {
+  color: #d0d0e0;
+}
+[data-theme="dark"] .blog-card {
+  background: rgba(26,27,42,0.88);
+  color: #c8c8d8;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+[data-theme="dark"] .blog-card__desc {
+  color: #8888a0;
+}
+[data-theme="dark"] .blog-card__date {
+  color: #606078;
+}
+[data-theme="dark"] .page-description {
+  color: #8888a0;
+}
+[data-theme="dark"] .blog-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+[data-theme="dark"] .blog-search {
+  background: rgba(26,27,42,0.8);
+  color: #c8c8d8;
+  border-color: rgba(255,255,255,0.08);
+}
+[data-theme="dark"] .blog-search::placeholder {
+  color: #505068;
+}
+[data-theme="dark"] .blog-search:focus {
+  border-color: var(--theme-color, #399FFF);
+  box-shadow: 0 0 0 3px rgba(57,159,255,0.1);
+}
+[data-theme="dark"] .blog-content {
+  background: rgba(26,27,42,0.88);
+}
+[data-theme="dark"] .blog-content p {
+  color: #b0b0c0;
+}
+[data-theme="dark"] .blog-content h2 {
+  color: var(--theme-color, #399FFF);
+}
+[data-theme="dark"] .filter-mode-label {
+  color: #606078;
+}
+[data-theme="dark"] .footer {
+  background: rgba(26,27,42,0.7);
+  border-top-color: rgba(255,255,255,0.06);
+}
+[data-theme="dark"] .footer__line {
+  color: #606078;
+}
+[data-theme="dark"] .navbar-nav a {
+  color: #a0a0b8;
+}
+[data-theme="dark"] .copy-toast {
+  background: rgba(57,159,255,0.85);
+}
+[data-theme="dark"] #blog-navbar {
+  background: rgba(26,27,42,0.82) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.35) !important;
+}
+[data-theme="dark"] .navbar-nav a {
+  color: #a0a0b8;
+}
+[data-theme="dark"] .navbar-nav a:hover {
+  background: rgba(57,159,255,0.15);
+}
+[data-theme="dark"] .navbar-sitename {
+  color: var(--theme-color, #399FFF);
+}
+[data-theme="dark"] #progress-container {
+  background: rgba(20,21,38,0.95);
+}
+
+/* 深色模式切换按钮 */
+.navbar-theme-btn:hover {
+  background: rgba(var(--theme-color-rgb, 57,159,255), 0.1) !important;
+  color: var(--theme-color, #399FFF) !important;
+}
+[data-theme="dark"] .navbar-theme-btn {
+  color: #a0a0b8 !important;
+}
+[data-theme="dark"] .navbar-theme-btn:hover {
+  color: var(--theme-color, #399FFF) !important;
+  background: rgba(57,159,255,0.15) !important;
+}
+
+/* ===== Dark Mode: Typora 导出页面（数学等） ===== */
+html[data-theme="dark"] {
+  --bg-color: #13141f !important;
+  --text-color: #c8c8d8 !important;
+}
+html[data-theme="dark"] #write {
+  color: #c8c8d8;
+}
+html[data-theme="dark"] #write h1,
+html[data-theme="dark"] #write h2,
+html[data-theme="dark"] #write h3,
+html[data-theme="dark"] #write h4,
+html[data-theme="dark"] #write h5,
+html[data-theme="dark"] #write h6 {
+  color: #d0d0e0;
+}
+html[data-theme="dark"] .md-math-block,
+html[data-theme="dark"] .md-rawblock,
+html[data-theme="dark"] #write p {
+  color: #c8c8d8;
+}
+html[data-theme="dark"] #write a {
+  color: var(--theme-color, #399FFF);
+}
+html[data-theme="dark"] #write blockquote {
+  color: #a0a0b8;
+  border-left-color: rgba(57,159,255,0.3);
+}
+html[data-theme="dark"] #write code,
+html[data-theme="dark"] #write tt {
+  background: rgba(57,159,255,0.1);
+  color: #d0d0d8;
+}
+html[data-theme="dark"] #write pre {
+  background: #1a1b2e;
+  color: #c8c8d8;
+}
+html[data-theme="dark"] #write table tr {
+  background: transparent;
+  border-top-color: rgba(255,255,255,0.08);
+}
+html[data-theme="dark"] #write table th,
+html[data-theme="dark"] #write table td {
+  border-color: rgba(255,255,255,0.08);
+}
+html[data-theme="dark"] #write .md-footnote {
+  color: #a0a0b8;
+}
+html[data-theme="dark"] .katex .mathnormal,
+html[data-theme="dark"] .katex .mathit,
+html[data-theme="dark"] .katex .mathrm {
+  color: #c8c8d8;
+}
+html[data-theme="dark"] .katex-html {
+  color: #c8c8d8;
 }

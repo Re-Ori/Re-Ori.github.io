@@ -2,8 +2,16 @@
   "name": "ReOri Blog",
   "items": [
     {
+      "id": "tech",
+      "priority": 2,
+      "title": "技术专栏",
+      "description": "C++ 算法竞赛相关文章",
+      "date": "2026-04-27",
+      "url": "/index.html?blog_list=/blogs/tech/tech.json"
+    },
+    {
       "id": "math",
-      "priority": 0,
+      "priority": 1,
       "title": "数学",
       "description": "有关高中数学的内容",
       "date": "2026-04-10",
@@ -27,7 +35,7 @@
     },
     {
       "id": "blog-jump",
-      "priority": 0,
+      "priority": -1,
       "title": "神秘递归",
       "description": "/tp @s",
       "date": "11-45-14",

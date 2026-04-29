@@ -31,6 +31,10 @@ class BlogCardRenderer {
     this.listDescription = '';       // 博客集合的描述
     this.currentSentenceText = '';   // 存储当前一言文本，用于复制
     this.loadingError = false;       // 列表加载失败标志
+    this.searchText = '';            // 搜索文本
+    this.activeTags = [];            // 当前选中的标签列表（多选）
+    this.filterMode = 'or';          // 标签筛选模式: 'or'(任意匹配) / 'and'(全部匹配)
+    this.hasInitialRender = false;   // 首次渲染完成标志
   }
 
   async init() {
@@ -88,13 +92,20 @@ class BlogCardRenderer {
       return;
     }
 
+    // 预计算标签列表（用于 URL 序列号编解码）
+    this.tagList = this.extractTags();
+
+    // 从 URL 解析预选标签（?tag=0,1,2 序列号）
+    this.parseTagParam();
+
     // 更新页面标题和描述
     this.updatePageTitleAndDescription();
 
-    // 渲染博客卡片
-    if (document.getElementById('blog-cards-container')) {
-      this.renderBlogCards('blog-cards-container');
-    }
+    // 渲染搜索和标签筛选工具栏
+    this.renderSearchAndFilter('blog-cards-container');
+
+    // 渲染博客卡片（带过滤和入场动画）
+    this.renderFilteredBlogCards('blog-cards-container');
 
     // 初始化 url 框
     this.initUrlBoxes();
@@ -197,7 +208,8 @@ class BlogCardRenderer {
   showRedirectProgress(targetUrl) {
     // 解析目标网站域名用于显示
     const targetDomain = this.extractDomain(targetUrl);
-    
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
     // 创建进度条容器
     const progressContainer = document.createElement('div');
     progressContainer.id = 'redirect-progress';
@@ -207,7 +219,7 @@ class BlogCardRenderer {
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(255, 255, 255, 0.95);
+      background: ${isDark ? 'rgba(19,20,31,0.96)' : 'rgba(255,255,255,0.95)'};
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -221,7 +233,7 @@ class BlogCardRenderer {
     progressBar.style.cssText = `
       width: 300px;
       height: 6px;
-      background: #f0f0f0;
+      background: ${isDark ? '#2a2b40' : '#f0f0f0'};
       border-radius: 3px;
       overflow: hidden;
       margin-bottom: 20px;
@@ -240,7 +252,7 @@ class BlogCardRenderer {
     const text = document.createElement('div');
     text.textContent = '正在重定向';
     text.style.cssText = `
-      color: #333;
+      color: ${isDark ? '#c8c8d8' : '#333'};
       font-size: 18px;
       margin-bottom: 15px;
       font-weight: bold;
@@ -250,7 +262,7 @@ class BlogCardRenderer {
     const targetInfo = document.createElement('div');
     targetInfo.textContent = `即将跳转到：${targetDomain}`;
     targetInfo.style.cssText = `
-      color: #666;
+      color: ${isDark ? '#787890' : '#666'};
       font-size: 14px;
       margin-bottom: 20px;
       max-width: 300px;
@@ -262,7 +274,7 @@ class BlogCardRenderer {
     const countdown = document.createElement('div');
     countdown.textContent = '1秒后自动跳转';
     countdown.style.cssText = `
-      color: #999;
+      color: ${isDark ? '#505068' : '#999'};
       font-size: 12px;
       margin-top: 10px;
     `;
@@ -333,12 +345,23 @@ class BlogCardRenderer {
     container.appendChild(errorCard);
   }
 
-  renderBlogCards(containerId) {
+  renderBlogCards(containerId, list) {
     const el = document.getElementById(containerId);
-    if (!el || !this.currentBlogList.length) return;
+    if (!el) return;
+
+    const items = list || this.currentBlogList;
 
     el.innerHTML = '';
-    this.currentBlogList.forEach(blog => {
+
+    if (!items.length) {
+      const emptyDiv = document.createElement('div');
+      emptyDiv.style.cssText = 'text-align: center; padding: 40px 20px; color: #999; font-size: 14px;';
+      emptyDiv.textContent = this.searchText || this.activeTags.length > 0 ? '未找到匹配内容' : '暂无博客';
+      el.appendChild(emptyDiv);
+      return;
+    }
+
+    items.forEach(blog => {
       const card = this.createBlogCard(blog);
       el.appendChild(card);
     });
@@ -352,12 +375,20 @@ class BlogCardRenderer {
     const card = document.createElement('a');
     card.href = url;
     card.className = 'blog-card';
+
+    // 标签区域
+    let tagsHtml = '';
+    if (Array.isArray(blog.tags) && blog.tags.length) {
+      tagsHtml = `<div class="blog-card__tags">${blog.tags.map(t => `<span class="blog-card__tag">${t}</span>`).join('')}</div>`;
+    }
+
     card.innerHTML = `
       <div class="blog-card__content">
         <div class="blog-card__title">${title || '无标题'}</div>
         <div class="blog-card__desc">${description || '无描述'}</div>
         <div class="blog-card__date">${date || '未知日期'}</div>
       </div>
+      ${tagsHtml}
       <div class="blog-card__actions">
         <button class="blog-card__copy-btn" title="复制地址">
           <img src="/images/copy.svg" alt="复制" style="height: 16px; width: auto;">
@@ -426,6 +457,259 @@ class BlogCardRenderer {
     });
   }
 
+  // ===== 搜索 + 多选标签筛选 + 入场动画 =====
+
+  // 从 URL 解析预选标签（序列号 → 标签名）
+  parseTagParam() {
+    const params = getUrlParams();
+    if (params.tag && this.tagList && this.tagList.length) {
+      const indices = params.tag.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+      this.activeTags = indices.map(i => this.tagList[i]).filter(Boolean);
+    }
+    this.filterMode = params.filter_mode === 'and' ? 'and' : 'or';
+  }
+
+  // 同步当前筛选状态到 URL（标签名 → 序列号）
+  syncURL() {
+    const params = getUrlParams();
+    const parts = [];
+    if (params.blog_list) parts.push('blog_list=' + params.blog_list);
+    if (this.activeTags.length > 0 && this.tagList) {
+      const indices = this.activeTags.map(t => this.tagList.indexOf(t)).filter(i => i >= 0);
+      parts.push('tag=' + indices.join(','));
+      if (this.filterMode === 'and') parts.push('filter_mode=and');
+    }
+    const search = parts.join('&');
+    const newURL = search ? `${window.location.pathname}?${search}` : window.location.pathname;
+    history.replaceState(null, '', newURL);
+  }
+
+  // 渲染搜索框和多选标签筛选栏
+  renderSearchAndFilter(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (document.getElementById('blog-toolbar')) return;
+
+    const toolbar = document.createElement('div');
+    toolbar.id = 'blog-toolbar';
+    toolbar.className = 'blog-toolbar';
+
+    // 搜索输入框
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'blog-search';
+    searchInput.placeholder = '搜索博客...';
+    searchInput.addEventListener('input', (e) => {
+      this.searchText = e.target.value;
+      this.renderFilteredBlogCards(containerId);
+    });
+
+    // 标签筛选栏
+    const filterBar = document.createElement('div');
+    filterBar.className = 'filter-bar';
+
+    // "全部" 按钮（与其他标签互斥）
+    const allChip = document.createElement('button');
+    allChip.className = 'filter-chip' + (this.activeTags.length === 0 ? ' active' : '');
+    allChip.textContent = '全部';
+    allChip.addEventListener('click', () => {
+      this.activeTags = [];
+      filterBar.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      allChip.classList.add('active');
+      this.hideFilterMode();
+      this.syncURL();
+      this.renderFilteredBlogCards(containerId);
+    });
+    filterBar.appendChild(allChip);
+
+    // 各个标签按钮（多选 toggle）
+    const tags = this.extractTags();
+    tags.forEach(tag => {
+      const chip = document.createElement('button');
+      chip.className = 'filter-chip' + (this.activeTags.includes(tag) ? ' active' : '');
+      chip.textContent = tag;
+      chip.dataset.tag = tag;
+      chip.addEventListener('click', () => {
+        const idx = this.activeTags.indexOf(tag);
+        if (idx > -1) {
+          this.activeTags.splice(idx, 1);
+          chip.classList.remove('active');
+        } else {
+          this.activeTags.push(tag);
+          chip.classList.add('active');
+        }
+
+        // 更新"全部"状态
+        const allActive = this.activeTags.length === 0;
+        allChip.classList.toggle('active', allActive);
+
+        // 显示/隐藏筛选模式切换
+        if (this.activeTags.length >= 2) {
+          this.showFilterMode(containerId);
+        } else {
+          this.hideFilterMode();
+        }
+
+        this.syncURL();
+        this.renderFilteredBlogCards(containerId);
+      });
+      filterBar.appendChild(chip);
+    });
+
+    toolbar.appendChild(searchInput);
+    if (filterBar.children.length > 1) toolbar.appendChild(filterBar);
+
+    // 筛选模式切换（且/或），初始隐藏
+    const modeContainer = document.createElement('div');
+    modeContainer.id = 'filter-mode';
+    modeContainer.className = 'filter-mode';
+    if (this.activeTags.length < 2) modeContainer.style.display = 'none';
+
+    const modeLabel = document.createElement('span');
+    modeLabel.className = 'filter-mode-label';
+    modeLabel.textContent = '标签筛选:';
+
+    const andBtn = document.createElement('button');
+    andBtn.className = 'filter-mode-btn' + (this.filterMode === 'and' ? ' active' : '');
+    andBtn.dataset.mode = 'and';
+    andBtn.textContent = '全部匹配';
+    andBtn.addEventListener('click', () => {
+      if (this.filterMode !== 'and') {
+        this.filterMode = 'and';
+        modeContainer.querySelectorAll('.filter-mode-btn').forEach(b => b.classList.remove('active'));
+        andBtn.classList.add('active');
+        this.syncURL();
+        this.renderFilteredBlogCards(containerId);
+      }
+    });
+
+    const orBtn = document.createElement('button');
+    orBtn.className = 'filter-mode-btn' + (this.filterMode === 'or' ? ' active' : '');
+    orBtn.dataset.mode = 'or';
+    orBtn.textContent = '任意匹配';
+    orBtn.addEventListener('click', () => {
+      if (this.filterMode !== 'or') {
+        this.filterMode = 'or';
+        modeContainer.querySelectorAll('.filter-mode-btn').forEach(b => b.classList.remove('active'));
+        orBtn.classList.add('active');
+        this.syncURL();
+        this.renderFilteredBlogCards(containerId);
+      }
+    });
+
+    modeContainer.append(modeLabel, andBtn, orBtn);
+    toolbar.appendChild(modeContainer);
+
+    // 插入到页面标题/描述之后
+    const descEl = document.getElementById('page-description');
+    const titleEl = document.getElementById('page-title');
+    const refEl = descEl || titleEl;
+    if (refEl && refEl.parentNode) {
+      refEl.parentNode.insertBefore(toolbar, refEl.nextSibling);
+    } else {
+      container.parentNode.insertBefore(toolbar, container);
+    }
+  }
+
+  showFilterMode() {
+    const el = document.getElementById('filter-mode');
+    if (el) el.style.display = 'flex';
+  }
+
+  hideFilterMode() {
+    const el = document.getElementById('filter-mode');
+    if (el) el.style.display = 'none';
+  }
+
+  // 从当前博客数据提取所有标签
+  extractTags() {
+    const tagSet = new Set();
+    this.currentBlogList.forEach(item => {
+      if (Array.isArray(item.tags)) {
+        item.tags.forEach(t => tagSet.add(t));
+      }
+    });
+    return Array.from(tagSet);
+  }
+
+  // 获取当前过滤后的博客列表
+  getFilteredList() {
+    let list = this.currentBlogList;
+
+    if (this.searchText) {
+      const q = this.searchText.toLowerCase().trim();
+      if (q) {
+        list = list.filter(item =>
+          (item.title || '').toLowerCase().includes(q) ||
+          (item.description || '').toLowerCase().includes(q)
+        );
+      }
+    }
+
+    if (this.activeTags.length > 0) {
+      if (this.filterMode === 'and') {
+        // 全部匹配（交集）：须同时满足所有选中标签
+        list = list.filter(item =>
+          this.activeTags.every(tag =>
+            Array.isArray(item.tags) && item.tags.includes(tag)
+          )
+        );
+      } else {
+        // 任意匹配（并集）：满足任一选中标签即可
+        list = list.filter(item =>
+          this.activeTags.some(tag =>
+            Array.isArray(item.tags) && item.tags.includes(tag)
+          )
+        );
+      }
+    }
+
+    return list;
+  }
+
+  // 渲染过滤后的卡片并触发入场动画
+  renderFilteredBlogCards(containerId) {
+    const filtered = this.getFilteredList();
+    this.renderBlogCards(containerId, filtered);
+
+    if (!this.hasInitialRender) {
+      this.setupEntranceAnimation();
+      this.hasInitialRender = true;
+    } else {
+      document.querySelectorAll('.blog-card-wrapper').forEach(w => w.classList.add('visible'));
+    }
+  }
+
+  // 卡片入场动画（IntersectionObserver + 索引延时）
+  setupEntranceAnimation() {
+    const wrappers = document.querySelectorAll('.blog-card-wrapper');
+    if (!wrappers.length) return;
+
+    if (!('IntersectionObserver' in window)) {
+      wrappers.forEach(w => w.classList.add('visible'));
+      return;
+    }
+
+    const entryTimes = new Map();
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          if (!entryTimes.has(entry.target)) {
+            entryTimes.set(entry.target, Date.now());
+          }
+          const index = Array.from(wrappers).indexOf(entry.target);
+          const delay = index * 40; // 每张卡 40ms 递增
+          setTimeout(() => {
+            entry.target.classList.add('visible');
+            observer.unobserve(entry.target);
+          }, delay);
+        }
+      });
+    }, { threshold: 0 });
+
+    wrappers.forEach(w => observer.observe(w));
+  }
+
   // 添加底部一言区域（不包含刷新按钮）
   addFooter() {
     if (document.querySelector('.footer')) return;
@@ -464,6 +748,101 @@ class BlogCardRenderer {
         console.error('加载一言失败:', error);
         sentenceDiv.textContent = '一言加载失败';
       });
+
+    // 底部 Overscroll 动画：尝试继续下滑时页脚颜色渐变 + 句子放大
+    let pullAccum = 0;
+    const MAX_PULL = 120;
+    let resetTimer;
+
+    const animateFooter = (progress) => {
+      const r = 57, g = 159, b = 255;
+      // 上边界升起感：边框加粗 + 向上扩散的阴影
+      footer.style.borderTopWidth = `${1 + progress * 1.5}px`;
+      footer.style.borderTopColor = `rgba(${r},${g},${b},${0.2 + progress * 0.5})`;
+      footer.style.boxShadow = `0 -${progress * 10}px ${progress * 16}px -2px rgba(${r},${g},${b},${progress * 0.15})`;
+      // 背景：半透明白 → 主题色渐显
+      footer.style.background = `rgba(${r},${g},${b},${0.08 + progress * 0.25})`;
+      // backdrop-filter 强度随下拉增加
+      footer.style.backdropFilter = `blur(${4 + progress * 8}px)`;
+      // 句子略微放大
+      sentenceDiv.style.transform = `scale(${1 + progress * 0.08})`;
+      sentenceDiv.style.color = progress > 0.5
+        ? `rgba(${Math.min(255, r + (255-r)*(progress-0.5)*2)}, ${Math.min(255, g + (255-g)*(progress-0.5)*2)}, 255, 1)`
+        : '';
+      // "再找" 行：字间距拉开 + 渐隐 + 变色加粗
+      line.style.letterSpacing = `${progress * 3}px`;
+      line.style.opacity = 1 - progress * 0.5;
+      line.style.color = `rgba(${r},${g},${b},${0.3 + progress * 0.7})`;
+      line.style.fontWeight = progress > 0.3 ? '700' : '';
+    };
+
+    const resetFooter = () => {
+      if (pullAccum === 0) return;
+      pullAccum = 0;
+      const trans = '0.5s cubic-bezier(0.2, 0.9, 0.3, 1)';
+      footer.style.transition = `background ${trans}, border-top-width ${trans}, border-top-color ${trans}, box-shadow ${trans}, backdrop-filter ${trans}`;
+      sentenceDiv.style.transition = `transform ${trans}, color ${trans}`;
+      line.style.transition = `letter-spacing ${trans}, opacity ${trans}, color ${trans}, font-weight ${trans}`;
+      footer.style.background = '';
+      footer.style.borderTopWidth = '';
+      footer.style.borderTopColor = '';
+      footer.style.boxShadow = '';
+      footer.style.backdropFilter = '';
+      sentenceDiv.style.transform = '';
+      sentenceDiv.style.color = '';
+      line.style.letterSpacing = '';
+      line.style.color = '';
+      line.style.fontWeight = '';
+      line.style.opacity = '';
+      setTimeout(() => {
+        footer.style.transition = '';
+        sentenceDiv.style.transition = '';
+        line.style.transition = '';
+      }, 500);
+    };
+
+    // 顶部 Overscroll：在页面最顶上继续上滑时内容被轻微拉下
+    let topPull = 0;
+    const MAX_TOP_PULL = 80;
+    const container = document.querySelector('.container');
+    let topResetTimer;
+
+    const resetTop = () => {
+      if (topPull === 0) return;
+      topPull = 0;
+      const trans = '0.5s cubic-bezier(0.2, 0.9, 0.3, 1)';
+      container.style.transition = `transform ${trans}`;
+      container.style.transform = '';
+      setTimeout(() => { container.style.transition = ''; }, 500);
+    };
+
+    window.addEventListener('wheel', (e) => {
+      const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+      const atTop = window.scrollY <= 0;
+
+      // 顶部 overscroll：上滑（deltaY < 0）
+      if (atTop && e.deltaY < 0 && topPull < MAX_TOP_PULL) {
+        topPull = Math.min(topPull + Math.abs(e.deltaY) * 0.3, MAX_TOP_PULL);
+        container.style.transform = `translateY(${topPull * 0.3}px)`;
+      }
+      if (topPull > 0 && (!atTop || e.deltaY > 0)) {
+        resetTop();
+      }
+
+      // 底部 overscroll（页脚动画）
+      if (atBottom && e.deltaY > 0 && pullAccum < MAX_PULL) {
+        pullAccum = Math.min(pullAccum + e.deltaY * 0.35, MAX_PULL);
+        animateFooter(pullAccum / MAX_PULL);
+      }
+      if (pullAccum > 0 && (!atBottom || e.deltaY < 0)) {
+        resetFooter();
+      }
+
+      clearTimeout(resetTimer);
+      if (pullAccum > 0) resetTimer = setTimeout(resetFooter, 200);
+      clearTimeout(topResetTimer);
+      if (topPull > 0) topResetTimer = setTimeout(resetTop, 200);
+    }, { passive: true });
   }
 
   copyToClipboard(text) {
