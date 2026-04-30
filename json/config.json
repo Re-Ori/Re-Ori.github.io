@@ -39,5 +39,16 @@
   },
   "blog": {
     "initialListUrl": "/json/blogs.json"
+  },
+  "giscus": {
+    "repo": "Re-Ori/Re-Ori.github.io",
+    "repoId": "R_kgDOM74MJQ",
+    "category": "Announcements",
+    "categoryId": "DIC_kwDOM74MJc4C8D1L",
+    "mapping": "pathname",
+    "reactionsEnabled": "1",
+    "emitMetadata": "0",
+    "inputPosition": "bottom",
+    "lang": "zh-CN"
   }
 }

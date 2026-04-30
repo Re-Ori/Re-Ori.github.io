@@ -8,22 +8,47 @@
 html {
   scroll-behavior: smooth;
   overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--theme-color, #399FFF) transparent;
 }
 
 body {
   overflow-x: hidden;
-}
-
-
-
-body {
   background: #f5f7fa;
   line-height: 1.6;
-  /* 新增 Flex 布局，使底部始终位于正确位置 */
+  margin: 0;
+}
+
+/* 仅在包含 .container 的页面启用 flex 粘性页脚，避免 Typora 导出页布局异常 */
+body:has(.container) {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  margin: 0;
+}
+
+/* ===== 自定义滚动条 (Webkit) ===== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--theme-color, #399FFF);
+  border-radius: 3px;
+  opacity: 0.6;
+}
+::-webkit-scrollbar-thumb:hover {
+  opacity: 1;
+}
+
+/* ===== 深色模式滚动条 ===== */
+[data-theme="dark"] html {
+  scrollbar-color: var(--theme-color, #399FFF) rgba(255,255,255,0.05);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--theme-color, #399FFF);
 }
 
 .container {
@@ -480,7 +505,11 @@ h1 {
   border-top: 1px solid rgba(0,0,0,0.1);
   background: rgba(255,255,255,0.6);
   backdrop-filter: blur(4px);
-  margin-top: 30px; /* 与上方内容保持距离 */
+  margin-top: 30px;
+  /* 始终撑满视口宽度，不受父容器 padding 影响 */
+  width: 100vw;
+  margin-left: calc(-50vw + 50%);
+  box-sizing: border-box;
 }
 
 .footer__line {
@@ -703,4 +732,120 @@ html[data-theme="dark"] .katex .mathrm {
 }
 html[data-theme="dark"] .katex-html {
   color: #c8c8d8;
+}
+
+/* ===== 回到顶部按钮 ===== */
+.back-to-top {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--theme-color, #399FFF);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  z-index: 9997;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(var(--theme-color-rgb, 57,159,255), 0.35);
+  opacity: 0;
+  transform: translateY(20px) scale(0.9);
+  pointer-events: none;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.2s,
+              box-shadow 0.2s;
+}
+.back-to-top.visible {
+  opacity: 0.9;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.back-to-top:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--theme-color, #399FFF) 85%, black);
+  box-shadow: 0 6px 24px rgba(var(--theme-color-rgb, 57,159,255), 0.5);
+  transform: translateY(-2px) scale(1.05);
+}
+.back-to-top:active {
+  transform: scale(0.95);
+}
+.back-to-top svg {
+  width: 20px;
+  height: 20px;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ===== Giscus 评论区 ===== */
+.giscus-wrapper {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 16px 24px;
+  width: 100%;
+}
+.giscus-wrapper .giscus {
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  padding: 20px;
+  min-height: 80px;
+}
+[data-theme="dark"] .giscus-wrapper .giscus {
+  background: rgba(26,27,42,0.7);
+}
+
+.giscus-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #999;
+  font-size: 13px;
+  padding: 28px 20px;
+  user-select: none;
+}
+.giscus-placeholder.error {
+  color: #e05555;
+}
+
+.giscus-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(var(--theme-color-rgb, 57,159,255), 0.2);
+  border-top-color: var(--theme-color, #399FFF);
+  border-radius: 50%;
+  animation: giscus-spin 0.7s linear infinite;
+}
+@keyframes giscus-spin {
+  to { transform: rotate(360deg); }
+}
+
+.giscus-placeholder .retry-link {
+  color: var(--theme-color, #399FFF);
+  cursor: pointer;
+  text-decoration: underline;
+  margin-top: 4px;
+}
+.giscus-placeholder .retry-link:hover {
+  opacity: 0.8;
+}
+
+/* ===== 暗色模式切换动画 ===== */
+#theme-transition-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 200vmax;
+  height: 200vmax;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 1;
+  pointer-events: none;
+  z-index: 99999;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.35s ease 0.1s;
 }

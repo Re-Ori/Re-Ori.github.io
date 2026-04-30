@@ -344,11 +344,55 @@
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const isDark = saved ? saved === 'dark' : prefersDark;
     if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
+    updateThemeIcon();
+
+    function updateThemeIcon() {
+      const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      const sun = themeBtn.querySelector('.sun');
+      const moon = themeBtn.querySelector('.moon');
+      if (sun) sun.style.display = dark ? '' : 'none';
+      if (moon) moon.style.display = dark ? 'none' : '';
+    }
+
+    // 主题切换 overlay
+    let themeOverlay = null;
+    function getThemeOverlay() {
+      if (!themeOverlay) {
+        themeOverlay = document.createElement('div');
+        themeOverlay.id = 'theme-transition-overlay';
+        document.body.appendChild(themeOverlay);
+      }
+      return themeOverlay;
+    }
 
     themeBtn.addEventListener('click', () => {
       const now = document.documentElement.getAttribute('data-theme') === 'dark';
-      document.documentElement.setAttribute('data-theme', now ? '' : 'dark');
-      localStorage.setItem('reori-theme', now ? 'light' : 'dark');
+      const targetDark = !now;
+      const overlay = getThemeOverlay();
+
+      // 静默重置：关掉 transition，瞬间归位
+      overlay.style.transition = 'none';
+      overlay.style.transform = 'translate(-50%, -50%) scale(0)';
+      overlay.style.opacity = '1';
+      overlay.style.background = targetDark ? '#13141f' : '#f5f7fa';
+      const rect = themeBtn.getBoundingClientRect();
+      overlay.style.left = (rect.left + rect.width / 2) + 'px';
+      overlay.style.top = (rect.top + rect.height / 2) + 'px';
+
+      // 强制回流，确保重置生效
+      overlay.offsetHeight;
+
+      // 恢复 transition，开始展开
+      overlay.style.transition = '';
+      overlay.style.transform = 'translate(-50%, -50%) scale(1)';
+
+      // 圆形覆盖大半时切换主题 + 淡出
+      setTimeout(() => {
+        document.documentElement.setAttribute('data-theme', targetDark ? 'dark' : '');
+        localStorage.setItem('reori-theme', targetDark ? 'dark' : 'light');
+        updateThemeIcon();
+        overlay.style.opacity = '0';
+      }, 200);
     });
 
     const ul = document.createElement('ul');
@@ -359,7 +403,7 @@
       a.href = item.url || '#';
       a.textContent = item.name;
       li.appendChild(a);
-      ul.appendChild(a);
+      ul.appendChild(li);
     });
 
     const siteName = document.createElement('div');
@@ -382,13 +426,60 @@
     progressContainer.append(progressBar);
     document.body.appendChild(progressContainer);
 
+    let scrollTicking = false;
     function updateProgress() {
       const scrollTop = window.scrollY;
       const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
       const percent = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 0;
       progressBar.style.width = percent + '%';
     }
-    window.addEventListener('scroll', updateProgress);
+    window.addEventListener('scroll', () => {
+      if (!scrollTicking) {
+        requestAnimationFrame(() => {
+          updateProgress();
+          scrollTicking = false;
+        });
+        scrollTicking = true;
+      }
+    });
     updateProgress();
+
+    // 回到顶部按钮
+    const backBtn = document.createElement('button');
+    backBtn.className = 'back-to-top';
+    backBtn.title = '回到顶部';
+    backBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="18 15 12 9 6 15"/>
+      </svg>
+    `;
+    document.body.appendChild(backBtn);
+
+    let backBtnTicking = false;
+    function updateBackToTop() {
+      backBtn.classList.toggle('visible', window.scrollY > 320);
+    }
+    window.addEventListener('scroll', () => {
+      if (!backBtnTicking) {
+        requestAnimationFrame(() => {
+          updateBackToTop();
+          backBtnTicking = false;
+        });
+        backBtnTicking = true;
+      }
+    });
+
+    backBtn.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // 进度条点击跳转
+    progressContainer.style.cursor = 'pointer';
+    progressContainer.addEventListener('click', (e) => {
+      const rect = progressContainer.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const target = ratio * (document.documentElement.scrollHeight - window.innerHeight);
+      window.scrollTo({ top: target, behavior: 'smooth' });
+    });
   });
 })();
