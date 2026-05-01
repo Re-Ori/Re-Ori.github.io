@@ -223,9 +223,17 @@
         bottom: 0;
         width: 100%;
         height: 6px;
-        background: rgba(255,255,255,0.9);
+        background: rgba(210,228,255,0.9);
         backdrop-filter: blur(8px);
+        border-top: 1px solid rgba(var(--theme-color-rgb,57,159,255),0.12);
         z-index: 9998;
+        transition: height 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
+                    background 0.25s ease;
+      }
+      #progress-container:hover {
+        height: 18px;
+        background: rgba(200,220,250,0.95);
+        box-shadow: 0 -6px 20px 2px rgba(var(--theme-color-rgb,57,159,255),0.35);
       }
       #read-progress {
         height: 100%;

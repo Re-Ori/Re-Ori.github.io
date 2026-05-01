@@ -2,12 +2,25 @@
   "name": "更新日志",
   "items": [
     {
+      "type": "html",
+      "priority": 99999999,
+      "html": "<div style=\"background: linear-gradient(135deg, rgba(var(--theme-color-rgb,57,159,255),0.10), rgba(var(--theme-color-rgb,57,159,255),0.02)); border: 1px solid rgba(var(--theme-color-rgb,57,159,255),0.15); border-radius: 8px; padding: 24px 20px; text-align: center;\"><span style=\"font-size: 15px; color: var(--theme-color,#399FFF); letter-spacing: 2px;\">敬请期待</span></div>"
+    },
+    {
       "id": "20260501",
       "priority": 20260501,
       "title": "20260501 更新",
       "description": "新增回到顶部按钮,Giscus评论区,自定义滚动条,暗色模式切换动画,进度条点击跳转,滚动性能优化,页脚全宽适配",
       "date": "2026-05-01",
       "url": "/blogs/update/20260501.html"
+    },
+    {
+      "id": "20260502",
+      "priority": 20260502,
+      "title": "20260502 更新",
+      "description": "新增一言刷新按钮,博客封面图支持,JSON自定义HTML片段,欢迎横幅,进度条hover交互改进,滚动条恢复默认",
+      "date": "2026-05-02",
+      "url": "/blogs/update/20260502.html"
     },
     {
       "id": "20260213",

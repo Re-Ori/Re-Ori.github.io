@@ -1,33 +1,40 @@
 {
   "name": "ReOri Blog",
+  "description": "Hello World!",
   "items": [
     {
-      "id": "tech",
-      "priority": 2,
-      "title": "技术专栏",
-      "description": "C++ 算法竞赛相关文章",
-      "date": "2026-04-27",
-      "url": "/index.html?blog_list=/blogs/tech/tech.json"
+      "type": "html",
+      "priority": 99,
+      "html": "<div style=\"background: linear-gradient(135deg, rgba(var(--theme-color-rgb,57,159,255),0.08), rgba(var(--theme-color-rgb,57,159,255),0.02)); border: 1px solid rgba(var(--theme-color-rgb,57,159,255),0.15); border-radius: 8px; padding: 16px 20px; text-align: center;\"><span style=\"font-size: 13px; color: var(--theme-color,#399FFF);\">欢迎来到 ReOri Blog</span></div>"
+    },
+    {
+      "id": "about",
+      "priority": 10,
+      "title": "About",
+      "description": "Introduction",
+      "cover": "/images/blogcover-about.svg",
+      "date": "2026-02-13",
+      "url": "/blogs/about.html"
     },
     {
       "id": "math",
-      "priority": 1,
+      "priority": 9,
       "title": "数学",
       "description": "有关高中数学的内容",
       "date": "2026-04-10",
       "url": "/index.html?blog_list=/blogs/math/math.json"
     },
     {
-      "id": "about",
-      "priority": 0,
-      "title": "About",
-      "description": "Introduction",
-      "date": "2026-02-13",
-      "url": "/blogs/about.html"
+      "id": "tech",
+      "priority": 8,
+      "title": "技术专栏",
+      "description": "C++ 算法竞赛相关文章",
+      "date": "2026-04-27",
+      "url": "/index.html?blog_list=/blogs/tech/tech.json"
     },
     {
       "id": "file",
-      "priority": 0,
+      "priority": 7,
       "title": "文件发布",
       "description": "",
       "date": "2026-02-26",

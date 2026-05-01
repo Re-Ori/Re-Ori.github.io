@@ -208,7 +208,9 @@ class BlogCardRenderer {
   showRedirectProgress(targetUrl) {
     // 解析目标网站域名用于显示
     const targetDomain = this.extractDomain(targetUrl);
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const savedTheme = localStorage.getItem('reori-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark = savedTheme ? savedTheme === 'dark' : prefersDark;
 
     // 创建进度条容器
     const progressContainer = document.createElement('div');
@@ -361,9 +363,17 @@ class BlogCardRenderer {
       return;
     }
 
-    items.forEach(blog => {
-      const card = this.createBlogCard(blog);
-      el.appendChild(card);
+    items.forEach(item => {
+      if (item.type === 'html') {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'blog-html-fragment';
+        wrapper.innerHTML = item.html;
+        if (item.wrapperClass) wrapper.classList.add(...item.wrapperClass.split(' '));
+        el.appendChild(wrapper);
+      } else {
+        const card = this.createBlogCard(item);
+        el.appendChild(card);
+      }
     });
   }
 
@@ -371,10 +381,17 @@ class BlogCardRenderer {
     const { id, title, description, date, url } = blog;
     const cardWrapper = document.createElement('div');
     cardWrapper.className = 'blog-card-wrapper';
+    if (blog.cover) cardWrapper.classList.add('has-cover');
 
     const card = document.createElement('a');
     card.href = url;
     card.className = 'blog-card';
+
+    // 封面图
+    let coverHtml = '';
+    if (blog.cover) {
+      coverHtml = `<div class="blog-card__cover"><img src="${blog.cover}" alt="${title || '博客封面'}" loading="lazy"></div>`;
+    }
 
     // 标签区域
     let tagsHtml = '';
@@ -383,6 +400,7 @@ class BlogCardRenderer {
     }
 
     card.innerHTML = `
+      ${coverHtml}
       <div class="blog-card__content">
         <div class="blog-card__title">${title || '无标题'}</div>
         <div class="blog-card__desc">${description || '无描述'}</div>
@@ -621,10 +639,11 @@ class BlogCardRenderer {
     if (el) el.style.display = 'none';
   }
 
-  // 从当前博客数据提取所有标签
+  // 从当前博客数据提取所有标签（跳过 HTML 片段）
   extractTags() {
     const tagSet = new Set();
     this.currentBlogList.forEach(item => {
+      if (item.type === 'html') return;
       if (Array.isArray(item.tags)) {
         item.tags.forEach(t => tagSet.add(t));
       }
@@ -632,14 +651,20 @@ class BlogCardRenderer {
     return Array.from(tagSet);
   }
 
-  // 获取当前过滤后的博客列表
+  // 获取当前过滤后的博客列表（HTML 片段始终保留在原位）
   getFilteredList() {
-    let list = this.currentBlogList;
+    const htmlFragments = this.currentBlogList.reduce((acc, item, idx) => {
+      if (item.type === 'html') acc.push(idx);
+      return acc;
+    }, []);
+
+    // 只对非 HTML 片段进行搜索和标签过滤
+    let filtered = this.currentBlogList.filter(item => item.type !== 'html');
 
     if (this.searchText) {
       const q = this.searchText.toLowerCase().trim();
       if (q) {
-        list = list.filter(item =>
+        filtered = filtered.filter(item =>
           (item.title || '').toLowerCase().includes(q) ||
           (item.description || '').toLowerCase().includes(q)
         );
@@ -648,15 +673,13 @@ class BlogCardRenderer {
 
     if (this.activeTags.length > 0) {
       if (this.filterMode === 'and') {
-        // 全部匹配（交集）：须同时满足所有选中标签
-        list = list.filter(item =>
+        filtered = filtered.filter(item =>
           this.activeTags.every(tag =>
             Array.isArray(item.tags) && item.tags.includes(tag)
           )
         );
       } else {
-        // 任意匹配（并集）：满足任一选中标签即可
-        list = list.filter(item =>
+        filtered = filtered.filter(item =>
           this.activeTags.some(tag =>
             Array.isArray(item.tags) && item.tags.includes(tag)
           )
@@ -664,7 +687,26 @@ class BlogCardRenderer {
       }
     }
 
-    return list;
+    // 将 HTML 片段按原位置插回
+    const result = [];
+    let filteredIdx = 0;
+    for (let i = 0; i < this.currentBlogList.length; i++) {
+      if (htmlFragments.includes(i)) {
+        result.push(this.currentBlogList[i]);
+      } else {
+        if (filteredIdx < filtered.length &&
+            this.currentBlogList[i] === filtered[filteredIdx]) {
+          result.push(filtered[filteredIdx]);
+          filteredIdx++;
+        }
+      }
+    }
+    // 追加剩余的过滤结果（理论上不会发生，但安全处理）
+    while (filteredIdx < filtered.length) {
+      result.push(filtered[filteredIdx++]);
+    }
+
+    return result;
   }
 
   // 渲染过滤后的卡片并触发入场动画
@@ -676,13 +718,13 @@ class BlogCardRenderer {
       this.setupEntranceAnimation();
       this.hasInitialRender = true;
     } else {
-      document.querySelectorAll('.blog-card-wrapper').forEach(w => w.classList.add('visible'));
+      document.querySelectorAll('.blog-card-wrapper, .blog-html-fragment').forEach(w => w.classList.add('visible'));
     }
   }
 
-  // 卡片入场动画（IntersectionObserver + 索引延时）
+  // 卡片入场动画：链式加载，每张卡自己等40ms后加上visible
   setupEntranceAnimation() {
-    const wrappers = document.querySelectorAll('.blog-card-wrapper');
+    const wrappers = document.querySelectorAll('.blog-card-wrapper, .blog-html-fragment');
     if (!wrappers.length) return;
 
     if (!('IntersectionObserver' in window)) {
@@ -690,24 +732,55 @@ class BlogCardRenderer {
       return;
     }
 
-    const entryTimes = new Map();
+    const scheduled = new Set();
+
+    const reveal = (el) => {
+      if (scheduled.has(el)) return;
+      scheduled.add(el);
+      setTimeout(() => {
+        el.classList.add('visible');
+        const idx = Array.from(wrappers).indexOf(el);
+        tryReveal(idx + 1);
+      }, 40);
+    };
+
+    const tryReveal = (fromIdx) => {
+      for (let i = fromIdx; i < wrappers.length; i++) {
+        const el = wrappers[i];
+        if (scheduled.has(el) || el.classList.contains('visible')) continue;
+
+        const rect = el.getBoundingClientRect();
+        // 已滚过视口上方，直接标为可见
+        if (rect.bottom < 0) {
+          el.classList.add('visible');
+          continue;
+        }
+        // 还没进入视口
+        if (rect.top >= window.innerHeight) return;
+
+        // 在视口中
+        if (i === 0) { reveal(el); return; }
+
+        const prev = wrappers[i - 1];
+        if (prev.classList.contains('visible') || prev.getBoundingClientRect().bottom < 0) {
+          reveal(el);
+          return;
+        }
+        return;
+      }
+    };
+
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
-          if (!entryTimes.has(entry.target)) {
-            entryTimes.set(entry.target, Date.now());
-          }
-          const index = Array.from(wrappers).indexOf(entry.target);
-          const delay = index * 40; // 每张卡 40ms 递增
-          setTimeout(() => {
-            entry.target.classList.add('visible');
-            observer.unobserve(entry.target);
-          }, delay);
+          tryReveal(0);
+          observer.unobserve(entry.target);
         }
       });
     }, { threshold: 0 });
 
     wrappers.forEach(w => observer.observe(w));
+    tryReveal(0);
   }
 
   // 添加底部一言区域（不包含刷新按钮）
@@ -725,29 +798,60 @@ class BlogCardRenderer {
     sentenceDiv.className = 'footer__sentence';
     sentenceDiv.textContent = '加载一言中...';
 
+    const refreshBtn = document.createElement('button');
+    refreshBtn.className = 'footer__refresh';
+    refreshBtn.title = '刷新一言';
+    refreshBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>
+    `;
+
+    const sentenceRow = document.createElement('div');
+    sentenceRow.className = 'footer__sentence-row';
+    sentenceRow.appendChild(sentenceDiv);
+
     footer.appendChild(line);
-    footer.appendChild(sentenceDiv);
+    footer.appendChild(sentenceRow);
+    footer.appendChild(refreshBtn);
     document.body.appendChild(footer);
 
-    fetch('/json/sentence.json')
-      .then(response => response.json())
-      .then(data => {
-        const randomIndex = Math.floor(Math.random() * data.length);
-        const item = data[randomIndex];
-        const sentence = item.sentence;
-        const from = item.from;
-        const displayText = `「${sentence}」\n——${from}`;
-        sentenceDiv.textContent = displayText;
-        this.currentSentenceText = `「${sentence}」——${from}`;
-
-        sentenceDiv.addEventListener('click', () => {
-          this.copyToClipboard(this.currentSentenceText);
+    const loadSentence = () => {
+      sentenceDiv.textContent = '加载一言中...';
+      fetch('/json/sentence.json')
+        .then(response => response.json())
+        .then(data => {
+          const randomIndex = Math.floor(Math.random() * data.length);
+          const item = data[randomIndex];
+          const sentence = item.sentence;
+          const from = item.from;
+          const displayText = `「${sentence}」\n——${from}`;
+          sentenceDiv.textContent = displayText;
+          this.currentSentenceText = `「${sentence}」——${from}`;
+        })
+        .catch(error => {
+          console.error('加载一言失败:', error);
+          sentenceDiv.textContent = '一言加载失败';
         });
-      })
-      .catch(error => {
-        console.error('加载一言失败:', error);
-        sentenceDiv.textContent = '一言加载失败';
-      });
+    };
+
+    loadSentence();
+
+    refreshBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      refreshBtn.classList.add('spinning');
+      loadSentence();
+    });
+
+    sentenceDiv.addEventListener('click', () => {
+      this.copyToClipboard(this.currentSentenceText);
+    });
+
+    // 旋转动画结束后移除类
+    refreshBtn.addEventListener('animationend', () => {
+      refreshBtn.classList.remove('spinning');
+    });
 
     // 底部 Overscroll 动画：尝试继续下滑时页脚颜色渐变 + 句子放大
     let pullAccum = 0;

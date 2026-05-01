@@ -8,8 +8,6 @@
 html {
   scroll-behavior: smooth;
   overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: var(--theme-color, #399FFF) transparent;
 }
 
 body {
@@ -24,31 +22,6 @@ body:has(.container) {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-}
-
-/* ===== 自定义滚动条 (Webkit) ===== */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--theme-color, #399FFF);
-  border-radius: 3px;
-  opacity: 0.6;
-}
-::-webkit-scrollbar-thumb:hover {
-  opacity: 1;
-}
-
-/* ===== 深色模式滚动条 ===== */
-[data-theme="dark"] html {
-  scrollbar-color: var(--theme-color, #399FFF) rgba(255,255,255,0.05);
-}
-[data-theme="dark"] ::-webkit-scrollbar-thumb {
-  background: var(--theme-color, #399FFF);
 }
 
 .container {
@@ -125,6 +98,27 @@ h1 {
   margin-left: auto;
   margin-right: auto;
   white-space: pre-wrap; /* 保留连续空格和换行 */
+}
+
+/* ===== 博客卡片封面图 ===== */
+.blog-card__cover {
+  width: calc(100% + 40px);
+  margin: -20px -20px 12px -20px;
+  overflow: hidden;
+  border-radius: 8px 8px 0 0;
+  max-height: 180px;
+}
+
+.blog-card__cover img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.blog-card:hover .blog-card__cover img {
+  transform: scale(1.05);
 }
 
 .blog-card__tags {
@@ -317,6 +311,19 @@ h1 {
 
 .container {
   animation: pageFadeIn 0.5s ease both;
+}
+
+/* ===== HTML 片段（自定义嵌入内容） ===== */
+.blog-html-fragment {
+  margin-bottom: 12px;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.blog-html-fragment.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* ===== Card Entrance Animation ===== */
@@ -522,13 +529,23 @@ h1 {
   color: var(--theme-color, #399FFF);
   font-size: 14px;
   cursor: pointer;
-  white-space: pre-line; /* 支持换行 */
+  white-space: pre-line;
   line-height: 1.6;
   transition: opacity 0.2s;
+  text-align: center;
+  flex: 1;
 }
 
 .footer__sentence:hover {
   opacity: 0.8;
+}
+
+.footer__sentence-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
 /* ===== MC百科风格隐藏内容样式 ===== */
@@ -661,7 +678,12 @@ h1 {
   color: var(--theme-color, #399FFF);
 }
 [data-theme="dark"] #progress-container {
-  background: rgba(20,21,38,0.95);
+  background: rgba(16,24,48,0.92);
+  border-top-color: rgba(57,159,255,0.15);
+}
+[data-theme="dark"] #progress-container:hover {
+  background: rgba(20,32,60,0.96);
+  box-shadow: 0 -6px 20px 2px rgba(57,159,255,0.3);
 }
 
 /* 深色模式切换按钮 */
@@ -732,6 +754,64 @@ html[data-theme="dark"] .katex .mathrm {
 }
 html[data-theme="dark"] .katex-html {
   color: #c8c8d8;
+}
+
+/* ===== 页脚一言刷新按钮（页内左侧） ===== */
+.footer {
+  position: relative;
+}
+
+.footer__refresh {
+  position: absolute;
+  left: 32px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--theme-color-rgb, 57,159,255), 0.2);
+  background: rgba(var(--theme-color-rgb, 57,159,255), 0.06);
+  color: var(--theme-color, #399FFF);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.25s, border-color 0.25s, transform 0.2s;
+  padding: 0;
+  line-height: 1;
+}
+
+.footer__refresh:hover {
+  background: rgba(var(--theme-color-rgb, 57,159,255), 0.15);
+  border-color: rgba(var(--theme-color-rgb, 57,159,255), 0.5);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.footer__refresh:active {
+  transform: translateY(-50%) scale(0.92);
+}
+
+.footer__refresh svg {
+  display: block;
+}
+
+@keyframes footer-refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.footer__refresh.spinning svg {
+  animation: footer-refresh-spin 0.6s ease-in-out;
+}
+
+[data-theme="dark"] .footer__refresh {
+  background: rgba(57,159,255,0.08);
+  border-color: rgba(255,255,255,0.08);
+}
+
+[data-theme="dark"] .footer__refresh:hover {
+  background: rgba(57,159,255,0.2);
+  border-color: rgba(57,159,255,0.4);
 }
 
 /* ===== 回到顶部按钮 ===== */
