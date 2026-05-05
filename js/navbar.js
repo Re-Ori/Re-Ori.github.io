@@ -230,7 +230,8 @@
         transition: height 0.25s cubic-bezier(0.2, 0.9, 0.3, 1),
                     background 0.25s ease;
       }
-      #progress-container:hover {
+      #progress-container:hover,
+      #progress-container.dragging {
         height: 18px;
         background: rgba(200,220,250,0.95);
         box-shadow: 0 -6px 20px 2px rgba(var(--theme-color-rgb,57,159,255),0.35);
@@ -270,26 +271,235 @@
         color: rgba(255,255,255,0.7);
         margin-right: 4px;
       }
+
+      /* ===== Hamburger Menu Button ===== */
+      .navbar-hamburger {
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        width: 36px;
+        height: 36px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 6px;
+        color: #333;
+        transition: background 0.2s;
+        flex-shrink: 0;
+        gap: 5px;
+      }
+      .navbar-hamburger:hover {
+        background: rgba(var(--theme-color-rgb, 57,159,255), 0.1);
+      }
+      .navbar-hamburger span {
+        display: block;
+        width: 20px;
+        height: 2px;
+        background: currentColor;
+        border-radius: 2px;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                    opacity 0.3s ease;
+      }
+      .navbar-hamburger span:nth-child(2) {
+        width: 14px;
+        align-self: center;
+      }
+      #blog-navbar.nav-open .navbar-hamburger span:nth-child(1) {
+        transform: rotate(45deg) translate(4px, 4px);
+      }
+      #blog-navbar.nav-open .navbar-hamburger span:nth-child(2) {
+        opacity: 0;
+      }
+      #blog-navbar.nav-open .navbar-hamburger span:nth-child(3) {
+        transform: rotate(-45deg) translate(4px, -4px);
+      }
+
+      /* ===== Mobile Dropdown Menu ===== */
+      .navbar-mobile-menu {
+        display: none;
+        position: fixed;
+        top: ${navbarHeight}px;
+        left: 8px;
+        right: 8px;
+        background: rgba(255,255,255,0.96);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-radius: 14px;
+        box-shadow: 0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+        z-index: 9998;
+        padding: 6px 0;
+        transform: translateY(-16px);
+        opacity: 0;
+        transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+                    opacity 0.2s ease;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .navbar-mobile-menu.open {
+        transform: translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .navbar-mobile-menu .nav-mobile-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 20px 12px;
+        border-bottom: 1px solid rgba(0,0,0,0.06);
+        margin-bottom: 4px;
+      }
+      .navbar-mobile-menu .nav-mobile-header img {
+        height: 28px;
+        width: auto;
+        flex-shrink: 0;
+      }
+      .navbar-mobile-menu .nav-mobile-header .nav-mobile-title {
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--theme-color, #399FFF);
+        cursor: pointer;
+        flex: 1;
+      }
+      .navbar-mobile-menu a {
+        display: flex;
+        align-items: center;
+        padding: 14px 20px;
+        color: #333;
+        text-decoration: none;
+        font-size: 16px;
+        margin: 0 6px;
+        border-radius: 10px;
+        transition: background 0.15s;
+        -webkit-tap-highlight-color: transparent;
+        position: relative;
+      }
+      .navbar-mobile-menu a:hover {
+        background: rgba(var(--theme-color-rgb, 57,159,255), 0.08);
+        color: var(--theme-color, #399FFF);
+      }
+      .navbar-mobile-menu a:active {
+        background: rgba(var(--theme-color-rgb, 57,159,255), 0.15);
+        transform: scale(0.98);
+      }
+
+      /* ===== Mobile Overlay ===== */
+      .navbar-mobile-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.18);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        z-index: 9997;
+        opacity: 0;
+        transition: opacity 0.25s ease;
+        pointer-events: none;
+      }
+      .navbar-mobile-overlay.visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      /* Dark mode overrides */
+      [data-theme="dark"] .navbar-hamburger {
+        color: #a0a0b8;
+      }
+      [data-theme="dark"] .navbar-hamburger:hover {
+        background: rgba(57,159,255,0.15);
+        color: var(--theme-color, #399FFF);
+      }
+      [data-theme="dark"] .navbar-mobile-menu {
+        background: rgba(30,32,52,0.96);
+        box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2);
+      }
+      [data-theme="dark"] .navbar-mobile-menu a {
+        color: #a0a0b8;
+      }
+      [data-theme="dark"] .navbar-mobile-menu a:hover {
+        background: rgba(57,159,255,0.12);
+        color: var(--theme-color, #399FFF);
+      }
+      [data-theme="dark"] .navbar-mobile-menu .nav-mobile-header {
+        border-bottom-color: rgba(255,255,255,0.06);
+      }
+      [data-theme="dark"] .navbar-mobile-overlay {
+        background: rgba(0,0,0,0.4);
+      }
+
+      /* 拖拽进度条时禁用卡片 hover 动画，避免卡顿 */
+      body.is-dragging .blog-card {
+        transition: none !important;
+        transform: none !important;
+      }
+      body.is-dragging .blog-card::before,
+      body.is-dragging .blog-card::after {
+        transition: none !important;
+        animation: none !important;
+        opacity: 0 !important;
+        transform: scaleX(0) !important;
+      }
+      body.is-dragging .blog-card:hover {
+        transform: none !important;
+        box-shadow: none !important;
+      }
+      body.is-dragging .blog-card:hover::before,
+      body.is-dragging .blog-card:hover::after {
+        opacity: 0 !important;
+        transform: scaleX(0) !important;
+      }
+      body.is-dragging .blog-card:hover .blog-card__cover img {
+        transform: none !important;
+      }
+
+      /* ===== Responsive Navbar ===== */
+      @media (max-width: 768px) {
+        .navbar-hamburger {
+          display: flex;
+        }
+        .navbar-nav {
+          display: none !important;
+        }
+        .navbar-sitename {
+          display: none !important;
+        }
+        .navbar-mobile-menu {
+          display: block;
+        }
+        .navbar-mobile-overlay {
+          display: block;
+        }
+        #blog-navbar {
+          border-bottom-left-radius: 0;
+          border-bottom-right-radius: 0;
+        }
+      }
     `;
     document.head.append(style);
 
     // 创建复制提示元素
     const toast = document.createElement('div');
     toast.className = 'copy-toast';
-    toast.innerHTML = '<span class="toast-address"></span><span>复制成功</span>';
     document.body.appendChild(toast);
 
+    // 通用弹窗函数（与复制弹窗样式一致）
+    window.showToast = function(text, duration = 2000) {
+      toast.textContent = text;
+      toast.style.textAlign = 'center';
+      toast.style.whiteSpace = 'normal';
+      toast.classList.add('show');
+      clearTimeout(toast._hideTimer);
+      toast._hideTimer = setTimeout(() => toast.classList.remove('show'), duration);
+    };
+
     const copyToClipboard = (text) => {
-      const addressSpan = toast.querySelector('.toast-address');
-      addressSpan.textContent = text + ' ';
       navigator.clipboard.writeText(text).then(() => {
-        toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 2000);
+        const display = text.length > 50 ? text.slice(0, 47) + '...' : text;
+        window.showToast(display + ' 已复制', 1500);
       }).catch(err => {
         console.error('复制失败:', err);
-        addressSpan.textContent = '复制失败！';
-        toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 2000);
+        window.showToast('复制失败！', 1500);
       });
     };
 
@@ -373,7 +583,34 @@
       return themeOverlay;
     }
 
+    // 彩蛋：快速连切深色模式
+    let themeClicks = [];
+    let easterEggCooldown = false;
+    const THEME_EASTER_EGG_COUNT = 10;
+    const THEME_EASTER_EGG_WINDOW = 2000;
+
+    function checkThemeEasterEgg() {
+      const now = Date.now();
+      themeClicks.push(now);
+      themeClicks = themeClicks.filter(t => now - t < THEME_EASTER_EGG_WINDOW);
+      if (themeClicks.length >= THEME_EASTER_EGG_COUNT) {
+        themeClicks = [];
+        easterEggCooldown = true;
+        if (typeof window.__bgEasterEgg === 'function') window.__bgEasterEgg();
+        showEasterEggEmoji();
+        setTimeout(() => { easterEggCooldown = false; }, 4000);
+      }
+    }
+
+    function showEasterEggEmoji() {
+      window.showToast('(・_・?)', 3000);
+    }
+
     themeBtn.addEventListener('click', () => {
+      if (easterEggCooldown) {
+        showEasterEggEmoji();
+        return;
+      }
       const now = document.documentElement.getAttribute('data-theme') === 'dark';
       const targetDark = !now;
       const overlay = getThemeOverlay();
@@ -400,6 +637,8 @@
         localStorage.setItem('reori-theme', targetDark ? 'dark' : 'light');
         updateThemeIcon();
         overlay.style.opacity = '0';
+        // 主题切换完成后检测彩蛋，确保崩坏时的背景颜色与切换后一致
+        checkThemeEasterEgg();
       }, 200);
     });
 
@@ -421,10 +660,60 @@
       window.location.href = '/index.html';
     });
 
-    rightContainer.append(themeBtn, ul, siteName);
+    // 移动端汉堡菜单按钮
+    const hamburgerBtn = document.createElement('button');
+    hamburgerBtn.className = 'navbar-hamburger';
+    hamburgerBtn.setAttribute('aria-label', '菜单');
+    hamburgerBtn.innerHTML = '<span></span><span></span><span></span>';
+
+    rightContainer.append(themeBtn, ul, siteName, hamburgerBtn);
     nav.append(logoWrap, rightContainer);
 
     document.body.insertBefore(nav, document.body.firstChild);
+
+    // === 移动端下拉菜单 ===
+    const mobileMenu = document.createElement('div');
+    mobileMenu.className = 'navbar-mobile-menu';
+
+    const mobHeader = document.createElement('div');
+    mobHeader.className = 'nav-mobile-header';
+    const mobLogo = document.createElement('img');
+    mobLogo.src = navbarConfig.logo.src;
+    mobLogo.alt = navbarConfig.logo.alt;
+    mobLogo.loading = 'lazy';
+    const mobTitle = document.createElement('span');
+    mobTitle.className = 'nav-mobile-title';
+    mobTitle.textContent = navbarConfig.siteName;
+    mobTitle.addEventListener('click', () => { window.location.href = '/index.html'; });
+    mobHeader.append(mobLogo, mobTitle);
+    mobileMenu.appendChild(mobHeader);
+
+    ul.querySelectorAll('a').forEach(a => {
+      const link = a.cloneNode(true);
+      link.addEventListener('click', closeMobileMenu);
+      mobileMenu.appendChild(link);
+    });
+
+    const overlay = document.createElement('div');
+    overlay.className = 'navbar-mobile-overlay';
+    overlay.addEventListener('click', closeMobileMenu);
+
+    function closeMobileMenu() {
+      nav.classList.remove('nav-open');
+      mobileMenu.classList.remove('open');
+      overlay.classList.remove('visible');
+    }
+
+    hamburgerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = mobileMenu.classList.contains('open');
+      nav.classList.toggle('nav-open');
+      mobileMenu.classList.toggle('open');
+      overlay.classList.toggle('visible');
+    });
+
+    document.body.appendChild(mobileMenu);
+    document.body.appendChild(overlay);
 
     // 进度条
     const progressContainer = document.createElement('div');
@@ -481,13 +770,60 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
-    // 进度条点击跳转
-    progressContainer.style.cursor = 'pointer';
-    progressContainer.addEventListener('click', (e) => {
-      const rect = progressContainer.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      const target = ratio * (document.documentElement.scrollHeight - window.innerHeight);
-      window.scrollTo({ top: target, behavior: 'smooth' });
+    // 进度条拖拽跳转
+    let isDragging = false;
+    let dragRect = null;
+    let dragMaxScroll = 0;
+
+    progressContainer.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      isDragging = true;
+      document.body.classList.add('is-dragging');
+      dragRect = progressContainer.getBoundingClientRect();
+      dragMaxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      progressContainer.classList.add('dragging');
+      progressContainer.style.cursor = 'grabbing';
+      seekProgress(e.clientX);
     });
+
+    function seekProgress(clientX) {
+      const ratio = Math.max(0, Math.min(1, (clientX - dragRect.left) / dragRect.width));
+      window.scrollTo(0, ratio * dragMaxScroll);
+    }
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      seekProgress(e.clientX);
+    });
+
+    function endDrag() {
+      if (!isDragging) return;
+      isDragging = false;
+      document.body.classList.remove('is-dragging');
+      dragRect = null;
+      dragMaxScroll = 0;
+      updateProgress();
+      progressContainer.classList.remove('dragging');
+      progressContainer.style.cursor = '';
+    }
+
+    window.addEventListener('mouseup', endDrag);
+    window.addEventListener('blur', endDrag);
+
+    progressContainer.addEventListener('touchstart', (e) => {
+      isDragging = true;
+      document.body.classList.add('is-dragging');
+      dragRect = progressContainer.getBoundingClientRect();
+      dragMaxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      progressContainer.classList.add('dragging');
+      seekProgress(e.touches[0].clientX);
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+      seekProgress(e.touches[0].clientX);
+    }, { passive: true });
+
+    document.addEventListener('touchend', endDrag);
   });
 })();

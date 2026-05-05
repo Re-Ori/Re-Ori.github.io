@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -11,16 +11,21 @@
         <div class="blog-content">
             <h2>20260501 更新</h2>
             <p>1. 新增回到顶部按钮,滚动超过一屏后在右下角显示,点击平滑回到顶部</p>
-            <p>2. 新增 Giscus 评论区,文章底部支持 GitHub Discussions 评论,实现加载动画和错误重试,暗色模式自动同步</p>
+            <p>2. 新增 Giscus 评论区,文章底部支持 GitHub Discussions 评论,带加载动画和错误重试,暗色模式自动同步</p>
+            <p>3. 自定义滚动条样式,6px 宽主题色滑块,支持 Firefox 和 Webkit 浏览器</p>
             <p>4. 新增暗色模式切换动画,从切换按钮处圆形扩散渐变,过渡自然</p>
             <p>5. 进度条支持点击跳转,点击底部进度条任意位置可跳转到对应阅读进度</p>
             <p>6. 滚动事件统一使用 requestAnimationFrame 节流,减少性能消耗</p>
             <p>7. 深色模式按钮图标跟随主题切换显示太阳/月亮</p>
+            <p>8. 评论区支持加载中提示和加载失败重试,超时 15 秒自动报错</p>
+            <p>10. 修复导航栏 HTML 结构问题</p>
+            <p>11. 页脚自动撑满视口宽度,不受父容器内边距影响</p>
         </div>
     </div>
 
     <script src="/js/main.js"></script>
     <script src="/js/navbar.js"></script>
     <script src="/js/giscus.js"></script>
+  <script src="/js/bg.js"></script>
 </body>
 </html>

@@ -25,6 +25,8 @@ body:has(.container) {
 }
 
 .container {
+  position: relative;
+  z-index: 1;
   max-width: 1000px;
   margin: 0 auto;
   padding: 0 16px;
@@ -507,6 +509,8 @@ h1 {
 
 /* ===== 新增底部页脚样式 ===== */
 .footer {
+  position: relative;
+  z-index: 1;
   text-align: center;
   padding: 20px 16px;
   border-top: 1px solid rgba(0,0,0,0.1);
@@ -928,4 +932,104 @@ html[data-theme="dark"] .katex-html {
   z-index: 99999;
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
               opacity 0.35s ease 0.1s;
+}
+
+/* ===== 响应式设计 ===== */
+@media (max-width: 1024px) {
+  .container {
+    max-width: 100%;
+    padding: 0 12px;
+  }
+  .giscus-wrapper {
+    max-width: 100%;
+    padding: 0 12px 20px;
+  }
+  .blog-card__cover {
+    max-height: 140px;
+  }
+  .blog-card__cover img {
+    height: 130px;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 0 8px;
+  }
+  h1 {
+    font-size: 22px;
+    margin-bottom: 16px;
+  }
+  .page-description {
+    font-size: 14px;
+    margin-bottom: 16px;
+  }
+  .blog-card {
+    padding: 14px;
+    min-height: auto;
+  }
+  .blog-card__title {
+    font-size: 16px;
+  }
+  .blog-card__desc {
+    font-size: 13px;
+  }
+  .blog-card__date {
+    font-size: 11px;
+  }
+  .blog-card__cover {
+    max-height: 120px;
+  }
+  .blog-card__cover img {
+    height: 110px;
+  }
+  .blog-card__actions {
+    flex-wrap: wrap;
+  }
+  .blog-card__tag {
+    font-size: 10px;
+    padding: 1px 6px;
+  }
+  .blog-content {
+    padding: 16px;
+  }
+  .footer {
+    padding: 16px 12px;
+  }
+  .footer__sentence {
+    font-size: 13px;
+  }
+  .footer__refresh {
+    left: 8px;
+    width: 30px;
+    height: 30px;
+  }
+  .back-to-top {
+    bottom: 16px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+  }
+  .back-to-top svg {
+    width: 18px;
+    height: 18px;
+  }
+  .copy-toast {
+    bottom: 12px;
+    right: 12px;
+    left: 12px;
+    max-width: none;
+    text-align: center;
+    font-size: 13px;
+    transform: translateY(20px);
+  }
+  .copy-toast.show {
+    transform: translateY(0);
+  }
+  .giscus-wrapper {
+    padding: 0 8px 16px;
+  }
+  .giscus-wrapper .giscus {
+    padding: 12px;
+  }
 }
