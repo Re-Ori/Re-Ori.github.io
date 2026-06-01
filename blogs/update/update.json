@@ -7,9 +7,50 @@
       "html": "<div style=\"background: linear-gradient(135deg, rgba(var(--theme-color-rgb,57,159,255),0.10), rgba(var(--theme-color-rgb,57,159,255),0.02)); border: 1px solid rgba(var(--theme-color-rgb,57,159,255),0.15); border-radius: 8px; padding: 24px 20px; text-align: center;\"><span style=\"font-size: 15px; color: var(--theme-color,#399FFF); letter-spacing: 2px;\">敬请期待</span></div>"
     },
     {
+      "id": "20260213",
+      "priority": 20260213,
+      "title": "1.0.0 20260213 更新",
+      "description": "新增博客系统,新增自定义blog来源设置,自动跳转,复制地址",
+      "themeColor": "#FF6B35",
+      "date": "2026-02-13",
+      "url": "/blogs/update/20260213.html"
+    },
+    {
+      "id": "20260214",
+      "priority": 20260214,
+      "title": "1.1.0 20260214 更新",
+      "description": "拓展复制按钮使用范围,新增一言功能,更改了链接样式,添加了404页面,blog优先级排序",
+      "date": "2026-02-14",
+      "url": "/blogs/update/20260214.html"
+    },
+    {
+      "id": "20260226",
+      "priority": 20260226,
+      "title": "1.1.1 20260226 更新",
+      "description": "新增blog框的悬停动画效果",
+      "date": "2026-02-26",
+      "url": "/blogs/update/20260226.html"
+    },
+    {
+      "id": "20260419",
+      "priority": 20260419,
+      "title": "1.1.2 20260419 更新",
+      "description": "优化文件结构,新增了blog集合的描述,优化404页面,新增了重定向链接的动画效果,新增了隐藏内容",
+      "date": "2026-04-19",
+      "url": "/blogs/update/20260419.html"
+    },
+    {
+      "id": "20260429",
+      "priority": 20260429,
+      "title": "1.2.0 20260429 更新",
+      "description": "新增搜索与多选标签筛选,新增技术专栏(C++算法竞赛14篇),新增深色模式,新增卡片入场与页面淡入动画,新增页脚顶部弹性效果,优化导航栏hover交互",
+      "date": "2026-04-29",
+      "url": "/blogs/update/20260429.html"
+    },
+    {
       "id": "20260501",
       "priority": 20260501,
-      "title": "20260501 更新",
+      "title": "1.2.1 20260501 更新",
       "description": "新增回到顶部按钮,Giscus评论区,自定义滚动条,暗色模式切换动画,进度条点击跳转,滚动性能优化,页脚全宽适配",
       "date": "2026-05-01",
       "url": "/blogs/update/20260501.html"
@@ -17,48 +58,26 @@
     {
       "id": "20260502",
       "priority": 20260502,
-      "title": "20260502 更新",
+      "title": "1.2.2 20260502 更新",
       "description": "新增一言刷新按钮,博客封面图支持,JSON自定义HTML片段,欢迎横幅,弹性网格背景,进度条hover交互改进",
       "date": "2026-05-02",
       "url": "/blogs/update/20260502.html"
     },
     {
-      "id": "20260213",
-      "priority": 20260213,
-      "title": "20260213 更新",
-      "description": "新增博客系统,新增自定义blog来源设置,自动跳转,复制地址",
-      "date": "2026-02-13",
-      "url": "/blogs/update/20260213.html"
-    },
-    {
-        "id": "20260214",
-        "priority": 20260214,
-        "title": "20260214 更新",
-        "description": "拓展复制按钮使用范围,新增一言功能,更改了链接样式,添加了404页面,blog优先级排序",
-        "date": "2026-02-14",
-        "url": "/blogs/update/20260214.html"
-    },
-    {
-        "id": "20260226",
-        "priority": 20260226,
-        "title": "20260226 更新",
-        "description": "新增blog框的悬停动画效果",
-        "date": "2026-02-26",
-        "url": "/blogs/update/20260226.html"
+      "id": "20260601",
+      "priority": 20260601,
+      "title": "1.3.0 20260601 更新",
+      "description": "国内镜像站上线!",
+      "themeColor": "#FF6B35",
+      "date": "2026-06-01",
+      "url": "/blogs/update/20260601-0.html"
     },{
-        "id": "20260419",
-        "priority": 20260419,
-        "title": "20260419 更新",
-        "description": "优化文件结构,新增了blog集合的描述,优化404页面,新增了重定向链接的动画效果,新增了隐藏内容的功能",
-        "date": "2026-04-19",
-        "url": "/blogs/update/20260419.html"
-    },{
-        "id": "20260429",
-        "priority": 20260429,
-        "title": "20260429 更新",
-        "description": "新增搜索与多选标签筛选,新增技术专栏(C++算法竞赛14篇),新增深色模式,新增卡片入场与页面淡入动画,新增页脚顶部弹性效果,优化导航栏hover交互",
-        "date": "2026-04-29",
-        "url": "/blogs/update/20260429.html"
+      "id": "20260601",
+      "priority": 20260601.5,
+      "title": "1.3.1 20260601 更新",
+      "description": "新增blog框颜色更改参数",
+      "date": "2026-06-01",
+      "url": "/blogs/update/20260601-1.html"
     }
   ]
 }

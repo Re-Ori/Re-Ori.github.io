@@ -8,6 +8,15 @@
       "html": "<div style=\"background: linear-gradient(135deg, rgba(var(--theme-color-rgb,57,159,255),0.08), rgba(var(--theme-color-rgb,57,159,255),0.02)); border: 1px solid rgba(var(--theme-color-rgb,57,159,255),0.15); border-radius: 8px; padding: 16px 20px; text-align: center;\"><span style=\"font-size: 13px; color: var(--theme-color,#399FFF);\">欢迎来到 ReOri Blog</span></div>"
     },
     {
+      "id": "major-update",
+      "priority": 10,
+      "title": "🎉 1.3.0 重大更新",
+      "description": "国内镜像站上线!",
+      "themeColor": "#FF6B35",
+      "date": "2026-06-01",
+      "url": "/blogs/update/20260601-0.html"
+    },
+    {
       "id": "about",
       "priority": 10,
       "title": "About",
@@ -46,7 +55,7 @@
       "title": "神秘递归",
       "description": "/tp @s",
       "date": "11-45-14",
-      "url": "/?blog_list=/json/blogs.json&blog_id=blog-jump"
+      "url": "/?blog_list=/blogs/blogs.json&blog_id=blog-jump"
     }
   ]
 }

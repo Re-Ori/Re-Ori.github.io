@@ -26,7 +26,7 @@ class BlogCardRenderer {
   constructor() {
     this.mainSiteUrl = "";
     this.currentBlogList = [];
-    this.currentListUrl = '/json/blogs.json';
+    this.currentListUrl = '/blogs/blogs.json';
     this.listName = 'ReOri Blog';
     this.listDescription = '';       // 博客集合的描述
     this.currentSentenceText = '';   // 存储当前一言文本，用于复制
@@ -50,14 +50,14 @@ class BlogCardRenderer {
     } else {
       // 尝试从配置文件加载初始博客列表URL
       try {
-        console.log('正在加载配置文件：/json/config.json');
+        // console.log('正在加载配置文件：/json/config.json');
         const res = await fetch('/json/config.json');
         if (!res.ok) {
           console.warn(`配置文件加载失败，状态码：${res.status}`);
           throw new Error(`HTTP ${res.status}`);
         }
         const config = await res.json();
-        console.log('配置文件加载成功：', config);
+        // console.log('配置文件加载成功：', config);
         
         // 设置主题色
         if (config.theme && config.theme.color) {
@@ -73,7 +73,7 @@ class BlogCardRenderer {
         }
       } catch (e) {
         console.warn('加载配置文件失败，使用默认配置:', e);
-        // 保持构造函数中设置的默认值：'/json/blogs.json'
+        // 保持构造函数中设置的默认值：'/blogs/blogs.json'
       }
     }
 
@@ -383,6 +383,12 @@ class BlogCardRenderer {
     cardWrapper.className = 'blog-card-wrapper';
     if (blog.cover) cardWrapper.classList.add('has-cover');
 
+    // 自定义主题色（未设置则使用全局默认）
+    if (blog.themeColor) {
+      cardWrapper.style.setProperty('--theme-color', blog.themeColor);
+      cardWrapper.style.setProperty('--theme-color-rgb', hexToRgb(blog.themeColor));
+    }
+
     const card = document.createElement('a');
     card.href = url;
     card.className = 'blog-card';
@@ -409,7 +415,7 @@ class BlogCardRenderer {
       ${tagsHtml}
       <div class="blog-card__actions">
         <button class="blog-card__copy-btn" title="复制地址">
-          <img src="/images/copy.svg" alt="复制" style="height: 16px; width: auto;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>
         <button class="blog-card__btn">阅读</button>
       </div>
@@ -464,7 +470,7 @@ class BlogCardRenderer {
       const button = document.createElement('button');
       button.className = 'inline-copy-btn';
       button.title = '复制内容';
-      button.innerHTML = `<img src="/images/copy.svg" alt="复制">${el.textContent}`;
+      button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; height: 1em; width: auto;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>${el.textContent}`;
 
       button.addEventListener('click', (e) => {
         e.stopPropagation();

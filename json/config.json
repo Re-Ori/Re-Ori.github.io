@@ -38,7 +38,7 @@
     }
   },
   "blog": {
-    "initialListUrl": "/json/blogs.json"
+    "initialListUrl": "/blogs/blogs.json"
   },
   "giscus": {
     "repo": "Re-Ori/Re-Ori.github.io",

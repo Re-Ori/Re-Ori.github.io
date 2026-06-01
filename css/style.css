@@ -165,10 +165,6 @@ h1 {
   justify-content: center;
 }
 
-.blog-card__copy-btn:hover {
-  background: rgba(var(--theme-color-rgb, 57,159,255), 0.2);
-}
-
 .blog-card__btn {
   background: var(--theme-color, #399FFF);
   color: #fff;

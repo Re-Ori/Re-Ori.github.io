@@ -22,14 +22,14 @@
 
     let navbarConfig;
     try {
-      console.log('[navbar.js] 正在加载配置文件：/json/config.json');
+      // console.log('[navbar.js] 正在加载配置文件：/json/config.json');
       const res = await fetch('/json/config.json');
       if (!res.ok) {
         console.warn(`[navbar.js] 配置文件加载失败，状态码：${res.status}`);
         throw new Error(`HTTP ${res.status}`);
       }
       const config = await res.json();
-      console.log('[navbar.js] 配置文件加载成功：', config);
+      // console.log('[navbar.js] 配置文件加载成功：', config);
       
       // 将模块化配置转换为navbar.js期望的扁平结构
       navbarConfig = {
