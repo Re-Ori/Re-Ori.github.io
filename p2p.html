@@ -50,6 +50,7 @@
     p2p.onMessage = addMessage;
     p2p.onFile = receiveFile;
     p2p.onScreenStream = receiveScreen;
+    p2p.onPeerLeave = handlePeerLeave;
   });
 
   // ── 渲染界面 ──
@@ -397,6 +398,12 @@
       container.classList.remove('visible');
       addSystemMsg(peerId + ' 结束屏幕共享');
     };
+  }
+
+  // ── Peer 断连处理 ──
+  function handlePeerLeave(peerId) {
+    addSystemMsg('👋 ' + peerId + ' 已离开房间');
+    // onPeersChange 已在 p2p._handlePeerLeave 中触发，侧栏会自动更新
   }
 
   // ── 工具 ──

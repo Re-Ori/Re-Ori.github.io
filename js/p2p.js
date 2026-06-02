@@ -2,12 +2,16 @@
  * P2P Manager — WebRTC 点对点通信
  * 支持：文字聊天、文件/图片传输、屏幕共享
  *
- * 修复记录（v2）：
- * - 修复 channel.onclose 中 orphaned 通道误删 peer 的问题：
- *   只有当关闭的 channel 仍是当前活跃的 channel 时才执行删除
- * - 修复 ICE 候选时序问题：在 setRemoteDescription 之前到达的候选
- *   被正确排队，在 setRemoteDescription 完成后刷新
- * - 加入日志便于调试
+ * 设计原则：只有加入房间的 peer 主动发起 WebRTC 连接，
+ * 房间内已有 peer 不主动 createOffer，只响应收到的 offer。
+ * 这完全消除了 glare（信令冲突）问题。
+ *
+ * 修复记录（v3）：
+ * - 移除 peer_join 中的 _connectTo 调用：不再双方互发 offer
+ * - 新增 peer_leave 处理：断连/关标签页时及时清理
+ * - 新增 WebRTC 连接状态日志：便于调试
+ * - 修复 ICE 候选时序：setRemoteDescription 前到达的候选排队等待
+ * - 修复 onclose 孤儿通道误删问题
  */
 class P2PManager {
   constructor() {
@@ -25,6 +29,7 @@ class P2PManager {
     this.onFile = null;          // (peerId, name, mime, blob, fileId) => {}
     this.onScreenStream = null;  // (peerId, stream) => {}
     this.onError = null;         // (msg) => {}
+    this.onPeerLeave = null;     // (peerId) => {}
   }
 
   // ── 后端检测 ──
@@ -51,7 +56,7 @@ class P2PManager {
       const data = await r.json();
       this.room = room;
       this.peerId = data.peer;
-      // 连接房间内已有成员
+      // 只有加入者主动连接房间内已有成员（单方发起，完全避免 glare）
       for (const p of data.peers) this._connectTo(p);
       // 立即触发一次上报，方便 UI 显示初始状态
       this._notifyPeersChange();
@@ -103,7 +108,13 @@ class P2PManager {
   async _handleSignal(sig) {
     switch (sig.type) {
       case 'peer_join':
-        this._connectTo(sig.data.peer);
+        // 关键：不在这里调用 _connectTo —
+        // 加入者已经在 joinRoom 中向所有已有成员发起了连接，
+        // 已有成员只需要等待接收 offer 即可（由 _handleOffer 处理）。
+        // 这完全避免了双方同时 createOffer 的 glare 问题。
+        break;
+      case 'peer_leave':
+        this._handlePeerLeave(sig.data.peer);
         break;
       case 'offer':
         await this._handleOffer(sig.from, sig.data);
@@ -121,6 +132,13 @@ class P2PManager {
         await this._handleScreenAnswer(sig.from, sig.data);
         break;
     }
+  }
+
+  _handlePeerLeave(peerId) {
+    // 清理断连 peer 的连接
+    this._disconnectPeer(peerId);
+    this._notifyPeersChange();
+    if (this.onPeerLeave) this.onPeerLeave(peerId);
   }
 
   // ── WebRTC 连接管理 ──
@@ -144,10 +162,22 @@ class P2PManager {
       if (this.onScreenStream) this.onScreenStream(peerId, e.streams[0]);
     };
 
+    // 调试日志：跟踪连接状态变化
+    pc.oniceconnectionstatechange = () => {
+      console.log(`[P2P] ICE ${peerId}: ${pc.iceConnectionState}`);
+    };
+    pc.onconnectionstatechange = () => {
+      console.log(`[P2P] Conn ${peerId}: ${pc.connectionState}`);
+      // 连接彻底断开时清理
+      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        this._handlePeerLeave(peerId);
+      }
+    };
+
     return pc;
   }
 
-  /** 刷新指定 peer 的排队 ICE 候选（在 setRemoteDescription 后调用） */
+  /** 刷新排队中的 ICE 候选（在 setRemoteDescription 后调用） */
   _flushPendingCandidates(peerId, pc) {
     const pending = this._pendingCandidates[peerId] || [];
     delete this._pendingCandidates[peerId];
@@ -159,14 +189,9 @@ class P2PManager {
   }
 
   /**
-   * Polite Peer 模式（彻底解决 glare / 信号冲突）：
-   *
-   * 双方都会创建 DataChannel + Offer，
-   * 收到对方 Offer 时通过 ID 比较决定谁让步：
-   *   - peerId > from（较大 ID）：polite → 回滚自己的 offer，接受对方
-   *   - peerId < from（较小 ID）：impolite → 保留自己的 offer，忽略对方
-   *
-   * 保证在相互发起的情况下总有一方能完成连接，不会死锁。
+   * 主动连接一个 peer。
+   * 只在 joinRoom 中调用（加入者连接已有成员），
+   * 不在 peer_join 中调用，从而保证只有一方发起。
    */
   _connectTo(peerId) {
     if (this.peers[peerId] || peerId === this.peerId) return;
@@ -176,9 +201,8 @@ class P2PManager {
 
     pc.createOffer()
       .then((offer) => {
-        // 防止双重协商：如果在 createOffer 异步期间
-        // _handleOffer 已经完成了 SDP 交换，就不再发送新的 offer
-        if (pc.signalingState !== 'stable' || pc.currentRemoteDescription) return;
+        // 如果 createOffer 异步期间连接已被建立，则不发
+        if (pc.signalingState !== 'stable') return;
         return pc.setLocalDescription(offer);
       })
       .then(() => {
@@ -204,20 +228,9 @@ class P2PManager {
   async _handleOffer(from, data) {
     const pc = this._getOrCreatePC(from);
 
-    // Glare 处理：双方同时发 offer
-    if (pc.signalingState === 'have-local-offer') {
-      if (this.peerId > from) {
-        // polite：接受对方的 offer
-        await pc.setLocalDescription({ type: 'rollback' });
-      } else {
-        // impolite：保留自己的 offer
-        return;
-      }
-    }
-
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(data));
-      // 关键修复：setRemoteDescription 后刷新排队中的 ICE 候选
+      // 刷新排队中的 ICE 候选
       this._flushPendingCandidates(from, pc);
 
       const answer = await pc.createAnswer();
@@ -237,7 +250,7 @@ class P2PManager {
     if (p.connection.signalingState === 'stable') return;
     try {
       await p.connection.setRemoteDescription(new RTCSessionDescription(data));
-      // 关键修复：setRemoteDescription 后刷新排队中的 ICE 候选
+      // 刷新排队中的 ICE 候选
       this._flushPendingCandidates(from, p.connection);
     } catch (e) {
       console.error('[P2P] handleAnswer error', from, e);
@@ -266,8 +279,7 @@ class P2PManager {
     };
 
     channel.onclose = () => {
-      // 关键修复：仅当关闭的 channel 仍然是当前活跃的 channel 时才删除 peer
-      // 防止孤儿 channel（rollback 遗留）关闭时误删正在使用的连接
+      // 仅当关闭的 channel 仍是当前活跃的 channel 时才清理
       if (this.peers[peerId] && this.peers[peerId].channel === channel) {
         delete this.peers[peerId];
         this._notifyPeersChange();
@@ -321,7 +333,7 @@ class P2PManager {
     return Object.keys(this.peers);
   }
 
-  /** 触发 onPeersChange 回调，传递已就绪的 peer 列表 */
+  /** 触发 onPeersChange 回调 */
   _notifyPeersChange() {
     if (this.onPeersChange) {
       this.onPeersChange(this._connectedPeerList(), this._allPeerList());

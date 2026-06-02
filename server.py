@@ -64,7 +64,7 @@ GITHUB_API_ORIGIN = "https://api.github.com"
 
 # ── P2P 信令存储（内存） ──────────────────────────────────
 _p2p_signals: dict[str, list[dict]] = {}
-_p2p_signals_lock = threading.Lock()
+_p2p_signals_lock = threading.RLock()
 _p2p_rooms: dict[str, dict[str, float]] = {}
 
 # ── 日志 ─────────────────────────────────────────────────
@@ -865,12 +865,28 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(502, "Bad Gateway")
 
     # -- P2P 信令 --
+    STALE_PEER_TIMEOUT = 15  # 秒 — 超过此时间未轮询视为断连
+
     def _store_signal(self, room: str, from_p: str, to_p: str, sig_type: str, data: dict):
         with _p2p_signals_lock:
             _p2p_signals.setdefault(room, []).append({
                 'from': from_p, 'to': to_p, 'type': sig_type,
                 'data': data, 'ts': time.time(),
             })
+
+    def _cleanup_stale_peers(self, room: str):
+        """移除超过 STALE_PEER_TIMEOUT 未轮询的 peer，广播 peer_leave。"""
+        if room not in _p2p_rooms:
+            return
+        now = time.time()
+        stale = [pid for pid, last_ts in list(_p2p_rooms[room].items())
+                 if now - last_ts > self.STALE_PEER_TIMEOUT]
+        for pid in stale:
+            _p2p_rooms[room].pop(pid, None)
+            self._store_signal(room, pid, '*', 'peer_leave', {'peer': pid})
+        if not _p2p_rooms[room]:
+            del _p2p_rooms[room]
+            _p2p_signals.pop(room, None)
 
     def _handle_p2p_join(self):
         try:
@@ -896,7 +912,10 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             with _p2p_signals_lock:
                 if room in _p2p_rooms:
                     _p2p_rooms[room].pop(peer, None)
-                    if not _p2p_rooms[room]:
+                    # 广播 peer_leave 给房间内剩余成员
+                    if _p2p_rooms[room]:
+                        self._store_signal(room, peer, '*', 'peer_leave', {'peer': peer})
+                    else:
                         del _p2p_rooms[room]
                         _p2p_signals.pop(room, None)
             self.send_response(200); self.send_header("Content-Length", "0"); self.end_headers()
@@ -919,16 +938,30 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         room, peer = params.get('room', [''])[0], params.get('peer', [''])[0]
         if not room or not peer:
             self._send_json({'signals': []}); return
+
+        # 收集数据在锁内，发送响应在锁外
         signals = []
         with _p2p_signals_lock:
+            # 更新此 peer 的最近轮询时间，用于断连检测
+            if room in _p2p_rooms and peer in _p2p_rooms[room]:
+                _p2p_rooms[room][peer] = time.time()
+            # 清理过期的 peer
+            self._cleanup_stale_peers(room)
+
             if room in _p2p_signals:
-                keep, signals = [], []
+                keep = []
                 for s in _p2p_signals[room]:
-                    if (s['to'] == '*' or s['to'] == peer) and s['from'] != peer:
+                    is_for_me = (s['to'] == peer) and s['from'] != peer
+                    is_broadcast = (s['to'] == '*') and s['from'] != peer
+                    if is_for_me:
                         signals.append(s)
+                    elif is_broadcast:
+                        signals.append(s)
+                        keep.append(s)
                     else:
                         keep.append(s)
                 _p2p_signals[room] = [s for s in keep if time.time() - s['ts'] < 30]
+
         self._send_json({'signals': signals})
 
     def _send_json(self, data: dict):
