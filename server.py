@@ -556,6 +556,34 @@ def apply_update(
     if cleaned:
         log(f"  清理了 {cleaned} 个空目录")
 
+# ── 本地文件变更检测 ─────────────────────────────────────
+
+def get_local_updated_at() -> str | None:
+    """
+    扫描项目目录，取所有被跟踪文件（非 LOCAL_ONLY_FILES）的最新修改时间。
+    返回格式化的 UTC+8 字符串，失败返回 None。
+    """
+    try:
+        latest: float = 0.0
+        for fpath in PROJECT_ROOT.rglob("*"):
+            if fpath.is_file():
+                rel = fpath.relative_to(PROJECT_ROOT)
+                if rel.name in LOCAL_ONLY_FILES:
+                    continue
+                # 跳过 .update_state.json 和 git 相关
+                if rel.name == ".update_state.json" or ".git" in rel.parts:
+                    continue
+                mtime = fpath.stat().st_mtime
+                if mtime > latest:
+                    latest = mtime
+        if latest == 0.0:
+            return None
+        dt = datetime.fromtimestamp(latest) + timedelta(hours=8)
+        return format_utc8(dt)
+    except Exception:
+        return None
+
+
 # ── 注入更新时间戳到 main.js ─────────────────────────────
 
 def inject_timestamp():
@@ -563,6 +591,7 @@ def inject_timestamp():
     state = load_state()
     github_updated_at = state.get("github_updated_at", "未知")
     last_checked_at = state.get("last_checked_at", "从未检查")
+    local_updated_at = get_local_updated_at() or "未知"
 
     block = (
         f"\n\n{TIMESTAMP_MARKER_START}\n"
@@ -573,7 +602,11 @@ def inject_timestamp():
         f"    'color: #4CAF50; font-size: 13px; font-weight: bold;'\n"
         f"  );\n"
         f"  console.log(\n"
-        f"    '  最新版本更新时间 (GitHub): %s',\n"
+        f"    '  本地文件版本: %s',\n"
+        f"    '{local_updated_at}'\n"
+        f"  );\n"
+        f"  console.log(\n"
+        f"    '  GitHub 远程版本: %s',\n"
         f"    '{github_updated_at}'\n"
         f"  );\n"
         f"  console.log(\n"
@@ -791,7 +824,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         return True
 
     # -- Giscus 代理 --
-    _GISCUS_PROXY_PREFIXES = ('/zh-CN/', '/en/', '/zh-TW/', '/_next/', '/api/')
+    _GISCUS_PROXY_PREFIXES = ('/zh-CN/', '/en/', '/zh-TW/', '/_next/', '/api/', '/themes/')
     _GISCUS_PROXY_EXACT = frozenset({
         '/default.css', '/light.css', '/dark.css', '/cider.css',
         '/site.webmanifest',
@@ -997,8 +1030,11 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                     datetime.utcnow() + timedelta(hours=8)
                 )
 
-                # 如果还没有版本更新时间，尝试从 API 获取一次
-                if not state.get("github_updated_at"):
+                # 每次检查都从 GitHub API 获取最新的 pushed_at，
+                # 因为即使 ZIP 内容没变（304），用户也可能刚推送了新 commit
+                gh_time = fetch_github_repo_updated_at()
+                if gh_time:
+                    state["github_updated_at"] = gh_time
                     gh_time = fetch_github_repo_updated_at()
                     if gh_time:
                         state["github_updated_at"] = gh_time
