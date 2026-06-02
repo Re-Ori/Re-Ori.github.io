@@ -270,7 +270,11 @@
 
     p2p.joinRoom(room).then(function(data) {
       if (!data) return;
+
+      // 关键修复：必须在 _notifyPeersChange() 之前设 state.connected，
+      // 因为侧栏 updatePeerList 依赖该标志判断显示 "未连接" 还是 peer 列表
       state.connected = true;
+
       document.getElementById('btn-join').style.display = 'none';
       document.getElementById('btn-copy-room').style.display = '';
       document.getElementById('btn-leave').style.display = '';
@@ -284,8 +288,9 @@
       url.searchParams.set('room', room);
       history.replaceState(null, '', url);
 
-      // 关键修复：加入房间后立即更新侧栏（而非等 DataChannel 打开才更新）
-      updatePeerList([], []);
+      // 关键修复：显式触发侧栏刷新，此时 state.connected 已为 true，
+      // updatePeerList 会显示正确的状态（peer 列表 / 等待他人加入）
+      p2p._notifyPeersChange();
 
       // 存储系统消息到 state 统一渲染
       addSystemMsg('你已加入房间 ' + room + '（ID: ' + p2p.peerId + '）');

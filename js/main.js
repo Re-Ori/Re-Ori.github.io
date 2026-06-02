@@ -1001,11 +1001,11 @@ document.addEventListener('DOMContentLoaded', () => {
   );
   console.log(
     '  最新版本更新时间 (GitHub): %s',
-    '未知'
+    '2026.06.02 22:21:55 [UTC+8]'
   );
   console.log(
     '  最新检查时间: %s',
-    '2026.06.02 21:17:57 [UTC+8]'
+    '2026.06.02 22:24:51 [UTC+8]'
   );
 })();
 // ===== End AutoUpdate Timestamp =====

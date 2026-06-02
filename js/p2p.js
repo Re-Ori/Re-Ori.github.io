@@ -2,10 +2,12 @@
  * P2P Manager — WebRTC 点对点通信
  * 支持：文字聊天、文件/图片传输、屏幕共享
  *
- * 修复记录：
- * - 修复 signal 轮询时 peer_join 被消费后其他 peer 无法收到的问题
- * - 优化 Polite Peer 模式（glare 冲突处理）
- * - 发送 signal 时先等 setLocalDescription 完成（避免 SDP 不完整）
+ * 修复记录（v2）：
+ * - 修复 channel.onclose 中 orphaned 通道误删 peer 的问题：
+ *   只有当关闭的 channel 仍是当前活跃的 channel 时才执行删除
+ * - 修复 ICE 候选时序问题：在 setRemoteDescription 之前到达的候选
+ *   被正确排队，在 setRemoteDescription 完成后刷新
+ * - 加入日志便于调试
  */
 class P2PManager {
   constructor() {
@@ -18,7 +20,7 @@ class P2PManager {
     this._pendingCandidates = {}; // peerId -> [candidates]
 
     // 回调
-    this.onPeersChange = null;   // (peerIds) => {}
+    this.onPeersChange = null;   // (connectedIds, allIds) => {}
     this.onMessage = null;       // (peerId, text) => {}
     this.onFile = null;          // (peerId, name, mime, blob, fileId) => {}
     this.onScreenStream = null;  // (peerId, stream) => {}
@@ -79,7 +81,7 @@ class P2PManager {
   // ── 信令轮询 ──
 
   _startPoll() {
-    this._stopPoll(); // 防止重复启动
+    this._stopPoll();
     this._pollTimer = setInterval(() => this._poll(), 1200);
   }
   _stopPoll() {
@@ -142,14 +144,18 @@ class P2PManager {
       if (this.onScreenStream) this.onScreenStream(peerId, e.streams[0]);
     };
 
-    // Flush pending candidates
+    return pc;
+  }
+
+  /** 刷新指定 peer 的排队 ICE 候选（在 setRemoteDescription 后调用） */
+  _flushPendingCandidates(peerId, pc) {
     const pending = this._pendingCandidates[peerId] || [];
     delete this._pendingCandidates[peerId];
     for (const c of pending) {
-      pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+      try {
+        pc.addIceCandidate(new RTCIceCandidate(c));
+      } catch { /* ignore */ }
     }
-
-    return pc;
   }
 
   /**
@@ -160,10 +166,7 @@ class P2PManager {
    *   - peerId > from（较大 ID）：polite → 回滚自己的 offer，接受对方
    *   - peerId < from（较小 ID）：impolite → 保留自己的 offer，忽略对方
    *
-   * 这样保证在相互发起的情况下总有一方能完成连接，不会死锁。
-   *
-   * 优化：发送 offer 前等待 setLocalDescription 完成，
-   * 避免对方收到 SDP 不完整的 offer。
+   * 保证在相互发起的情况下总有一方能完成连接，不会死锁。
    */
   _connectTo(peerId) {
     if (this.peers[peerId] || peerId === this.peerId) return;
@@ -173,8 +176,9 @@ class P2PManager {
 
     pc.createOffer()
       .then((offer) => {
-        // createOffer 异步期间可能已收到对端 offer（状态已变化）
-        if (pc.signalingState !== 'stable') return;
+        // 防止双重协商：如果在 createOffer 异步期间
+        // _handleOffer 已经完成了 SDP 交换，就不再发送新的 offer
+        if (pc.signalingState !== 'stable' || pc.currentRemoteDescription) return;
         return pc.setLocalDescription(offer);
       })
       .then(() => {
@@ -185,7 +189,7 @@ class P2PManager {
           });
         }
       })
-      .catch((e) => console.error('createOffer error', e));
+      .catch((e) => console.error('[P2P] createOffer error', e));
   }
 
   _disconnectPeer(peerId) {
@@ -213,6 +217,9 @@ class P2PManager {
 
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(data));
+      // 关键修复：setRemoteDescription 后刷新排队中的 ICE 候选
+      this._flushPendingCandidates(from, pc);
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       this._sendSignal(from, 'answer', {
@@ -220,7 +227,7 @@ class P2PManager {
         type: answer.type,
       });
     } catch (e) {
-      console.error('handleOffer error', from, e);
+      console.error('[P2P] handleOffer error', from, e);
     }
   }
 
@@ -230,14 +237,17 @@ class P2PManager {
     if (p.connection.signalingState === 'stable') return;
     try {
       await p.connection.setRemoteDescription(new RTCSessionDescription(data));
+      // 关键修复：setRemoteDescription 后刷新排队中的 ICE 候选
+      this._flushPendingCandidates(from, p.connection);
     } catch (e) {
-      console.error('handleAnswer error', from, e);
+      console.error('[P2P] handleAnswer error', from, e);
     }
   }
 
   async _handleIce(from, data) {
     const p = this.peers[from];
-    if (!p) {
+    // 如果 peer 不存在，或还未设置 remote description，则排队
+    if (!p || !p.connection.remoteDescription) {
       (this._pendingCandidates[from] = this._pendingCandidates[from] || []).push(data);
       return;
     }
@@ -254,9 +264,14 @@ class P2PManager {
     channel.onopen = () => {
       this._notifyPeersChange();
     };
+
     channel.onclose = () => {
-      delete this.peers[peerId];
-      this._notifyPeersChange();
+      // 关键修复：仅当关闭的 channel 仍然是当前活跃的 channel 时才删除 peer
+      // 防止孤儿 channel（rollback 遗留）关闭时误删正在使用的连接
+      if (this.peers[peerId] && this.peers[peerId].channel === channel) {
+        delete this.peers[peerId];
+        this._notifyPeersChange();
+      }
     };
 
     channel.onmessage = (e) => {
@@ -397,7 +412,7 @@ class P2PManager {
         sdp: answer.sdp,
         type: answer.type,
       });
-    } catch (e) { console.error('screen-offer error', e); }
+    } catch (e) { console.error('[P2P] screen-offer error', e); }
   }
 
   async _handleScreenAnswer(from, data) {
@@ -405,6 +420,6 @@ class P2PManager {
     if (!p) return;
     try {
       await p.connection.setRemoteDescription(new RTCSessionDescription(data));
-    } catch (e) { console.error('screen-answer error', e); }
+    } catch (e) { console.error('[P2P] screen-answer error', e); }
   }
 }
