@@ -21,7 +21,15 @@
 
 <div id="p2p-screen-container" class="p2p-screen-container">
   <div class="p2p-screen-label">📺 屏幕共享</div>
-  <video id="p2p-screen-video" autoplay muted></video>
+  <div class="p2p-screen-controls">
+    <button class="p2p-screen-zoom-btn" onclick="screenZoomOut()" title="缩小">−</button>
+    <span class="p2p-screen-zoom-level" id="screen-zoom-level">1×</span>
+    <button class="p2p-screen-zoom-btn" onclick="screenZoomIn()" title="放大">+</button>
+    <button class="p2p-screen-zoom-btn" onclick="screenZoomReset()" title="重置">⟲</button>
+  </div>
+  <div class="p2p-screen-video-wrap">
+    <video id="p2p-screen-video" autoplay muted></video>
+  </div>
 </div>
 
 <script src="/js/navbar.js"></script>
@@ -37,6 +45,59 @@
   var connectedPeers = [];   // DataChannel 已 open
   var connectingPeers = [];  // RTCPeerConnection 已建立（含正在连接的）
 
+  // ── WebRTC 检测 ──
+  function checkWebRTC() {
+    var issues = [];
+    var RTCPC = window.RTCPeerConnection || window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
+    if (!RTCPC) {
+      issues.push('浏览器不支持 RTCPeerConnection');
+    } else {
+      try {
+        new RTCPC({ iceServers: [] });
+      } catch(e) {
+        issues.push('WebRTC 初始化失败: ' + e.message);
+      }
+    }
+    // 屏幕共享检测
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+      issues.push('屏幕共享（getDisplayMedia）不被支持');
+    }
+    // DataChannel 检测
+    if (RTCPC) {
+      try {
+        var pc = new RTCPC({ iceServers: [] });
+        try { pc.createDataChannel('detect', { negotiated: true, id: 0 }); } catch(e) { issues.push('DataChannel 创建失败: ' + e.message); }
+        pc.close();
+      } catch(e) { /* already caught above */ }
+    }
+    return issues;
+  }
+
+  function showWebRTCError(issues) {
+    unavailable.style.display = 'block';
+    unavailable.innerHTML = [
+      '<h2>🌐 P2P 空间</h2>',
+      '<div style="background:#fef0f0;border:1px solid #fcc;border-radius:8px;padding:16px;text-align:left;margin-top:12px;">',
+        '<h3 style="color:#d00;margin:0 0 8px;font-size:16px;">⚠️ WebRTC 不可用</h3>',
+        '<p style="color:#c33;font-size:14px;">您的浏览器不支持或禁用了 WebRTC，无法使用 P2P 直连功能。</p>',
+        '<ul style="color:#a33;font-size:13px;padding-left:20px;">',
+          issues.map(function(i) { return '<li>' + i + '</li>'; }).join(''),
+        '</ul>',
+        '<p style="font-size:13px;margin-top:8px;">请尝试：<br>',
+        '• 使用 Firefox / Chrome 浏览器<br>',
+        '• 检查是否禁用了 WebRTC（<code>edge://flags</code> 或 <code>chrome://flags</code>）<br>',
+        '• 检查防火墙 / VPN 是否拦截了 UDP</p>',
+      '</div>',
+    ].join('');
+  }
+
+  // ── WebRTC 检测 ──
+  var webrtcIssues = checkWebRTC();
+  if (webrtcIssues.length > 0) {
+    showWebRTCError(webrtcIssues);
+    return;
+  }
+
   // ── 后端检测 ──
   p2p.checkBackend().then(function(avail) {
     if (!avail) {
@@ -51,6 +112,8 @@
     p2p.onFile = receiveFile;
     p2p.onScreenStream = receiveScreen;
     p2p.onPeerLeave = handlePeerLeave;
+    p2p.onScreenEnd = handleScreenEnd;
+    p2p.onUserName = handleUserName;
   });
 
   // ── 渲染界面 ──
@@ -69,6 +132,10 @@
           '<div class="p2p-sidebar-footer" id="room-info">',
             '房间: -',
           '</div>',
+          '<div class="p2p-sidebar-user">',
+            '<label>👤 昵称</label>',
+            '<input type="text" id="username-input" maxlength="16" placeholder="设置昵称" autocomplete="off">',
+          '</div>',
         '</div>',
 
         /* 主区域 */
@@ -80,6 +147,7 @@
             '<button class="p2p-btn" id="btn-join" onclick="joinRoom()">加入/创建</button>',
             '<button class="p2p-btn outline" id="btn-copy-room" onclick="copyRoomLink()" style="display:none;">📋 邀请</button>',
             '<button class="p2p-btn danger" id="btn-leave" onclick="leaveRoom()" style="display:none;">离开</button>',
+            '<button class="p2p-btn warning" id="btn-stop-share" onclick="stopMyScreenShare()" style="display:none;">⏹ 停止共享</button>',
           '</div>',
 
           /* 消息 */
@@ -139,6 +207,32 @@
     });
 
     document.getElementById('btn-screen').addEventListener('click', startScreenShare);
+
+    // 用户名
+    var savedName = window.localStorage.getItem('p2p_username') || '';
+    var usernameInput = document.getElementById('username-input');
+    if (savedName) {
+      usernameInput.value = savedName;
+      p2p.userNames[p2p.peerId] = savedName;
+    }
+    usernameInput.addEventListener('change', function() {
+      var name = this.value.trim();
+      if (name) {
+        window.localStorage.setItem('p2p_username', name);
+        p2p.userNames[p2p.peerId] = name;
+        if (p2p.room) p2p.broadcastUserName(name);
+      } else {
+        window.localStorage.removeItem('p2p_username');
+        delete p2p.userNames[p2p.peerId];
+      }
+      updatePeerList(connectedPeers, connectingPeers);
+      // 更新 room-info 中的名称
+      if (state.connected) {
+        var myName = p2p.userNames[p2p.peerId] || p2p.peerId;
+        document.getElementById('room-info').textContent = '房间: ' + p2p.room + ' | ' + myName;
+        document.getElementById('room-info').title = 'ID: ' + p2p.peerId;
+      }
+    });
   }
 
   function setInputsEnabled(enabled) {
@@ -206,9 +300,10 @@
         else if (connState === 'failed' || connState === 'disconnected') { badge = '❌ 断连'; extraClass = ''; }
         else badge = iceState;
       }
+      var displayName = p2p.userNames[id] || id;
       items += '<div class="p2p-peer-item">' +
         '<div class="p2p-peer-dot' + extraClass + '"></div>' +
-        '<span class="p2p-peer-name">' + escapeHtml(id) + '</span>' +
+        '<span class="p2p-peer-name">' + escapeHtml(displayName) + '</span>' +
         '<span class="p2p-peer-badge">' + badge + '</span>' +
         '</div>';
     }
@@ -252,13 +347,13 @@
 
       } else if (m.type === 'chat') {
         html += '<div class="p2p-msg ' + (isSelf ? 'self' : 'other') + '">';
-        if (!isSelf) html += '<div class="p2p-msg-from">' + escapeHtml(m.from) + '</div>';
+        if (!isSelf) html += '<div class="p2p-msg-from">' + escapeHtml(p2p.userNames[m.from] || m.from) + '</div>';
         html += '<div>' + escapeHtml(m.text) + '</div>';
         html += '<div class="p2p-msg-time">' + time + '</div></div>';
 
       } else if (m.type === 'file') {
         html += '<div class="p2p-msg ' + (isSelf ? 'self' : 'other') + '">';
-        if (!isSelf) html += '<div class="p2p-msg-from">' + escapeHtml(m.from) + '</div>';
+        if (!isSelf) html += '<div class="p2p-msg-from">' + escapeHtml(p2p.userNames[m.from] || m.from) + '</div>';
 
         if (m.mime && m.mime.startsWith('image/')) {
           var url = URL.createObjectURL(m.blob);
@@ -294,8 +389,9 @@
       document.getElementById('btn-copy-room').style.display = '';
       document.getElementById('btn-leave').style.display = '';
       document.getElementById('room-input').disabled = true;
-      document.getElementById('room-info').textContent = '房间: ' + room + ' | 我的ID: ' + p2p.peerId;
-      document.getElementById('room-info').title = '我的ID: ' + p2p.peerId;
+      var myName = p2p.userNames[p2p.peerId] || p2p.peerId;
+      document.getElementById('room-info').textContent = '房间: ' + room + ' | ' + myName;
+      document.getElementById('room-info').title = 'ID: ' + p2p.peerId;
       setInputsEnabled(true);
 
       // 更新 URL
@@ -365,8 +461,12 @@
     var reader = new FileReader();
     reader.onload = function(e) {
       p2p.sendFile(file);
-      var msg = type === 'image' ? '📷 图片: ' + file.name : '📎 文件: ' + file.name;
-      addMessage(p2p.peerId, msg);
+
+      // 发送方也看到图片/文件的实际预览（不仅是文字）
+      var mime = file.type || 'application/octet-stream';
+      var blob = new Blob([e.target.result], { type: mime });
+      receiveFile(p2p.peerId, file.name, mime, blob, 'self-' + Date.now());
+
       removeProgress(progress);
     };
     reader.readAsArrayBuffer(file);
@@ -395,29 +495,112 @@
     p2p.startScreenShare().then(function(ok) {
       if (ok) {
         window.showToast && window.showToast('正在共享屏幕', 2000);
+        document.getElementById('btn-stop-share').style.display = '';
       } else {
         window.showToast && window.showToast('屏幕共享启动失败', 2000);
       }
     });
   }
 
+  window.stopMyScreenShare = function() {
+    p2p.stopScreenShare();
+    document.getElementById('btn-stop-share').style.display = 'none';
+    window.showToast && window.showToast('已停止屏幕共享', 2000);
+  };
+
   function receiveScreen(peerId, stream) {
     var container = document.getElementById('p2p-screen-container');
     var video = document.getElementById('p2p-screen-video');
+    var name = p2p.userNames[peerId] || peerId;
     container.classList.add('visible');
     video.srcObject = stream;
     video.play().catch(function(){});
-    addSystemMsg(peerId + ' 开始屏幕共享');
+    addSystemMsg(name + ' 开始屏幕共享');
+    // 视频轨道结束时自动清理
     stream.getVideoTracks()[0].onended = function() {
-      container.classList.remove('visible');
-      addSystemMsg(peerId + ' 结束屏幕共享');
+      if (container.classList.contains('visible')) {
+        if (video.srcObject) {
+          video.srcObject.getTracks().forEach(function(t) { t.stop(); });
+          video.srcObject = null;
+        }
+        container.classList.remove('visible');
+        screenZoom = 1;
+        video.style.transform = '';
+        addSystemMsg(name + ' 的屏幕共享已断开');
+      }
     };
+  }
+
+  // ── 屏幕共享缩放 ──
+  var screenZoom = 1;
+  window.screenZoomIn = function() {
+    var video = document.getElementById('p2p-screen-video');
+    if (!video) return;
+    screenZoom = Math.min(3, +(screenZoom + 0.25).toFixed(2));
+    applyScreenZoom();
+  };
+  window.screenZoomOut = function() {
+    var video = document.getElementById('p2p-screen-video');
+    if (!video) return;
+    screenZoom = Math.max(0.25, +(screenZoom - 0.25).toFixed(2));
+    applyScreenZoom();
+  };
+  window.screenZoomReset = function() {
+    screenZoom = 1;
+    applyScreenZoom();
+  };
+  function applyScreenZoom() {
+    var video = document.getElementById('p2p-screen-video');
+    var levelEl = document.getElementById('screen-zoom-level');
+    if (!video || !levelEl) return;
+    video.style.transform = 'scale(' + screenZoom + ')';
+    video.style.transformOrigin = 'top left';
+    levelEl.textContent = screenZoom + '×';
+    // 放大时调整容器宽度
+    var container = document.getElementById('p2p-screen-container');
+    var baseW = 320;
+    if (screenZoom > 1) {
+      container.style.width = Math.min(baseW * screenZoom, window.innerWidth * 0.85) + 'px';
+    } else {
+      container.style.width = baseW + 'px';
+    }
   }
 
   // ── Peer 断连处理 ──
   function handlePeerLeave(peerId) {
-    addSystemMsg('👋 ' + peerId + ' 已离开房间');
+    var name = p2p.userNames[peerId] || peerId;
+    addSystemMsg('👋 ' + name + ' 已离开房间');
+    // 清理用户名称缓存
+    delete p2p.userNames[peerId];
     // onPeersChange 已在 p2p._handlePeerLeave 中触发，侧栏会自动更新
+  }
+
+  // ── 屏幕共享结束 ──
+  function handleScreenEnd(peerId) {
+    // 隐藏停止按钮（可能是自己停止）
+    var stopBtn = document.getElementById('btn-stop-share');
+    if (stopBtn) stopBtn.style.display = 'none';
+    var name = p2p.userNames[peerId] || peerId;
+    var container = document.getElementById('p2p-screen-container');
+    if (container.classList.contains('visible')) {
+      var video = document.getElementById('p2p-screen-video');
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach(function(t) { t.stop(); });
+        video.srcObject = null;
+      }
+      container.classList.remove('visible');
+      screenZoom = 1;
+      document.getElementById('screen-zoom-level').textContent = '1×';
+      video.style.transform = '';
+      addSystemMsg(name + ' 已结束屏幕共享');
+    }
+  }
+
+  // ── 用户名更新 ──
+  function handleUserName(peerId, name) {
+    p2p.userNames[peerId] = name;
+    updatePeerList(connectedPeers, connectingPeers);
+    renderMessages();
   }
 
   // ── 工具 ──

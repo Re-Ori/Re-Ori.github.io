@@ -21,12 +21,17 @@ class P2PManager {
     this._pendingCandidates = {};
     this._pendingAnswers = {};    // peerId -> [answer data] (answer before offer 时排队)
 
+    this.screenStream = null;
+    this.userNames = {};
+
     this.onPeersChange = null;
     this.onMessage = null;
     this.onFile = null;
     this.onScreenStream = null;
     this.onError = null;
     this.onPeerLeave = null;
+    this.onScreenEnd = null;
+    this.onUserName = null;
   }
 
   // ── 后端检测 ──
@@ -126,6 +131,9 @@ class P2PManager {
         break;
       case 'screen-answer':
         await this._handleScreenAnswer(sig.from, sig.data);
+        break;
+      case 'screen-end':
+        if (this.onScreenEnd) this.onScreenEnd(sig.from);
         break;
     }
   }
@@ -369,6 +377,9 @@ class P2PManager {
           case 'ping':
             channel.send(JSON.stringify({ type: 'pong' }));
             break;
+          case 'set-name':
+            if (this.onUserName) this.onUserName(peerId, msg.name);
+            break;
           case 'file-meta':
             this._fileBuffers[msg.id] = {
               name: msg.name, size: msg.size, mime: msg.mime,
@@ -461,25 +472,44 @@ class P2PManager {
   async startScreenShare() {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      for (const p of Object.values(this.peers)) {
+      this.screenStream = stream;
+
+      for (const [pid, p] of Object.entries(this.peers)) {
         for (const track of stream.getVideoTracks()) {
           p.connection.addTrack(track, stream);
         }
         const offer = await p.connection.createOffer();
         await p.connection.setLocalDescription(offer);
-        let pid = null;
-        for (const [id, v] of Object.entries(this.peers)) {
-          if (v.connection === p.connection) { pid = id; break; }
-        }
-        if (pid) {
-          this._sendSignal(pid, 'screen-offer', {
-            sdp: offer.sdp, type: offer.type,
-          });
-        }
+        this._sendSignal(pid, 'screen-offer', {
+          sdp: offer.sdp, type: offer.type,
+        });
       }
-      stream.getVideoTracks()[0].onended = () => {};
+
+      stream.getVideoTracks()[0].onended = () => {
+        this.stopScreenShare();
+      };
       return true;
     } catch { return false; }
+  }
+
+  stopScreenShare() {
+    if (this.screenStream) {
+      this.screenStream.getTracks().forEach(t => t.stop());
+      this.screenStream = null;
+    }
+    // 通知本地 UI
+    if (this.onScreenEnd) this.onScreenEnd(this.peerId);
+    // 通知远端 peer
+    for (const pid of Object.keys(this.peers)) {
+      this._sendSignal(pid, 'screen-end', {});
+    }
+  }
+
+  broadcastUserName(name) {
+    const msg = JSON.stringify({ type: 'set-name', name });
+    for (const p of Object.values(this.peers)) {
+      if (p.channel && p.channel.readyState === 'open') p.channel.send(msg);
+    }
   }
 
   async _handleScreenOffer(from, data) {
