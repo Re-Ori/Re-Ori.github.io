@@ -19,6 +19,7 @@ class P2PManager {
     this._pollTimer = null;
     this._fileBuffers = {};
     this._pendingCandidates = {};
+    this._pendingAnswers = {};    // peerId -> [answer data] (answer before offer 时排队)
 
     this.onPeersChange = null;
     this.onMessage = null;
@@ -201,6 +202,17 @@ class P2PManager {
         p.connected = true;
         changed = true;
       }
+
+      // 超时重试：10s 未连接且是我们发起的
+      if (!p.connected && p.connectStartedAt > 0 && (now - p.connectStartedAt) > 10000) {
+        const iceFailed = iceState === 'failed';
+        const connFailed = connState === 'failed' || connState === 'disconnected';
+        console.log(`[P2P] ${id} timeout (${Math.round((now - p.connectStartedAt)/1000)}s, ice=${iceState}, conn=${connState}), reconnecting...`);
+        // 断开重连
+        this._disconnectPeer(id);
+        this._connectTo(id);
+        // _connectTo 会更新 connectStartedAt
+      }
     }
 
     if (changed) this._notifyPeersChange();
@@ -219,7 +231,10 @@ class P2PManager {
     const pc = this._getOrCreatePC(peerId);
     this.peers[peerId].connectStartedAt = Date.now();
     console.log(`[P2P] Connecting to ${peerId}...`);
-    const channel = pc.createDataChannel('p2p-channel');
+
+    // 使用 negotiated DataChannel：双方各自创建相同 ID 的通道，
+    // 不依赖 ondatachannel 事件，更可靠
+    const channel = pc.createDataChannel('p2p-channel', { negotiated: true, id: 0 });
     this._setupChannel(channel, peerId);
 
     pc.createOffer()
@@ -234,6 +249,14 @@ class P2PManager {
             sdp: pc.localDescription.sdp,
             type: pc.localDescription.type,
           });
+
+          // 处理在 offer 创建前到达的排队 answer
+          const pending = (this._pendingAnswers[peerId] || []);
+          delete this._pendingAnswers[peerId];
+          for (const ans of pending) {
+            console.log(`[P2P] Processing queued answer from ${peerId}`);
+            this._handleAnswer(peerId, ans);
+          }
         }
       })
       .catch((e) => console.error('[P2P] createOffer error', e));
@@ -257,6 +280,14 @@ class P2PManager {
       console.log(`[P2P] Remote description set for ${from}`);
       this._flushPendingCandidates(from, pc);
 
+      // 创建同样 negotiated DataChannel（双方 ID 必须一致）
+      // 不依赖 ondatachannel，避免浏览器兼容问题
+      if (!this.peers[from].channel) {
+        console.log(`[P2P] Creating negotiated DataChannel for ${from}`);
+        const channel = pc.createDataChannel('p2p-channel', { negotiated: true, id: 0 });
+        this._setupChannel(channel, from);
+      }
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       console.log(`[P2P] Sending answer to ${from}`);
@@ -272,7 +303,19 @@ class P2PManager {
   async _handleAnswer(from, data) {
     const p = this.peers[from];
     if (!p) { console.warn(`[P2P] Answer from unknown ${from}`); return; }
+
+    console.log(`[P2P] Answer from ${from}, signalingState=${p.connection.signalingState}, hasLocalDesc=${!!p.connection.localDescription}`);
+
+    // 如果还没设 local description（offer 尚未 create），排队等
+    if (p.connection.signalingState === 'stable' && !p.connection.localDescription) {
+      console.log(`[P2P] Answer from ${from} queued (offer not yet set)`);
+      (this._pendingAnswers[from] = this._pendingAnswers[from] || []).push(data);
+      return;
+    }
+
+    // 已处理过相同 answer
     if (p.connection.signalingState === 'stable') return;
+
     try {
       await p.connection.setRemoteDescription(new RTCSessionDescription(data));
       console.log(`[P2P] Remote description set from ${from} via answer`);
