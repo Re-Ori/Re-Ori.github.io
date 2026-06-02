@@ -1,35 +1,31 @@
 /**
  * P2P Manager — WebRTC 点对点通信
- * 支持：文字聊天、文件/图片传输、屏幕共享
  *
- * 设计原则：只有加入房间的 peer 主动发起 WebRTC 连接，
- * 房间内已有 peer 不主动 createOffer，只响应收到的 offer。
- * 这完全消除了 glare（信令冲突）问题。
+ * 单方发起：只有加入房间的 peer 主动创建 offer，
+ * 已有 peer 只响应收到的 offer，完全消除 glare。
  *
- * 修复记录（v3）：
- * - 移除 peer_join 中的 _connectTo 调用：不再双方互发 offer
- * - 新增 peer_leave 处理：断连/关标签页时及时清理
- * - 新增 WebRTC 连接状态日志：便于调试
- * - 修复 ICE 候选时序：setRemoteDescription 前到达的候选排队等待
- * - 修复 onclose 孤儿通道误删问题
+ * 健壮性策略：
+ * - 每次 poll 检查连接状态，`connected` flag 跟踪连接就绪
+ * - `_connectedPeerList()` 检查 DataChannel + connected flag
+ * - 移除 auto-cleanup 以免初始连接阶段误删 peer
+ * - 完整日志输出到浏览器控制台以便调试
  */
 class P2PManager {
   constructor() {
     this.room = '';
     this.peerId = '';
-    this.peers = {};           // peerId -> { connection, channel }
+    this.peers = {};              // peerId -> { connection, channel, connected }
     this.backendAvail = false;
     this._pollTimer = null;
-    this._fileBuffers = {};    // fileId -> received chunks
-    this._pendingCandidates = {}; // peerId -> [candidates]
+    this._fileBuffers = {};
+    this._pendingCandidates = {};
 
-    // 回调
-    this.onPeersChange = null;   // (connectedIds, allIds) => {}
-    this.onMessage = null;       // (peerId, text) => {}
-    this.onFile = null;          // (peerId, name, mime, blob, fileId) => {}
-    this.onScreenStream = null;  // (peerId, stream) => {}
-    this.onError = null;         // (msg) => {}
-    this.onPeerLeave = null;     // (peerId) => {}
+    this.onPeersChange = null;
+    this.onMessage = null;
+    this.onFile = null;
+    this.onScreenStream = null;
+    this.onError = null;
+    this.onPeerLeave = null;
   }
 
   // ── 后端检测 ──
@@ -56,9 +52,8 @@ class P2PManager {
       const data = await r.json();
       this.room = room;
       this.peerId = data.peer;
-      // 只有加入者主动连接房间内已有成员（单方发起，完全避免 glare）
+      console.log(`[P2P] Joined "${room}" as ${this.peerId}, peers:`, data.peers);
       for (const p of data.peers) this._connectTo(p);
-      // 立即触发一次上报，方便 UI 显示初始状态
       this._notifyPeersChange();
       this._startPoll();
       return data;
@@ -79,6 +74,7 @@ class P2PManager {
         body: JSON.stringify({ room: this.room, peer: this.peerId }),
       });
     } catch { /* ignore */ }
+    console.log(`[P2P] Left "${this.room}"`);
     this.room = '';
     this.peerId = '';
   }
@@ -103,15 +99,14 @@ class P2PManager {
       const data = await r.json();
       for (const sig of data.signals) await this._handleSignal(sig);
     } catch { /* ignore polling errors */ }
+
+    // 每次 poll 后检查连接状态，确保 UI 及时更新
+    this._checkPeerConnections();
   }
 
   async _handleSignal(sig) {
     switch (sig.type) {
       case 'peer_join':
-        // 关键：不在这里调用 _connectTo —
-        // 加入者已经在 joinRoom 中向所有已有成员发起了连接，
-        // 已有成员只需要等待接收 offer 即可（由 _handleOffer 处理）。
-        // 这完全避免了双方同时 createOffer 的 glare 问题。
         break;
       case 'peer_leave':
         this._handlePeerLeave(sig.data.peer);
@@ -135,7 +130,7 @@ class P2PManager {
   }
 
   _handlePeerLeave(peerId) {
-    // 清理断连 peer 的连接
+    console.log(`[P2P] Peer left: ${peerId}`);
     this._disconnectPeer(peerId);
     this._notifyPeersChange();
     if (this.onPeerLeave) this.onPeerLeave(peerId);
@@ -148,7 +143,7 @@ class P2PManager {
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
     });
-    this.peers[peerId] = { connection: pc, channel: null };
+    this.peers[peerId] = { connection: pc, channel: null, connected: false, connectStartedAt: 0 };
 
     pc.onicecandidate = (e) => {
       if (e.candidate) {
@@ -162,51 +157,79 @@ class P2PManager {
       if (this.onScreenStream) this.onScreenStream(peerId, e.streams[0]);
     };
 
-    // 调试日志：跟踪连接状态变化
     pc.oniceconnectionstatechange = () => {
-      console.log(`[P2P] ICE ${peerId}: ${pc.iceConnectionState}`);
+      const s = pc.iceConnectionState;
+      console.log(`[P2P] ICE ${peerId}: ${s}`);
+      if (s === 'connected' || s === 'completed') {
+        // ICE 连接就绪 → 标记连接已建立
+        const p = this.peers[peerId];
+        if (p && !p.connected) {
+          p.connected = true;
+          this._notifyPeersChange();
+        }
+      }
     };
     pc.onconnectionstatechange = () => {
-      console.log(`[P2P] Conn ${peerId}: ${pc.connectionState}`);
-      // 连接彻底断开时清理
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        this._handlePeerLeave(peerId);
+      const s = pc.connectionState;
+      console.log(`[P2P] Conn ${peerId}: ${s}`);
+      if (s === 'connected') {
+        const p = this.peers[peerId];
+        if (p && !p.connected) {
+          p.connected = true;
+          this._notifyPeersChange();
+        }
       }
     };
 
     return pc;
   }
 
-  /** 刷新排队中的 ICE 候选（在 setRemoteDescription 后调用） */
+  /** 检查所有 peer 的连接状态，并处理超时重试 */
+  _checkPeerConnections() {
+    let changed = false;
+    const now = Date.now();
+
+    for (const [id, p] of Object.entries(this.peers)) {
+      const conn = p.connection;
+      const iceState = conn.iceConnectionState;
+      const connState = conn.connectionState;
+      const channelOpen = p.channel && p.channel.readyState === 'open';
+
+      // 标记已连接
+      if ((connState === 'connected' || iceState === 'connected' || iceState === 'completed') && !p.connected) {
+        console.log(`[P2P] ${id} connected (conn=${connState}, ice=${iceState}, chan=${channelOpen ? 'open' : 'waiting'})`);
+        p.connected = true;
+        changed = true;
+      }
+    }
+
+    if (changed) this._notifyPeersChange();
+  }
+
   _flushPendingCandidates(peerId, pc) {
     const pending = this._pendingCandidates[peerId] || [];
     delete this._pendingCandidates[peerId];
     for (const c of pending) {
-      try {
-        pc.addIceCandidate(new RTCIceCandidate(c));
-      } catch { /* ignore */ }
+      try { pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
     }
   }
 
-  /**
-   * 主动连接一个 peer。
-   * 只在 joinRoom 中调用（加入者连接已有成员），
-   * 不在 peer_join 中调用，从而保证只有一方发起。
-   */
   _connectTo(peerId) {
     if (this.peers[peerId] || peerId === this.peerId) return;
     const pc = this._getOrCreatePC(peerId);
+    this.peers[peerId].connectStartedAt = Date.now();
+    console.log(`[P2P] Connecting to ${peerId}...`);
     const channel = pc.createDataChannel('p2p-channel');
     this._setupChannel(channel, peerId);
 
     pc.createOffer()
       .then((offer) => {
-        // 如果 createOffer 异步期间连接已被建立，则不发
         if (pc.signalingState !== 'stable') return;
         return pc.setLocalDescription(offer);
       })
       .then(() => {
         if (pc.localDescription && pc.signalingState === 'have-local-offer') {
+          console.log(`[P2P] Sending offer to ${peerId}`);
           this._sendSignal(peerId, 'offer', {
             sdp: pc.localDescription.sdp,
             type: pc.localDescription.type,
@@ -226,15 +249,17 @@ class P2PManager {
   }
 
   async _handleOffer(from, data) {
+    console.log(`[P2P] Received offer from ${from}`);
     const pc = this._getOrCreatePC(from);
 
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(data));
-      // 刷新排队中的 ICE 候选
+      console.log(`[P2P] Remote description set for ${from}`);
       this._flushPendingCandidates(from, pc);
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+      console.log(`[P2P] Sending answer to ${from}`);
       this._sendSignal(from, 'answer', {
         sdp: answer.sdp,
         type: answer.type,
@@ -246,11 +271,11 @@ class P2PManager {
 
   async _handleAnswer(from, data) {
     const p = this.peers[from];
-    if (!p) return;
+    if (!p) { console.warn(`[P2P] Answer from unknown ${from}`); return; }
     if (p.connection.signalingState === 'stable') return;
     try {
       await p.connection.setRemoteDescription(new RTCSessionDescription(data));
-      // 刷新排队中的 ICE 候选
+      console.log(`[P2P] Remote description set from ${from} via answer`);
       this._flushPendingCandidates(from, p.connection);
     } catch (e) {
       console.error('[P2P] handleAnswer error', from, e);
@@ -259,7 +284,6 @@ class P2PManager {
 
   async _handleIce(from, data) {
     const p = this.peers[from];
-    // 如果 peer 不存在，或还未设置 remote description，则排队
     if (!p || !p.connection.remoteDescription) {
       (this._pendingCandidates[from] = this._pendingCandidates[from] || []).push(data);
       return;
@@ -271,19 +295,25 @@ class P2PManager {
 
   _setupChannel(channel, peerId) {
     const p = this.peers[peerId];
-    if (!p) return;
+    if (!p) { console.warn(`[P2P] setupChannel: peer ${peerId} not found`); return; }
     p.channel = channel;
 
     channel.onopen = () => {
+      console.log(`[P2P] DataChannel opened for ${peerId}`);
+      p.connected = true;
       this._notifyPeersChange();
     };
 
     channel.onclose = () => {
-      // 仅当关闭的 channel 仍是当前活跃的 channel 时才清理
+      console.log(`[P2P] DataChannel closed for ${peerId}`);
       if (this.peers[peerId] && this.peers[peerId].channel === channel) {
         delete this.peers[peerId];
         this._notifyPeersChange();
       }
+    };
+
+    channel.onerror = (e) => {
+      console.error(`[P2P] DataChannel error for ${peerId}:`, e);
     };
 
     channel.onmessage = (e) => {
@@ -320,20 +350,20 @@ class P2PManager {
     };
   }
 
-  /** 获取已连接（DataChannel 已 open）的 peer 列表 */
+  /** 已连接列表：DataChannel open 或 WebRTC 连接就绪 */
   _connectedPeerList() {
     return Object.keys(this.peers).filter((id) => {
       const p = this.peers[id];
-      return p.channel && p.channel.readyState === 'open';
+      if (p.channel && p.channel.readyState === 'open') return true;
+      if (p.connected) return true;
+      return false;
     });
   }
 
-  /** 获取所有已建立 RTCPeerConnection 的 peer 列表（含正在连接的） */
   _allPeerList() {
     return Object.keys(this.peers);
   }
 
-  /** 触发 onPeersChange 回调 */
   _notifyPeersChange() {
     if (this.onPeersChange) {
       this.onPeersChange(this._connectedPeerList(), this._allPeerList());
@@ -361,18 +391,15 @@ class P2PManager {
   sendFile(file) {
     const id = Math.random().toString(36).substring(2, 10);
     const CHUNK = 16 * 1024;
-
     const peers = Object.values(this.peers).filter(
       (p) => p.channel && p.channel.readyState === 'open'
     );
     if (!peers.length) return;
-
     const meta = JSON.stringify({
       type: 'file-meta', id, name: file.name,
       size: file.size, mime: file.type || 'application/octet-stream',
     });
     for (const p of peers) p.channel.send(meta);
-
     const reader = new FileReader();
     reader.onload = (ev) => {
       if (!ev.target) return;
@@ -403,8 +430,7 @@ class P2PManager {
         }
         if (pid) {
           this._sendSignal(pid, 'screen-offer', {
-            sdp: offer.sdp,
-            type: offer.type,
+            sdp: offer.sdp, type: offer.type,
           });
         }
       }
@@ -420,10 +446,7 @@ class P2PManager {
       await p.connection.setRemoteDescription(new RTCSessionDescription(data));
       const answer = await p.connection.createAnswer();
       await p.connection.setLocalDescription(answer);
-      this._sendSignal(from, 'screen-answer', {
-        sdp: answer.sdp,
-        type: answer.type,
-      });
+      this._sendSignal(from, 'screen-answer', { sdp: answer.sdp, type: answer.type });
     } catch (e) { console.error('[P2P] screen-offer error', e); }
   }
 

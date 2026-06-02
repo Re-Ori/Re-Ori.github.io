@@ -192,10 +192,24 @@
     for (var i = 0; i < connectingPeers.length; i++) {
       var id = connectingPeers[i];
       var isConnected = connectedPeers.indexOf(id) !== -1;
+      // 从 p2p 实例获取 ICE 状态（用于调试）
+      var badge = '连接中…';
+      var extraClass = ' connecting';
+      if (isConnected) {
+        badge = '已连接';
+        extraClass = '';
+      } else if (p2p.peers[id]) {
+        var iceState = p2p.peers[id].connection.iceConnectionState;
+        var connState = p2p.peers[id].connection.connectionState;
+        if (iceState === 'connected' || iceState === 'completed') { badge = '已连接'; extraClass = ''; }
+        else if (iceState === 'failed') { badge = '❌ 失败'; extraClass = ''; }
+        else if (connState === 'failed' || connState === 'disconnected') { badge = '❌ 断连'; extraClass = ''; }
+        else badge = iceState;
+      }
       items += '<div class="p2p-peer-item">' +
-        '<div class="p2p-peer-dot' + (isConnected ? '' : ' connecting') + '"></div>' +
+        '<div class="p2p-peer-dot' + extraClass + '"></div>' +
         '<span class="p2p-peer-name">' + escapeHtml(id) + '</span>' +
-        '<span class="p2p-peer-badge">' + (isConnected ? '已连接' : '连接中…') + '</span>' +
+        '<span class="p2p-peer-badge">' + badge + '</span>' +
         '</div>';
     }
     list.innerHTML = items;
