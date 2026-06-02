@@ -130,10 +130,16 @@ class P2PManager {
     return pc;
   }
 
-  // ── 连接修复：Polite Peer 模式 ──
-  // 双方都创建 DataChannel + Offer。
-  // 当收到对方的 Offer 时根据自己的 ID 决定 polite/imolite 行为，
-  // 彻底解决 glare（信号冲突）问题。
+  // 在 setRemoteDescription 之后刷新积压的 ICE 候选者
+  _flushCandidates(peerId) {
+    const p = this.peers[peerId];
+    if (!p) return;
+    const pending = this._pendingCandidates[peerId] || [];
+    delete this._pendingCandidates[peerId];
+    for (const c of pending) {
+      try { p.connection.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+    }
+  }
 
   _connectTo(peerId) {
     if (this.peers[peerId] || peerId === this.peerId) return;
@@ -146,8 +152,7 @@ class P2PManager {
       try { await pc.setLocalDescription(offer); } catch { return; }
       if (pc.localDescription && pc.localDescription.type === 'offer') {
         this._sendSignal(peerId, 'offer', {
-          sdp: pc.localDescription.sdp,
-          type: pc.localDescription.type
+          sdp: pc.localDescription.sdp, type: pc.localDescription.type
         });
       }
     }).catch(e => console.error('createOffer error', e));
@@ -165,13 +170,10 @@ class P2PManager {
   async _handleOffer(from, data) {
     const pc = this._getOrCreatePC(from);
 
-    // Polite Peer 模式：双方同时发 Offer（glare）时的处理
     if (pc.signalingState === 'have-local-offer') {
       if (this.peerId > from) {
-        // ID 较大 = polite：回滚已有 offer，接受对方
         await pc.setLocalDescription({ type: 'rollback' });
       } else {
-        // ID 较小 = impolite：保留自己 offer，忽略对方
         return;
       }
     }
@@ -193,16 +195,6 @@ class P2PManager {
       await p.connection.setRemoteDescription(new RTCSessionDescription(data));
       this._flushCandidates(from);
     } catch (e) { console.error('handleAnswer error', from, e); }
-  }
-
-  _flushCandidates(peerId) {
-    const p = this.peers[peerId];
-    if (!p) return;
-    const pending = this._pendingCandidates[peerId] || [];
-    delete this._pendingCandidates[peerId];
-    for (const c of pending) {
-      try { p.connection.addIceCandidate(new RTCIceCandidate(c)); } catch {}
-    }
   }
 
   async _handleIce(from, data) {
@@ -286,16 +278,14 @@ class P2PManager {
 
   sendFile(file) {
     const id = Math.random().toString(36).substring(2, 10);
-    const CHUNK = 16 * 1024; // 16KB
+    const CHUNK = 16 * 1024;
 
     const peers = Object.values(this.peers).filter(p => p.channel && p.channel.readyState === 'open');
     if (!peers.length) return;
 
-    // Send meta first
     const meta = JSON.stringify({ type: 'file-meta', id, name: file.name, size: file.size, mime: file.type || 'application/octet-stream' });
     for (const p of peers) p.channel.send(meta);
 
-    // Read and chunk
     const reader = new FileReader();
     reader.onload = (ev) => {
       const arr = new Uint8Array(ev.target.result);
@@ -319,7 +309,6 @@ class P2PManager {
         }
         const offer = await p.connection.createOffer();
         await p.connection.setLocalDescription(offer);
-        // Find peerId for this connection
         let pid = null;
         for (const [id, v] of Object.entries(this.peers)) {
           if (v.connection === p.connection) { pid = id; break; }
