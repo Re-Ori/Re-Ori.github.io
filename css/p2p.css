@@ -75,6 +75,20 @@
   background: #4CAF50; flex-shrink: 0;
 }
 .p2p-peer-dot.self { background: var(--theme-color, #399FFF); }
+.p2p-peer-dot.connecting {
+  background: #FFA726;
+  animation: p2p-pulse 1.2s ease-in-out infinite;
+}
+@keyframes p2p-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.p2p-sidebar-status {
+  padding: 16px;
+  text-align: center;
+  color: #999;
+  font-size: 13px;
+}
 .p2p-peer-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p2p-peer-badge { font-size: 11px; color: #999; }
 [data-theme="dark"] .p2p-peer-badge { color: #666; }

@@ -52,6 +52,8 @@ MAIN_JS = PROJECT_ROOT / "js" / "main.js"
 WORKERS = 8
 
 # ── ACME HTTP-01 挑战（SSL 证书申请） ─────────────────────
+# btPanel 等工具申请 SSL 证书时，会把挑战文件写入此目录。
+# 服务器需要在多个可能的 web root 下查找并提供文件。
 ACME_CHALLENGE_ROOTS: list[Path] = [
     PROJECT_ROOT,
 ]
@@ -72,6 +74,7 @@ def log(msg: str):
     try:
         print(f"[{ts}] {msg}")
     except UnicodeEncodeError:
+        # Windows GBK 回退：只替换无法编码的字符（通常是 emoji）
         print(f"[{ts}] {msg.encode('gbk', 'replace').decode('gbk')}")
 
 # ── 状态管理 ─────────────────────────────────────────────
@@ -92,6 +95,15 @@ def save_state(state: dict):
 # ── 白名单 ───────────────────────────────────────────────
 
 def load_whitelist() -> list[str] | None:
+    """
+    加载访问白名单。
+
+    返回 ``None`` 表示白名单文件不存在或无法解析——拒绝所有请求。
+    返回 ``[]`` 表示白名单文件存在但为空——也拒绝所有请求。
+    返回路径列表：
+      - 以 ``/`` 结尾的条目为目录前缀（path.startswith(entry)）
+      - 否则为精确匹配
+    """
     if not WHITELIST_FILE.exists():
         return None
     try:
@@ -105,18 +117,28 @@ def load_whitelist() -> list[str] | None:
 
 
 def is_path_allowed(request_path: str, whitelist: list[str] | None) -> bool:
+    """
+    检查请求路径是否在白名单内。
+
+    - whitelist 为 ``None`` —— 白名单文件不存在，拒绝所有请求
+    - whitelist 为 ``[]`` —— 白名单为空，也拒绝所有请求
+    - 否则按条目匹配
+    """
     if whitelist is None:
-        return False
+        return False   # 文件不存在，拒绝所有
     if not whitelist:
-        return False
+        return False   # 存在但为空，拒绝所有
     for entry in whitelist:
         if entry == "/":
+            # "/" 仅精确匹配根路径，不作为前缀（否则会放行所有路径）
             if request_path == "/":
                 return True
         elif entry.endswith("/"):
+            # 以 "/" 结尾的条目作为目录前缀匹配
             if request_path.startswith(entry):
                 return True
         else:
+            # 否则精确匹配文件名
             if request_path == entry:
                 return True
     return False
@@ -139,10 +161,17 @@ def user_agent() -> str:
 
 
 def format_utc8(dt: datetime) -> str:
+    """格式化为 ``2026.06.01 22:53:24 [UTC+8]`` 格式。"""
     return dt.strftime("%Y.%m.%d %H:%M:%S") + " [UTC+8]"
 
 
 def fetch_github_repo_updated_at() -> str | None:
+    """
+    调用 GitHub API 获取仓库最新推送时间（``pushed_at``）。
+
+    返回 HTTP 日期格式字符串（如 ``Mon, 01 Jun 2026 22:44:09 GMT``），
+    失败返回 ``None``。
+    """
     api_url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}"
     req = urllib.request.Request(
         api_url,
@@ -154,9 +183,10 @@ def fetch_github_repo_updated_at() -> str | None:
     try:
         with _ssl_urlopen(req, 15) as resp:
             data = json.loads(resp.read())
-            pushed_at = data.get("pushed_at")
+            pushed_at = data.get("pushed_at")  # ISO 8601: "2026-05-05T15:33:16Z"
             if pushed_at:
                 dt = datetime.strptime(pushed_at, "%Y-%m-%dT%H:%M:%SZ")
+                # GitHub 返回的是 UTC 时间，转为 UTC+8
                 dt_utc8 = dt + timedelta(hours=8)
                 return format_utc8(dt_utc8)
             return None
@@ -165,12 +195,19 @@ def fetch_github_repo_updated_at() -> str | None:
 
 # ── 下载 GitHub ZIP ─────────────────────────────────────
 
-DOWNLOAD_TIMEOUT = 60
-DOWNLOAD_RETRIES = 3
-RETRY_BACKOFF = [1, 3, 8]
+DOWNLOAD_TIMEOUT = 60   # 秒（GitHub CDN 可能较慢）
+DOWNLOAD_RETRIES = 3    # 网络不稳定时重试次数
+RETRY_BACKOFF = [1, 3, 8]  # 每次重试前等待秒数（索引 0=第一次重试前）
 
 
 def _make_ssl_context() -> ssl.SSLContext:
+    """创建兼容的 SSL 上下文，处理 Windows / CDN 边缘节点 TLS 问题。
+
+    GitHub CDN（codeload.github.com）有时会在 TLS 握手阶段提前断开，
+    标准 ``ssl.create_default_context()`` 对此十分严格。这里：
+    1. 先用标准上下文尝试
+    2. 若失败则降级为未验证上下文 + 宽松选项
+    """
     ctx = ssl.create_default_context()
     _set_ctx_option(ctx, getattr(ssl, "OP_IGNORE_UNEXPECTED_EOF", 0))
     _set_ctx_option(ctx, getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0))
@@ -178,6 +215,7 @@ def _make_ssl_context() -> ssl.SSLContext:
 
 
 def _make_fallback_ssl_context() -> ssl.SSLContext:
+    """降级上下文：不验证证书 + 宽松选项。"""
     ctx = ssl._create_unverified_context()
     _set_ctx_option(ctx, getattr(ssl, "OP_IGNORE_UNEXPECTED_EOF", 0))
     _set_ctx_option(ctx, getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0))
@@ -185,6 +223,7 @@ def _make_fallback_ssl_context() -> ssl.SSLContext:
 
 
 def _set_ctx_option(ctx: ssl.SSLContext, opt: int):
+    """安全地设置 SSL Context option（忽略不存在的选项）。"""
     if opt:
         try:
             ctx.options |= opt
@@ -193,11 +232,17 @@ def _set_ctx_option(ctx: ssl.SSLContext, opt: int):
 
 
 def _ssl_urlopen(req: urllib.request.Request, timeout: int):
+    """带 SSL 兼容处理的 urlopen — 自动降级。
+
+    先用标准 SSL 上下文连接，如果遇到证书/握手/CDN 断连错误则
+    降级到未验证上下文重试一次（丢弃已消耗的响应体）。
+    """
     try:
         return urllib.request.urlopen(req, timeout=timeout,
                                        context=_make_ssl_context())
     except Exception as e:
         err_str = str(e).lower()
+        # 只有和网络/SSL/TLS 相关的错误才触发降级
         keywords = ("eof", "certificate", "handshake", "remote end",
                     "connection aborted", "connection reset",
                     "connection refused", "timed out",
@@ -209,19 +254,24 @@ def _ssl_urlopen(req: urllib.request.Request, timeout: int):
 
 
 def _download_via_curl(url: str, target_path: Path, etag: str | None = None) -> tuple[str | None, str | None] | None:
+    """使用 ``curl.exe`` 下载（兜底方案 — 绕过 Python SSL 栈）。
+
+    curl 使用 Windows 自带的 Schannel SSL 库，与 GitHub CDN 的兼容性更好。
+    返回新的 ETag，失败返回 None。
+    """
     curl = shutil.which("curl") or shutil.which("curl.exe")
     if not curl:
         log("curl 不可用，跳过兜底下载")
         return None
 
     header_file = target_path.with_name(target_path.name + ".headers")
-    CURL_TIMEOUT = 180
+    CURL_TIMEOUT = 180  # 秒 — 实测 GitHub CDN 有时需要 110s
     cmd = [
         curl, "-sSL",
-        "-k",
-        "--ssl-no-revoke",
+        "-k",                          # 跳过证书验证（WinSSL 证书存储问题）
+        "--ssl-no-revoke",             # Windows 上避免 OCSP 吊销检查超时
         "-o", str(target_path),
-        "-D", str(header_file),
+        "-D", str(header_file),        # 把响应头写入单独文件
         "--connect-timeout", "30",
         "--max-time", str(CURL_TIMEOUT),
     ]
@@ -237,6 +287,7 @@ def _download_via_curl(url: str, target_path: Path, etag: str | None = None) -> 
         if proc.returncode == 0:
             size = target_path.stat().st_size if target_path.exists() else 0
             if size > 0:
+                # 从响应头提取 ETag 和 Last-Modified
                 new_etag = etag
                 last_modified = None
                 if header_file.exists():
@@ -253,7 +304,7 @@ def _download_via_curl(url: str, target_path: Path, etag: str | None = None) -> 
             else:
                 log("curl 下载的文件为空")
                 return None
-        elif proc.returncode == 22:
+        elif proc.returncode == 22:  # HTTP 4xx/5xx
             out = (proc.stdout + proc.stderr).lower()
             if "304" in out:
                 log("服务端文件未变动（curl 返回 304）。")
@@ -275,6 +326,10 @@ def _download_via_curl(url: str, target_path: Path, etag: str | None = None) -> 
 
 
 def download_zip(target_path: Path) -> str | None:
+    """
+    下载仓库 ZIP 到本地。
+    返回 ETag 字符串表示下载成功，返回 None 表示无更新或出错。
+    """
     headers = {"User-Agent": user_agent()}
 
     state = load_state()
@@ -287,6 +342,9 @@ def download_zip(target_path: Path) -> str | None:
 
     last_err = None
 
+    # ── 第 1 步：Python urllib（快速尝试，30s 超时） ──
+    # Windows 上的 Python SSL 栈与 GitHub CDN 兼容性不好，
+    # 尝试一次不行就立刻交给 curl，不浪费多次重试。
     try:
         log("尝试 Python urllib 下载…")
         with _ssl_urlopen(req, DOWNLOAD_TIMEOUT) as resp:
@@ -299,6 +357,7 @@ def download_zip(target_path: Path) -> str | None:
             new_etag = resp.headers.get("ETag")
             if new_etag:
                 state["etag"] = new_etag
+            # 捕获/获取 GitHub 仓库的版本更新时间
             last_modified = resp.headers.get("Last-Modified")
             if last_modified:
                 state["github_updated_at"] = last_modified
@@ -327,6 +386,7 @@ def download_zip(target_path: Path) -> str | None:
         log(f"urllib 失败: {ern}")
         last_err = ern
 
+    # ── 第 2 步：curl 兜底 ──
     log(f"urllib 失败（{last_err}），尝试 curl 兜底…")
     etag_fallback = load_state().get("etag")
     curl_result = _download_via_curl(ZIP_URL, target_path, etag_fallback)
@@ -372,6 +432,7 @@ def extract_zip(zip_path: Path, target_dir: Path) -> bool:
         return False
 
 # ── 注入更新时间戳到 main.js 所用的标记常量 ──────────────
+# （放在文件比对之前定义，因为比对逻辑也会引用）
 
 TIMESTAMP_MARKER_START = "// ===== AutoUpdate Timestamp (do not remove) ====="
 TIMESTAMP_MARKER_END   = "// ===== End AutoUpdate Timestamp ====="
@@ -380,14 +441,9 @@ TIMESTAMP_MARKER_END   = "// ===== End AutoUpdate Timestamp ====="
 
 # 不被远程仓库管理的本地文件（不参与比对、不被删除）
 LOCAL_ONLY_FILES = frozenset({
-    ".update_state.json",
+    ".update_state.json", "server.py", "updater.py",
+    "js/giscus-client.js", "js/p2p.js", "css/p2p.css", "p2p.html",
 })
-# 只在本地存在、不参与远程下载的文件（跳过 ZIP 中的对应路径）
-REMOTE_EXCLUDE = frozenset({
-    ".update_state.json", ".claude",
-})
-# 受保护文件：参与比对可更新，但 GitHub 无此文件时也不删除
-PROTECTED_FILES = frozenset({"server.py"})
 # 被远程管理、但本地可能被注入额外内容的文件 — 计算哈希前先剥离受控区块
 HASH_STRIP_MARKERS: dict[str, tuple[str, str]] = {
     "js/main.js": (TIMESTAMP_MARKER_START, TIMESTAMP_MARKER_END),
@@ -396,6 +452,7 @@ HASH_STRIP_MARKERS: dict[str, tuple[str, str]] = {
 
 def _content_hash(path: Path, strip_start: str | None = None,
                   strip_end: str | None = None) -> str:
+    """计算文件 SHA256，可选地剥离指定区块后再计算。"""
     if strip_start is None:
         return file_sha256(path)
 
@@ -426,15 +483,15 @@ def compare_and_update(
     for fpath in temp_dir.rglob("*"):
         if fpath.is_file():
             rel = fpath.relative_to(temp_dir)
-            if rel.name in REMOTE_EXCLUDE:
-                continue
             temp_files[rel] = file_sha256(fpath)
 
     for fpath in project_root.rglob("*"):
         if fpath.is_file():
             rel = fpath.relative_to(project_root)
+            # 跳过本地自有文件
             if rel.name in LOCAL_ONLY_FILES:
                 continue
+            # 计算哈希时自动剥离本地注入的区块
             markers = HASH_STRIP_MARKERS.get(str(rel.as_posix()))
             ss, se = markers if markers else (None, None)
             local_files[rel] = _content_hash(fpath, ss, se)
@@ -451,9 +508,6 @@ def compare_and_update(
         elif in_temp and not in_local:
             return ("added", key)
         else:
-            # 受保护文件：不存在于 GitHub 时不删除
-            if key.name in PROTECTED_FILES:
-                return ("same", key)
             return ("removed", key)
 
     with ThreadPoolExecutor(max_workers=WORKERS) as executor:
@@ -489,6 +543,7 @@ def apply_update(
             target.unlink()
             log(f"  删除  {rel_str}")
 
+    # 清理空目录
     cleaned = 0
     for root, dirs, files in os.walk(project_root, topdown=False):
         if root == str(project_root):
@@ -504,6 +559,7 @@ def apply_update(
 # ── 注入更新时间戳到 main.js ─────────────────────────────
 
 def inject_timestamp():
+    """在 main.js 末尾注入/刷新更新时间戳（F12 控制台输出）。"""
     state = load_state()
     github_updated_at = state.get("github_updated_at", "未知")
     last_checked_at = state.get("last_checked_at", "从未检查")
@@ -530,6 +586,7 @@ def inject_timestamp():
 
     try:
         if not MAIN_JS.exists():
+            # 如果 main.js 还不存在，先创建基础框架
             MAIN_JS.parent.mkdir(parents=True, exist_ok=True)
             base = (
                 "// AutoUpdate — timestamp placeholder\n"
@@ -544,11 +601,13 @@ def inject_timestamp():
         content = MAIN_JS.read_text(encoding="utf-8")
 
         if TIMESTAMP_MARKER_START in content:
+            # 替换已有区块
             start = content.index(TIMESTAMP_MARKER_START)
             end = content.index(TIMESTAMP_MARKER_END) + len(TIMESTAMP_MARKER_END)
             new = content[:start].rstrip() + block
             MAIN_JS.write_text(new, encoding="utf-8")
         else:
+            # 首次追加
             MAIN_JS.write_text(content.rstrip() + block, encoding="utf-8")
 
         log(f"🕐 时间戳信息已{'刷新' if TIMESTAMP_MARKER_START in content else '注入'}")
@@ -557,10 +616,12 @@ def inject_timestamp():
 
 # ── 主更新流程 ───────────────────────────────────────────
 
-def run_update() -> bool | str:
+REMOTE_EXCLUDE = {".update_state.json", "server.py", "updater.py", ".claude"}
+
+def run_update() -> bool:
     """
     执行一次更新：下载 → 解压 → 比对 → 应用。
-    返回 True=有变更, False=无更新, "restart"=server.py 已更新需要重启。
+    返回 True 表示有文件变更，False 表示无更新。
     """
     state = load_state()
 
@@ -598,11 +659,6 @@ def run_update() -> bool | str:
         save_state(state)
 
         log(f"\n✅ 更新完成！共处理 {len(updated) + len(added) + len(removed)} 个文件。")
-
-        if "server.py" in updated:
-            log("🔄 server.py 已更新，即将重启…")
-            return "restart"
-
         return True
 
 
@@ -621,7 +677,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(PROJECT_ROOT), **kwargs)
 
     def do_GET(self):
-        self._try_check_update()
+        self._try_check_update()          # 先触发更新（403 页面也要触发）
+        # ACME HTTP-01 挑战 — 从可能的 web root 提供验证文件
         if self._try_serve_acme_challenge():
             return
 
@@ -668,7 +725,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         self.send_error(404, "Not Found")
 
     def do_HEAD(self):
-        self._try_check_update()
+        self._try_check_update()          # 先触发更新（403 页面也要触发）
+        # ACME HTTP-01 挑战 — 从可能的 web root 提供验证文件
         if self._try_serve_acme_challenge():
             return
         if not self._check_whitelist():
@@ -677,6 +735,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
 
     # -- 白名单检查 --
     def _check_whitelist(self) -> bool:
+        """检查请求路径是否在白名单内。不在则返回 403。"""
+        # whitelist.json 本身永远不允许直接访问
         WHITELIST_PATH = "/whitelist.json"
         parsed = urllib.parse.urlparse(self.path)
         req_path = parsed.path
@@ -685,9 +745,11 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(403, "Forbidden")
             return False
 
+        # 每次请求重新加载白名单，确保 GitHub 同步后立即生效
         whitelist = load_whitelist()
 
         if not is_path_allowed(req_path, whitelist):
+            # 记录日志
             log(f"⛔ 访问被白名单拒绝: {req_path}")
             self.send_error(403, "Forbidden")
             return False
@@ -696,6 +758,12 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
 
     # -- ACME HTTP-01 挑战 --
     def _try_serve_acme_challenge(self) -> bool:
+        """
+        尝试提供 ACME HTTP-01 验证文件。
+
+        遍历 ACME_CHALLENGE_ROOTS 查找验证文件；找到则返回内容，
+        返回 True 表示请求已处理（无需后续操作），False 表示非 ACME 路径。
+        """
         parsed = urllib.parse.urlparse(self.path)
         req_path = parsed.path
 
@@ -730,6 +798,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     })
 
     def _try_giscus_proxy(self, path: str) -> bool:
+        """透明代理 Giscus 静态资源到 giscus.app。"""
         if (path not in self._GISCUS_PROXY_EXACT
                 and not path.startswith(self._GISCUS_PROXY_PREFIXES)):
             return False
@@ -745,6 +814,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 content = resp.read()
                 ct = resp.headers.get("Content-Type", "application/octet-stream")
 
+                # 在 JS/HTML 中把 GitHub API 地址替换为本地代理
                 if 'javascript' in ct or 'html' in ct:
                     content = content.replace(
                         b'https://api.github.com',
@@ -766,6 +836,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
 
     # -- GitHub API 代理 --
     def _proxy_github_graphql(self):
+        """透明转发 GitHub GraphQL API 请求。"""
         length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(length) if length else b''
 
@@ -861,6 +932,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         self._send_json({'signals': signals})
 
     def _send_json(self, data: dict):
+        """发送 JSON 响应。"""
         resp = json.dumps(data)
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -871,6 +943,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     # -- 更新触发 --
     @classmethod
     def _try_check_update(cls):
+        """冷却期内不检查，否则异步触发一次更新。"""
         now = time.time()
         with cls.check_lock:
             if now - cls.last_check_time < cls.CHECK_INTERVAL:
@@ -883,34 +956,24 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         def _do():
             try:
                 log("检查 GitHub 更新…")
-                result = run_update()
+                changed = run_update()
 
+                # 无论是否有更新，都记录本次检查时间
                 state = load_state()
                 state["last_checked_at"] = format_utc8(
                     datetime.utcnow() + timedelta(hours=8)
                 )
+
+                # 如果还没有版本更新时间，尝试从 API 获取一次
                 if not state.get("github_updated_at"):
                     gh_time = fetch_github_repo_updated_at()
                     if gh_time:
                         state["github_updated_at"] = gh_time
+
                 save_state(state)
 
                 inject_timestamp()
-
-                if result == "restart":
-                    # server.py 已更新 — 1 秒后启动新进程、关闭当前进程
-                    log("🔄 server.py 已更新，1 秒后重启…")
-                    threading.Timer(1.0, lambda: (
-                        subprocess.Popen(
-                            [sys.executable] + sys.argv,
-                            cwd=str(PROJECT_ROOT),
-                            creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
-                        ),
-                        os._exit(0)
-                    )).start()
-                    return
-
-                if result is True:
+                if changed:
                     log("更新完成，刷新浏览器即可生效")
                 else:
                     log("当前已是最新版本")
@@ -923,8 +986,10 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         if len(args) == 3:
+            # 正常请求: ("GET /path HTTP/1.1", "200", "size")
             log(f"→ {args[0]}  {args[1]} ({args[2]})")
         elif len(args) == 2:
+            # 错误响应: (code, message) — 被 send_error 调用
             log(f"→ ❌ {args[0]} {args[1]}")
         else:
             log(f"→ HTTP {' '.join(str(a) for a in args)}")
@@ -969,6 +1034,7 @@ def main():
     log(f"{'='*50}")
     log("")
 
+    # 启动时确保 main.js 有时间戳（尚无则首次注入）
     inject_timestamp()
 
     try:

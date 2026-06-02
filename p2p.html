@@ -31,9 +31,11 @@
   var app = document.getElementById('app');
   var unavailable = document.getElementById('p2p-unavailable');
   var p2p = new P2PManager();
-  var state = { connected: false, peers: [], messages: [] };
-  var currentFileId = null;
-  var currentFilePeer = null;
+  // state: 所有消息（含系统消息）统一存储，renderMessages 统一渲染
+  var state = { connected: false, messages: [] };
+  // 区分"已就绪的 peer"和"所有正在连接的 peer"
+  var connectedPeers = [];   // DataChannel 已 open
+  var connectingPeers = [];  // RTCPeerConnection 已建立（含正在连接的）
 
   // ── 后端检测 ──
   p2p.checkBackend().then(function(avail) {
@@ -61,7 +63,7 @@
             '<span style="font-size:12px;color:#999;" class="peer-count">0</span>',
           '</div>',
           '<div class="p2p-peer-list" id="peer-list">',
-            '<div style="padding:16px;text-align:center;color:#999;font-size:13px;">未连接</div>',
+            '<div class="p2p-sidebar-status" id="sidebar-status">未连接</div>',
           '</div>',
           '<div class="p2p-sidebar-footer" id="room-info">',
             '房间: -',
@@ -108,7 +110,6 @@
       '</div>',
     ].join('');
 
-    // 事件绑定
     bindEvents();
   }
 
@@ -153,23 +154,50 @@
     };
   }
 
-  function updatePeerList(peers) {
-    state.peers = peers || [];
-    var list = document.getElementById('peer-list');
-    var count = document.querySelector('.peer-count');
-    if (count) count.textContent = peers.length;
+  /**
+   * 更新侧栏 peer 列表。
+   * @param {string[]} connected - DataChannel 已连接的 peer ID 列表
+   * @param {string[]} all - 所有正在连接的 peer ID 列表（含正在建立 WebRTC 连接的）
+   */
+  function updatePeerList(connected, all) {
+    connectedPeers = connected || [];
+    connectingPeers = all || [];
 
-    if (!peers || !peers.length) {
-      list.innerHTML = '<div style="padding:16px;text-align:center;color:#999;font-size:13px;">等待他人加入…</div>';
+    var list = document.getElementById('peer-list');
+    var countEl = document.querySelector('.peer-count');
+
+    // 更新在线计数（仅显示已连接的）
+    var connectedCount = connectedPeers.length;
+    var connectingCount = connectingPeers.length - connectedCount;
+    if (countEl) {
+      countEl.textContent = connectedCount +
+        (connectingCount > 0 ? ' (+' + connectingCount + ')' : '');
+    }
+
+    // 没有人在房间（含未连接状态）
+    if (!state.connected) {
+      list.innerHTML = '<div class="p2p-sidebar-status" id="sidebar-status">未连接</div>';
       return;
     }
-    list.innerHTML = peers.map(function(id) {
-      return '<div class="p2p-peer-item">' +
-        '<div class="p2p-peer-dot"></div>' +
-        '<span class="p2p-peer-name">' + id + '</span>' +
-        '<span class="p2p-peer-badge">已连接</span>' +
+
+    // 已加入房间但没有已连接的 peer
+    if (connectingPeers.length === 0) {
+      list.innerHTML = '<div class="p2p-sidebar-status" id="sidebar-status">等待他人加入…</div>';
+      return;
+    }
+
+    // 有正在连接或已连接的 peer
+    var items = '';
+    for (var i = 0; i < connectingPeers.length; i++) {
+      var id = connectingPeers[i];
+      var isConnected = connectedPeers.indexOf(id) !== -1;
+      items += '<div class="p2p-peer-item">' +
+        '<div class="p2p-peer-dot' + (isConnected ? '' : ' connecting') + '"></div>' +
+        '<span class="p2p-peer-name">' + escapeHtml(id) + '</span>' +
+        '<span class="p2p-peer-badge">' + (isConnected ? '已连接' : '连接中…') + '</span>' +
         '</div>';
-    }).join('');
+    }
+    list.innerHTML = items;
   }
 
   function addMessage(peerId, text) {
@@ -178,10 +206,20 @@
   }
 
   function receiveFile(peerId, name, mime, blob, fileId) {
-    state.messages.push({ from: peerId, name: name, mime: mime, blob: blob, fileId: fileId, type: 'file', time: new Date() });
+    state.messages.push({
+      from: peerId, name: name, mime: mime,
+      blob: blob, fileId: fileId, type: 'file', time: new Date(),
+    });
     renderMessages();
   }
 
+  /** 添加系统消息并存储到 state，统一由 renderMessages 渲染 */
+  function addSystemMsg(text) {
+    state.messages.push({ type: 'system', text: text, time: new Date() });
+    renderMessages();
+  }
+
+  /** 统一渲染所有消息（聊天、文件、系统），不会擦除之前的消息 */
   function renderMessages() {
     var area = document.getElementById('msg-area');
     var empty = document.getElementById('empty-chat');
@@ -194,11 +232,15 @@
       var isSelf = m.from === p2p.peerId;
       var time = (m.time ? m.time : new Date()).toLocaleTimeString();
 
-      if (m.type === 'chat') {
+      if (m.type === 'system') {
+        html += '<div class="p2p-system-msg">' + escapeHtml(m.text) + '</div>';
+
+      } else if (m.type === 'chat') {
         html += '<div class="p2p-msg ' + (isSelf ? 'self' : 'other') + '">';
         if (!isSelf) html += '<div class="p2p-msg-from">' + escapeHtml(m.from) + '</div>';
         html += '<div>' + escapeHtml(m.text) + '</div>';
         html += '<div class="p2p-msg-time">' + time + '</div></div>';
+
       } else if (m.type === 'file') {
         html += '<div class="p2p-msg ' + (isSelf ? 'self' : 'other') + '">';
         if (!isSelf) html += '<div class="p2p-msg-from">' + escapeHtml(m.from) + '</div>';
@@ -218,17 +260,6 @@
     }
 
     area.innerHTML = html;
-    area.scrollTop = area.scrollHeight;
-  }
-
-  function addSystemMsg(text) {
-    var area = document.getElementById('msg-area');
-    var empty = document.getElementById('empty-chat');
-    if (empty) empty.style.display = 'none';
-    var div = document.createElement('div');
-    div.className = 'p2p-system-msg';
-    div.textContent = text;
-    area.appendChild(div);
     area.scrollTop = area.scrollHeight;
   }
 
@@ -253,11 +284,14 @@
       url.searchParams.set('room', room);
       history.replaceState(null, '', url);
 
+      // 关键修复：加入房间后立即更新侧栏（而非等 DataChannel 打开才更新）
+      updatePeerList([], []);
+
+      // 存储系统消息到 state 统一渲染
       addSystemMsg('你已加入房间 ' + room + '（ID: ' + p2p.peerId + '）');
 
-      // 如果有其他在线成员，显示提示
       if (data.peers && data.peers.length) {
-        addSystemMsg('当前在线: ' + data.peers.join(', '));
+        addSystemMsg('房间内已有 ' + data.peers.length + ' 人，正在连接…');
       } else {
         addSystemMsg('等待其他人加入… 点击「邀请」分享房间链接');
       }
@@ -268,17 +302,22 @@
     p2p.leaveRoom().then(function() {
       state.connected = false;
       state.messages = [];
+      connectedPeers = [];
+      connectingPeers = [];
       document.getElementById('btn-join').style.display = '';
       document.getElementById('btn-copy-room').style.display = 'none';
       document.getElementById('btn-leave').style.display = 'none';
       document.getElementById('room-input').disabled = false;
       document.getElementById('room-info').textContent = '房间: -';
       setInputsEnabled(false);
-      document.getElementById('msg-area').innerHTML =
+      // 重置消息区
+      var area = document.getElementById('msg-area');
+      area.innerHTML =
         '<div class="p2p-empty-chat" id="empty-chat">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
         '<span>已离开房间</span></div>';
-      updatePeerList([]);
+      // 关键修复：离开房间后侧栏显示 "未连接"
+      updatePeerList([], []);
     });
   };
 
@@ -302,7 +341,6 @@
 
   // ── 文件 ──
   function sendFile(file, type) {
-    // 显示发送进度
     var progress = createProgress();
     var reader = new FileReader();
     reader.onload = function(e) {
@@ -367,7 +405,6 @@
   (function autoJoin() {
     var p = new URLSearchParams(window.location.search);
     if (p.get('room')) {
-      // 等 navbar 加载完再执行
       var wait = setInterval(function() {
         if (document.getElementById('btn-join')) {
           clearInterval(wait);
