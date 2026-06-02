@@ -127,11 +127,6 @@ class P2PManager {
       if (this.onScreenStream) this.onScreenStream(peerId, e.streams[0]);
     };
 
-    // Flush any pending candidates
-    const pending = this._pendingCandidates[peerId] || [];
-    delete this._pendingCandidates[peerId];
-    for (const c of pending) pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
-
     return pc;
   }
 
@@ -183,6 +178,7 @@ class P2PManager {
 
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(data));
+      this._flushCandidates(from);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       this._sendSignal(from, 'answer', { sdp: answer.sdp, type: answer.type });
@@ -195,7 +191,18 @@ class P2PManager {
     if (p.connection.signalingState === 'stable') return;
     try {
       await p.connection.setRemoteDescription(new RTCSessionDescription(data));
+      this._flushCandidates(from);
     } catch (e) { console.error('handleAnswer error', from, e); }
+  }
+
+  _flushCandidates(peerId) {
+    const p = this.peers[peerId];
+    if (!p) return;
+    const pending = this._pendingCandidates[peerId] || [];
+    delete this._pendingCandidates[peerId];
+    for (const c of pending) {
+      try { p.connection.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+    }
   }
 
   async _handleIce(from, data) {
