@@ -3,6 +3,7 @@
   var loading = true;
   var giscusLoaded = false;
   var wrapper, container;
+  var useProxy = false;  // 是否使用本地代理
 
   function showLoading() {
     loading = true;
@@ -28,7 +29,7 @@
     }
   }
 
-  // 独立判断当前主题，不依赖 DOM 属性（避免 navbar.js 尚未初始化的竞态）
+  // 独立判断当前主题
   function getTheme() {
     var saved = localStorage.getItem('reori-theme');
     if (saved === 'dark') return 'dark';
@@ -39,7 +40,8 @@
   function sendGiscusMessage(msg) {
     var iframe = document.querySelector('iframe.giscus-frame');
     if (iframe) {
-      iframe.contentWindow.postMessage({ giscus: msg }, 'https://giscus.app');
+      var target = useProxy ? window.location.origin : 'https://giscus.app';
+      iframe.contentWindow.postMessage({ giscus: msg }, target);
     }
   }
 
@@ -47,7 +49,8 @@
     while (container.firstChild) container.removeChild(container.firstChild);
 
     var script = document.createElement('script');
-    script.src = 'https://giscus.app/client.js';
+    // 有代理则加载本地 client.js，否则加载 CDN
+    script.src = useProxy ? '/js/giscus-client.js' : 'https://giscus.app/client.js';
     script.setAttribute('data-repo', config.repo);
     script.setAttribute('data-repo-id', config.repoId);
     script.setAttribute('data-category', config.category);
@@ -63,11 +66,16 @@
 
     script.onerror = function() {
       giscusLoaded = false;
-      showError('评论区加载失败，请检查网络后重试');
+      var msg = useProxy
+        ? '评论区本地代理加载失败，请检查网络后重试'
+        : '评论区加载失败，请检查网络后重试';
+      showError(msg);
     };
 
+    var expectedOrigin = useProxy ? window.location.origin : 'https://giscus.app';
+
     var messageHandler = function(e) {
-      if (e.origin === 'https://giscus.app' && e.data && e.data.giscus) {
+      if (e.origin === expectedOrigin && e.data && e.data.giscus) {
         loading = false;
         giscusLoaded = true;
         window.removeEventListener('message', messageHandler);
@@ -89,6 +97,13 @@
     container.appendChild(script);
   }
 
+  // 检测后端是否支持代理
+  function checkProxy() {
+    return fetch('/api/ping', { method: 'GET', cache: 'no-store' })
+      .then(function(r) { return r.ok; })
+      .catch(function() { return false; });
+  }
+
   function loadGiscus() {
     if (!config) {
       showError('评论区配置缺失，请检查 config.json 中的 giscus 字段');
@@ -98,12 +113,21 @@
       showError('评论区未配置完整 (repo/repoId/categoryId)');
       return;
     }
+
+    // 先检测代理，再决定加载方式
     showLoading();
-    renderGiscus(getTheme());
+    checkProxy().then(function(proxyAvail) {
+      useProxy = proxyAvail;
+      if (proxyAvail) {
+        console.log('[giscus] 使用本地代理');
+      } else {
+        console.log('[giscus] 代理不可用，回退到 CDN 直连');
+      }
+      renderGiscus(getTheme());
+    });
   }
 
   function init() {
-    // 支持两种页面类型：blog-content（关于页等）和 #write（Typora 导出页）
     var contentEl = document.querySelector('.blog-content') || document.getElementById('write');
     if (!contentEl) return;
 

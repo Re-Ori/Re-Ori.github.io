@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1.4.0 20260602 更新</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="blog-content">
+            <h2>1.4.0 20260602 更新</h2>
+
+            <h3>🔒 SSL 证书支持</h3>
+            <p>服务器现在可以顺利完成 Let's Encrypt 的 HTTP-01 域名验证，申请 SSL 证书。</p>
+            <p>以后访问本站就是 <strong>HTTPS</strong> 而不是 HTTP 了。</p>
+
+            <h3>🚀 Giscus 评论区国内加速</h3>
+            <p>Giscus 评论区现在会优先使用本地代理：</p>
+            <ul>
+                <li>Giscus 客户端 JS 从本站服务器加载（绕过 Vercel CDN）</li>
+                <li>GitHub GraphQL API 请求通过本站服务器代理转发</li>
+                <li>无代理环境（如 GitHub Pages）自动降级到 CDN 直连，评论区不中断</li>
+            </ul>
+
+            <h3>🌐 P2P 直连空间</h3>
+            <p>新增 P2P 点对点通信功能，所有数据传输不走服务器：</p>
+            <ul>
+                <li><strong>文字聊天</strong> — 通过 WebRTC DataChannel 实时传输</li>
+                <li><strong>文件传输</strong> — 支持任意文件类型，分块传输</li>
+                <li><strong>图片分享</strong> — 拖拽或选择图片直接发送，接收方即时预览</li>
+                <li><strong>屏幕共享</strong> — 基于 WebRTC 媒体流，一键分享屏幕</li>
+                <li><strong>房间机制</strong> — 创建/加入房间，分享链接即可邀请他人</li>
+            </ul>
+            <p>入口：导航栏「P2P」按钮 / 首页「🌐 P2P 直连空间」卡片</p>
+
+            <h3>🧠 智能后端检测</h3>
+            <p>P2P 和 Giscus 代理都带有后端可用性检测：</p>
+            <ul>
+                <li>在 reori.cn 上 → 自动启用 P2P 和 Giscus 代理</li>
+                <li>在 GitHub Pages 等纯静态环境 → 自动检测并降级，功能不受影响</li>
+            </ul>
+        </div>
+
+    <script src="/js/main.js"></script>
+    <script src="/js/navbar.js"></script>
+    <script src="/js/giscus.js"></script>
+  <script src="/js/bg.js"></script>
+</html>

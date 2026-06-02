@@ -18,6 +18,10 @@
         "url": "/index.html?blog_list=/blogs/update/update.json"
       },
       {
+        "name": "P2P",
+        "url": "/p2p.html"
+      },
+      {
         "name": "关于",
         "url": "/blogs/about.html"
       },

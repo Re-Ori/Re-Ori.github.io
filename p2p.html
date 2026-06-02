@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P2P 空间 — ReOri</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/p2p.css">
+</head>
+<body>
+<div class="container" id="app">
+  <!-- 无后端提示（默认显示，隐藏后走 P2P 界面） -->
+  <div id="p2p-unavailable" class="p2p-unavailable" style="display:none;">
+    <h2>🌐 P2P 空间</h2>
+    <p>
+      P2P 直连功能需要运行在自建服务器上。<br>
+      请前往 <a href="https://reori.cn/p2p.html">reori.cn/p2p.html</a> 使用此功能。
+    </p>
+  </div>
+</div>
+
+<div id="p2p-screen-container" class="p2p-screen-container">
+  <div class="p2p-screen-label">📺 屏幕共享</div>
+  <video id="p2p-screen-video" autoplay muted></video>
+</div>
+
+<script src="/js/navbar.js"></script>
+<script src="/js/p2p.js"></script>
+<script>
+(function() {
+  var app = document.getElementById('app');
+  var unavailable = document.getElementById('p2p-unavailable');
+  var p2p = new P2PManager();
+  var state = { connected: false, peers: [], messages: [] };
+  var currentFileId = null;
+  var currentFilePeer = null;
+
+  // ── 后端检测 ──
+  p2p.checkBackend().then(function(avail) {
+    if (!avail) {
+      unavailable.style.display = 'block';
+      return;
+    }
+    unavailable.style.display = 'none';
+    renderUI();
+    setupCallbacks();
+    p2p.onPeersChange = updatePeerList;
+    p2p.onMessage = addMessage;
+    p2p.onFile = receiveFile;
+    p2p.onScreenStream = receiveScreen;
+  });
+
+  // ── 渲染界面 ──
+  function renderUI() {
+    app.innerHTML = [
+      '<div class="p2p-layout">',
+        /* 侧栏 */
+        '<div class="p2p-sidebar">',
+          '<div class="p2p-sidebar-header">',
+            '<span>👥 在线</span>',
+            '<span style="font-size:12px;color:#999;" class="peer-count">0</span>',
+          '</div>',
+          '<div class="p2p-peer-list" id="peer-list">',
+            '<div style="padding:16px;text-align:center;color:#999;font-size:13px;">未连接</div>',
+          '</div>',
+          '<div class="p2p-sidebar-footer" id="room-info">',
+            '房间: -',
+          '</div>',
+        '</div>',
+
+        /* 主区域 */
+        '<div class="p2p-main">',
+          /* 顶栏 */
+          '<div class="p2p-topbar">',
+            '<label>房间</label>',
+            '<input type="text" id="room-input" placeholder="输入房间ID" value="' + defaultRoom() + '">',
+            '<button class="p2p-btn" id="btn-join" onclick="joinRoom()">加入/创建</button>',
+            '<button class="p2p-btn outline" id="btn-copy-room" onclick="copyRoomLink()" style="display:none;">📋 邀请</button>',
+            '<button class="p2p-btn danger" id="btn-leave" onclick="leaveRoom()" style="display:none;">离开</button>',
+          '</div>',
+
+          /* 消息 */
+          '<div class="p2p-messages" id="msg-area">',
+            '<div class="p2p-empty-chat" id="empty-chat">',
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+              '<span>加入房间后即可开始聊天、传文件</span>',
+            '</div>',
+          '</div>',
+
+          /* 输入 */
+          '<div class="p2p-input">',
+            '<textarea id="chat-input" placeholder="输入消息，回车发送…" disabled></textarea>',
+            '<div class="p2p-input-actions">',
+              '<button class="p2p-icon-btn" id="btn-file" title="发送文件" disabled>',
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>',
+                '<input type="file" id="file-input" accept="*">',
+              '</button>',
+              '<button class="p2p-icon-btn" id="btn-image" title="发送图片" disabled>',
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>',
+                '<input type="file" id="image-input" accept="image/*">',
+              '</button>',
+              '<button class="p2p-icon-btn" id="btn-screen" title="屏幕共享" disabled>',
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>',
+              '</button>',
+            '</div>',
+          '</div>',
+        '</div>',
+      '</div>',
+    ].join('');
+
+    // 事件绑定
+    bindEvents();
+  }
+
+  function defaultRoom() {
+    var p = new URLSearchParams(window.location.search);
+    return p.get('room') || '';
+  }
+
+  function bindEvents() {
+    var input = document.getElementById('chat-input');
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChat();
+      }
+    });
+
+    document.getElementById('file-input').addEventListener('change', function(e) {
+      if (e.target.files.length) sendFile(e.target.files[0], 'file');
+      e.target.value = '';
+    });
+
+    document.getElementById('image-input').addEventListener('change', function(e) {
+      if (e.target.files.length) sendFile(e.target.files[0], 'image');
+      e.target.value = '';
+    });
+
+    document.getElementById('btn-screen').addEventListener('click', startScreenShare);
+  }
+
+  function setInputsEnabled(enabled) {
+    document.getElementById('chat-input').disabled = !enabled;
+    document.getElementById('btn-file').disabled = !enabled;
+    document.getElementById('btn-image').disabled = !enabled;
+    document.getElementById('btn-screen').disabled = !enabled;
+  }
+
+  // ── 回调 ──
+  function setupCallbacks() {
+    p2p.onError = function(msg) {
+      window.showToast && window.showToast(msg, 3000);
+    };
+  }
+
+  function updatePeerList(peers) {
+    state.peers = peers || [];
+    var list = document.getElementById('peer-list');
+    var count = document.querySelector('.peer-count');
+    if (count) count.textContent = peers.length;
+
+    if (!peers || !peers.length) {
+      list.innerHTML = '<div style="padding:16px;text-align:center;color:#999;font-size:13px;">等待他人加入…</div>';
+      return;
+    }
+    list.innerHTML = peers.map(function(id) {
+      return '<div class="p2p-peer-item">' +
+        '<div class="p2p-peer-dot"></div>' +
+        '<span class="p2p-peer-name">' + id + '</span>' +
+        '<span class="p2p-peer-badge">已连接</span>' +
+        '</div>';
+    }).join('');
+  }
+
+  function addMessage(peerId, text) {
+    state.messages.push({ from: peerId, text: text, time: new Date(), type: 'chat' });
+    renderMessages();
+  }
+
+  function receiveFile(peerId, name, mime, blob, fileId) {
+    state.messages.push({ from: peerId, name: name, mime: mime, blob: blob, fileId: fileId, type: 'file', time: new Date() });
+    renderMessages();
+  }
+
+  function renderMessages() {
+    var area = document.getElementById('msg-area');
+    var empty = document.getElementById('empty-chat');
+    if (empty) empty.style.display = 'none';
+
+    var msgs = state.messages;
+    var html = '';
+    for (var i = 0; i < msgs.length; i++) {
+      var m = msgs[i];
+      var isSelf = m.from === p2p.peerId;
+      var time = (m.time ? m.time : new Date()).toLocaleTimeString();
+
+      if (m.type === 'chat') {
+        html += '<div class="p2p-msg ' + (isSelf ? 'self' : 'other') + '">';
+        if (!isSelf) html += '<div class="p2p-msg-from">' + escapeHtml(m.from) + '</div>';
+        html += '<div>' + escapeHtml(m.text) + '</div>';
+        html += '<div class="p2p-msg-time">' + time + '</div></div>';
+      } else if (m.type === 'file') {
+        html += '<div class="p2p-msg ' + (isSelf ? 'self' : 'other') + '">';
+        if (!isSelf) html += '<div class="p2p-msg-from">' + escapeHtml(m.from) + '</div>';
+
+        if (m.mime && m.mime.startsWith('image/')) {
+          var url = URL.createObjectURL(m.blob);
+          html += '<img class="p2p-msg-image" src="' + url + '" alt="图片" onclick="window.open(\'' + url + '\')">';
+        } else {
+          html += '<div class="p2p-msg-file" onclick="downloadFile(' + i + ')">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="12"/><line x1="15" y1="15" x2="12" y2="12"/></svg>' +
+            '<span>' + escapeHtml(m.name || '文件') + '</span>' +
+            '</div>';
+        }
+
+        html += '<div class="p2p-msg-time">' + time + '</div></div>';
+      }
+    }
+
+    area.innerHTML = html;
+    area.scrollTop = area.scrollHeight;
+  }
+
+  function addSystemMsg(text) {
+    var area = document.getElementById('msg-area');
+    var empty = document.getElementById('empty-chat');
+    if (empty) empty.style.display = 'none';
+    var div = document.createElement('div');
+    div.className = 'p2p-system-msg';
+    div.textContent = text;
+    area.appendChild(div);
+    area.scrollTop = area.scrollHeight;
+  }
+
+  // ── 房间操作 ──
+  window.joinRoom = function() {
+    var room = document.getElementById('room-input').value.trim();
+    if (!room) { window.showToast && window.showToast('请输入房间ID', 2000); return; }
+
+    p2p.joinRoom(room).then(function(data) {
+      if (!data) return;
+      state.connected = true;
+      document.getElementById('btn-join').style.display = 'none';
+      document.getElementById('btn-copy-room').style.display = '';
+      document.getElementById('btn-leave').style.display = '';
+      document.getElementById('room-input').disabled = true;
+      document.getElementById('room-info').textContent = '房间: ' + room + ' | 我的ID: ' + p2p.peerId;
+      document.getElementById('room-info').title = '我的ID: ' + p2p.peerId;
+      setInputsEnabled(true);
+
+      // 更新 URL
+      var url = new URL(window.location);
+      url.searchParams.set('room', room);
+      history.replaceState(null, '', url);
+
+      addSystemMsg('你已加入房间 ' + room + '（ID: ' + p2p.peerId + '）');
+
+      // 如果有其他在线成员，显示提示
+      if (data.peers && data.peers.length) {
+        addSystemMsg('当前在线: ' + data.peers.join(', '));
+      } else {
+        addSystemMsg('等待其他人加入… 点击「邀请」分享房间链接');
+      }
+    });
+  };
+
+  window.leaveRoom = function() {
+    p2p.leaveRoom().then(function() {
+      state.connected = false;
+      state.messages = [];
+      document.getElementById('btn-join').style.display = '';
+      document.getElementById('btn-copy-room').style.display = 'none';
+      document.getElementById('btn-leave').style.display = 'none';
+      document.getElementById('room-input').disabled = false;
+      document.getElementById('room-info').textContent = '房间: -';
+      setInputsEnabled(false);
+      document.getElementById('msg-area').innerHTML =
+        '<div class="p2p-empty-chat" id="empty-chat">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
+        '<span>已离开房间</span></div>';
+      updatePeerList([]);
+    });
+  };
+
+  window.copyRoomLink = function() {
+    var url = window.location.origin + '/p2p.html?room=' + encodeURIComponent(p2p.room);
+    navigator.clipboard.writeText(url).then(function() {
+      window.showToast && window.showToast('房间链接已复制', 2000);
+    });
+  };
+
+  // ── 聊天 ──
+  function sendChat() {
+    var input = document.getElementById('chat-input');
+    var text = input.value.trim();
+    if (!text) return;
+    p2p.sendChat(text);
+    addMessage(p2p.peerId, text);
+    input.value = '';
+  }
+  window.sendChat = sendChat;
+
+  // ── 文件 ──
+  function sendFile(file, type) {
+    // 显示发送进度
+    var progress = createProgress();
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      p2p.sendFile(file);
+      var msg = type === 'image' ? '📷 图片: ' + file.name : '📎 文件: ' + file.name;
+      addMessage(p2p.peerId, msg);
+      removeProgress(progress);
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function createProgress() {
+    var p = document.createElement('div');
+    p.className = 'p2p-progress';
+    p.innerHTML = '<div class="p2p-progress-bar" style="width:100%;animation:p2p-spin 1s linear infinite;"></div>';
+    document.getElementById('msg-area').parentNode.insertBefore(p, document.querySelector('.p2p-input'));
+    return p;
+  }
+  function removeProgress(p) { if (p && p.parentNode) p.parentNode.removeChild(p); }
+
+  window.downloadFile = function(index) {
+    var m = state.messages[index];
+    if (!m || !m.blob) return;
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(m.blob);
+    a.download = m.name || 'file';
+    a.click();
+  };
+
+  // ── 屏幕共享 ──
+  function startScreenShare() {
+    p2p.startScreenShare().then(function(ok) {
+      if (ok) {
+        window.showToast && window.showToast('正在共享屏幕', 2000);
+      } else {
+        window.showToast && window.showToast('屏幕共享启动失败', 2000);
+      }
+    });
+  }
+
+  function receiveScreen(peerId, stream) {
+    var container = document.getElementById('p2p-screen-container');
+    var video = document.getElementById('p2p-screen-video');
+    container.classList.add('visible');
+    video.srcObject = stream;
+    video.play().catch(function(){});
+    addSystemMsg(peerId + ' 开始屏幕共享');
+    stream.getVideoTracks()[0].onended = function() {
+      container.classList.remove('visible');
+      addSystemMsg(peerId + ' 结束屏幕共享');
+    };
+  }
+
+  // ── 工具 ──
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // 如果 URL 有 room 参数，自动加入
+  (function autoJoin() {
+    var p = new URLSearchParams(window.location.search);
+    if (p.get('room')) {
+      // 等 navbar 加载完再执行
+      var wait = setInterval(function() {
+        if (document.getElementById('btn-join')) {
+          clearInterval(wait);
+          setTimeout(window.joinRoom, 300);
+        }
+      }, 100);
+    }
+  })();
+})();
+</script>
+</body>
+</html>
