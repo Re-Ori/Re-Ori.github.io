@@ -148,10 +148,10 @@ class P2PManager {
 
     pc.createOffer().then(offer => {
       // createOffer 是异步的，期间可能已经收到对方 Offer 并改变了状态
-      if (pc.signalingState !== 'stable') return;
+      if (pc.signalingState !== 'stable' || pc.remoteDescription) return;
       return pc.setLocalDescription(offer);
     }).then(() => {
-      if (pc.localDescription) {
+      if (pc.localDescription && pc.localDescription.type === 'offer') {
         this._sendSignal(peerId, 'offer', {
           sdp: pc.localDescription.sdp,
           type: pc.localDescription.type

@@ -1005,7 +1005,7 @@ document.addEventListener('DOMContentLoaded', () => {
   );
   console.log(
     '  最新检查时间: %s',
-    '2026.06.02 21:17:57 [UTC+8]'
+    '2026.06.02 21:26:02 [UTC+8]'
   );
 })();
 // ===== End AutoUpdate Timestamp =====
