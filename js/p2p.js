@@ -135,6 +135,11 @@ class P2PManager {
     return pc;
   }
 
+  // ── 连接修复：Polite Peer 模式 ──
+  // 双方都创建 DataChannel + Offer。
+  // 当收到对方的 Offer 时根据自己的 ID 决定 polite/imolite 行为，
+  // 彻底解决 glare（信号冲突）问题。
+
   _connectTo(peerId) {
     if (this.peers[peerId] || peerId === this.peerId) return;
     const pc = this._getOrCreatePC(peerId);
@@ -142,8 +147,16 @@ class P2PManager {
     this._setupChannel(channel, peerId);
 
     pc.createOffer().then(offer => {
-      pc.setLocalDescription(offer);
-      this._sendSignal(peerId, 'offer', { sdp: offer.sdp, type: offer.type });
+      // createOffer 是异步的，期间可能已经收到对方 Offer 并改变了状态
+      if (pc.signalingState !== 'stable') return;
+      return pc.setLocalDescription(offer);
+    }).then(() => {
+      if (pc.localDescription) {
+        this._sendSignal(peerId, 'offer', {
+          sdp: pc.localDescription.sdp,
+          type: pc.localDescription.type
+        });
+      }
     }).catch(e => console.error('createOffer error', e));
   }
 
@@ -158,6 +171,18 @@ class P2PManager {
 
   async _handleOffer(from, data) {
     const pc = this._getOrCreatePC(from);
+
+    // Polite Peer 模式：双方同时发 Offer（glare）时的处理
+    if (pc.signalingState === 'have-local-offer') {
+      if (this.peerId > from) {
+        // ID 较大 = polite：回滚已有 offer，接受对方
+        await pc.setLocalDescription({ type: 'rollback' });
+      } else {
+        // ID 较小 = impolite：保留自己 offer，忽略对方
+        return;
+      }
+    }
+
     try {
       await pc.setRemoteDescription(new RTCSessionDescription(data));
       const answer = await pc.createAnswer();
@@ -169,6 +194,7 @@ class P2PManager {
   async _handleAnswer(from, data) {
     const p = this.peers[from];
     if (!p) return;
+    if (p.connection.signalingState === 'stable') return;
     try {
       await p.connection.setRemoteDescription(new RTCSessionDescription(data));
     } catch (e) { console.error('handleAnswer error', from, e); }
