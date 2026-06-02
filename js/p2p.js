@@ -146,11 +146,9 @@ class P2PManager {
     const channel = pc.createDataChannel('p2p-channel');
     this._setupChannel(channel, peerId);
 
-    pc.createOffer().then(offer => {
-      // createOffer 是异步的，期间可能已经收到对方 Offer 并改变了状态
+    pc.createOffer().then(async (offer) => {
       if (pc.signalingState !== 'stable' || pc.remoteDescription) return;
-      return pc.setLocalDescription(offer);
-    }).then(() => {
+      try { await pc.setLocalDescription(offer); } catch { return; }
       if (pc.localDescription && pc.localDescription.type === 'offer') {
         this._sendSignal(peerId, 'offer', {
           sdp: pc.localDescription.sdp,
