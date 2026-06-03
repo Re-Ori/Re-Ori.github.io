@@ -1000,12 +1000,16 @@ document.addEventListener('DOMContentLoaded', () => {
     'color: #4CAF50; font-size: 13px; font-weight: bold;'
   );
   console.log(
-    '  最新版本更新时间 (GitHub): %s',
-    '2026.06.02 22:21:55 [UTC+8]'
+    '  本地文件版本: %s',
+    '2026.06.03 21:47:25 [UTC+8]'
+  );
+  console.log(
+    '  GitHub 远程版本: %s',
+    '未知'
   );
   console.log(
     '  最新检查时间: %s',
-    '2026.06.03 00:00:54 [UTC+8]'
+    '2026.06.03 21:47:25 [UTC+8]'
   );
 })();
 // ===== End AutoUpdate Timestamp =====

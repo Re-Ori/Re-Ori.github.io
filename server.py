@@ -165,14 +165,17 @@ def format_utc8(dt: datetime) -> str:
     return dt.strftime("%Y.%m.%d %H:%M:%S") + " [UTC+8]"
 
 
-def fetch_github_repo_updated_at() -> str | None:
+def fetch_github_repo_info() -> dict | None:
     """
-    调用 GitHub API 获取仓库最新推送时间（``pushed_at``）。
+    调用 GitHub Commits API 获取最新 commit 的 SHA 和时间。
 
-    返回 HTTP 日期格式字符串（如 ``Mon, 01 Jun 2026 22:44:09 GMT``），
+    返回 ``{"sha": "e885e80", "updated_at": "2026.06.03 21:47:25 [UTC+8]"}``，
     失败返回 ``None``。
     """
-    api_url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}"
+    api_url = (
+        f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}"
+        f"/commits/main?per_page=1"
+    )
     req = urllib.request.Request(
         api_url,
         headers={
@@ -183,12 +186,27 @@ def fetch_github_repo_updated_at() -> str | None:
     try:
         with _ssl_urlopen(req, 15) as resp:
             data = json.loads(resp.read())
-            pushed_at = data.get("pushed_at")  # ISO 8601: "2026-05-05T15:33:16Z"
-            if pushed_at:
-                dt = datetime.strptime(pushed_at, "%Y-%m-%dT%H:%M:%SZ")
-                # GitHub 返回的是 UTC 时间，转为 UTC+8
-                dt_utc8 = dt + timedelta(hours=8)
-                return format_utc8(dt_utc8)
+            if isinstance(data, list) and data:
+                commit = data[0]
+                sha_full = commit.get("sha", "") or ""
+                sha_short = sha_full[:7] if sha_full else None
+                commit_date = (
+                    commit.get("commit", {})
+                    .get("committer", {})
+                    .get("date")
+                )
+                if commit_date:
+                    dt = datetime.strptime(
+                        commit_date.replace("Z", "").split("+")[0],
+                        "%Y-%m-%dT%H:%M:%S",
+                    )
+                    dt_utc8 = dt + timedelta(hours=8)
+                    return {
+                        "sha": sha_short,
+                        "updated_at": format_utc8(dt_utc8),
+                    }
+                if sha_short:
+                    return {"sha": sha_short, "updated_at": None}
             return None
     except Exception:
         return None
@@ -357,15 +375,6 @@ def download_zip(target_path: Path) -> str | None:
             new_etag = resp.headers.get("ETag")
             if new_etag:
                 state["etag"] = new_etag
-            # 捕获/获取 GitHub 仓库的版本更新时间
-            last_modified = resp.headers.get("Last-Modified")
-            if last_modified:
-                state["github_updated_at"] = last_modified
-            else:
-                gh_time = fetch_github_repo_updated_at()
-                if gh_time:
-                    state["github_updated_at"] = gh_time
-            if new_etag or last_modified or state.get("github_updated_at"):
                 save_state(state)
             return new_etag
     except urllib.error.HTTPError as e:
@@ -391,15 +400,9 @@ def download_zip(target_path: Path) -> str | None:
     etag_fallback = load_state().get("etag")
     curl_result = _download_via_curl(ZIP_URL, target_path, etag_fallback)
     if curl_result:
-        curl_etag, curl_last_modified = curl_result
+        curl_etag, _ = curl_result  # 忽略 Last-Modified，版本信息走 API 统一获取
         state = load_state()
         state["etag"] = curl_etag
-        if curl_last_modified:
-            state["github_updated_at"] = curl_last_modified
-        else:
-            gh_time = fetch_github_repo_updated_at()
-            if gh_time:
-                state["github_updated_at"] = gh_time
         save_state(state)
         return curl_etag
 
@@ -578,7 +581,7 @@ def get_local_updated_at() -> str | None:
                     latest = mtime
         if latest == 0.0:
             return None
-        dt = datetime.fromtimestamp(latest) + timedelta(hours=8)
+        dt = datetime.utcfromtimestamp(latest) + timedelta(hours=8)
         return format_utc8(dt)
     except Exception:
         return None
@@ -590,6 +593,11 @@ def inject_timestamp():
     """在 main.js 末尾注入/刷新更新时间戳（F12 控制台输出）。"""
     state = load_state()
     github_updated_at = state.get("github_updated_at", "未知")
+    github_commit_sha = state.get("github_commit_sha")
+    if github_updated_at != "未知" and github_commit_sha:
+        github_display = f"{github_updated_at} [{github_commit_sha}]"
+    else:
+        github_display = github_updated_at
     last_checked_at = state.get("last_checked_at", "从未检查")
     local_updated_at = get_local_updated_at() or "未知"
 
@@ -607,7 +615,7 @@ def inject_timestamp():
         f"  );\n"
         f"  console.log(\n"
         f"    '  GitHub 远程版本: %s',\n"
-        f"    '{github_updated_at}'\n"
+        f"    '{github_display}'\n"
         f"  );\n"
         f"  console.log(\n"
         f"    '  最新检查时间: %s',\n"
@@ -650,6 +658,7 @@ def inject_timestamp():
 # ── 主更新流程 ───────────────────────────────────────────
 
 REMOTE_EXCLUDE = {".update_state.json", "server.py", "updater.py", ".claude"}
+_RESTART_NEEDED: bool = False  # run_update 检测到 server.py 自身有变更时置 True
 
 def run_update() -> bool:
     """
@@ -1030,11 +1039,14 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                     datetime.utcnow() + timedelta(hours=8)
                 )
 
-                # 每次检查都从 GitHub API 获取最新的 pushed_at，
-                # 因为即使 ZIP 内容没变（304），用户也可能刚推送了新 commit
-                gh_time = fetch_github_repo_updated_at()
-                if gh_time:
-                    state["github_updated_at"] = gh_time
+                # 每次检查都从 GitHub API 获取最新 commit SHA 和时间，
+                # 即使 ZIP 内容没变（304），用户也可能刚推送了新 commit
+                gh_info = fetch_github_repo_info()
+                if gh_info:
+                    if gh_info["updated_at"]:
+                        state["github_updated_at"] = gh_info["updated_at"]
+                    if gh_info["sha"]:
+                        state["github_commit_sha"] = gh_info["sha"]
 
                 save_state(state)
 
@@ -1043,6 +1055,16 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                     log("更新完成，刷新浏览器即可生效")
                 else:
                     log("当前已是最新版本")
+
+                # server.py 自身在更新中被覆盖 → 重启进程
+                if _RESTART_NEEDED:
+                    log("\n🔄 server.py 已更新，正在重启…")
+                    time.sleep(3)
+                    try:
+                        subprocess.Popen([sys.executable] + sys.argv)
+                    except Exception as e:
+                        log(f"重启失败: {e}")
+                    os._exit(0)
             except Exception as e:
                 log(f"更新异常: {e}")
             finally:
