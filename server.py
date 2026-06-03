@@ -1035,9 +1035,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 gh_time = fetch_github_repo_updated_at()
                 if gh_time:
                     state["github_updated_at"] = gh_time
-                    gh_time = fetch_github_repo_updated_at()
-                    if gh_time:
-                        state["github_updated_at"] = gh_time
 
                 save_state(state)
 

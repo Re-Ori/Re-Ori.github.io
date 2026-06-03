@@ -39,13 +39,582 @@
   var app = document.getElementById('app');
   var unavailable = document.getElementById('p2p-unavailable');
   var p2p = new P2PManager();
-  // state: 所有消息（含系统消息）统一存储，renderMessages 统一渲染
   var state = { connected: false, messages: [] };
-  // 区分"已就绪的 peer"和"所有正在连接的 peer"
-  var connectedPeers = [];   // DataChannel 已 open
-  var connectingPeers = [];  // RTCPeerConnection 已建立（含正在连接的）
+  var connectedPeers = [];
+  var connectingPeers = [];
 
-  // ── WebRTC 检测 ──
+  // ═══════════════════════════════════════════
+  //  环境检测模块
+  // ═══════════════════════════════════════════
+
+  var detect = { step: 0, results: {} };
+
+  function renderDetectUI() {
+    app.innerHTML = [
+      '<div class="p2p-detect-wrap">',
+        /* 头部 */
+        '<div class="p2p-detect-header">',
+          '<div class="p2p-detect-header-icon">',
+            '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">',
+              '<path d="M5 12.55a11 11 0 0 1 14.08 0"/>',
+              '<path d="M1.42 9a16 16 0 0 1 21.16 0"/>',
+              '<path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>',
+              '<circle cx="12" cy="20" r="1"/>',
+            '</svg>',
+          '</div>',
+          '<div class="p2p-detect-title">环境检测</div>',
+          '<div class="p2p-detect-subtitle">验证浏览器与网络环境是否支持 P2P 直连</div>',
+        '</div>',
+
+        /* 步骤进度 */
+        '<div class="p2p-detect-progress" id="detect-progress">',
+          '<span class="p2p-detect-progress-dot" id="prog-1"></span>',
+          '<span class="p2p-detect-progress-line" id="prog-l1"></span>',
+          '<span class="p2p-detect-progress-dot" id="prog-2"></span>',
+          '<span class="p2p-detect-progress-line" id="prog-l2"></span>',
+          '<span class="p2p-detect-progress-dot" id="prog-3"></span>',
+        '</div>',
+
+        /* 步骤 1：信令服务器（最快，先检测） */
+        '<div id="detect-step-1" class="p2p-detect-item pending">',
+          '<div class="p2p-detect-icon">',
+            '<svg class="icon-pending" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>',
+            '<svg class="icon-running" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10" stroke-dasharray="31.4 31.4" stroke-dashoffset="10"/></svg>',
+            '<svg class="icon-pass" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none"><polyline points="20 6 9 17 4 12"/></svg>',
+            '<svg class="icon-fail" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="2.5" stroke-linecap="round" style="display:none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+          '</div>',
+          '<div class="p2p-detect-body">',
+            '<div class="p2p-detect-label">信令服务器',
+              '<span class="p2p-detect-label-status" id="status-1"></span>',
+            '</div>',
+            '<div class="p2p-detect-desc">与后端信令服务的连通性</div>',
+            '<div id="detect-detail-1" class="p2p-detect-detail" style="display:none;"></div>',
+          '</div>',
+        '</div>',
+
+        /* 步骤 2：浏览器兼容性 */
+        '<div id="detect-step-2" class="p2p-detect-item pending">',
+          '<div class="p2p-detect-icon">',
+            '<svg class="icon-pending" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>',
+            '<svg class="icon-running" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10" stroke-dasharray="31.4 31.4" stroke-dashoffset="10"/></svg>',
+            '<svg class="icon-pass" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none"><polyline points="20 6 9 17 4 12"/></svg>',
+            '<svg class="icon-fail" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="2.5" stroke-linecap="round" style="display:none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+          '</div>',
+          '<div class="p2p-detect-body">',
+            '<div class="p2p-detect-label">浏览器兼容性',
+              '<span class="p2p-detect-label-status" id="status-2"></span>',
+            '</div>',
+            '<div class="p2p-detect-desc">WebRTC、屏幕共享等 API</div>',
+            '<div id="detect-detail-2" class="p2p-detect-detail" style="display:none;"></div>',
+          '</div>',
+        '</div>',
+
+        /* 步骤 3：WebRTC 自测（最耗时，最后） */
+        '<div id="detect-step-3" class="p2p-detect-item pending">',
+          '<div class="p2p-detect-icon">',
+            '<svg class="icon-pending" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>',
+            '<svg class="icon-running" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10" stroke-dasharray="31.4 31.4" stroke-dashoffset="10"/></svg>',
+            '<svg class="icon-pass" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none"><polyline points="20 6 9 17 4 12"/></svg>',
+            '<svg class="icon-fail" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="2.5" stroke-linecap="round" style="display:none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+          '</div>',
+          '<div class="p2p-detect-body">',
+            '<div class="p2p-detect-label">WebRTC 自测',
+              '<span class="p2p-detect-label-status" id="status-3"></span>',
+            '</div>',
+            '<div class="p2p-detect-desc">模拟双端连接，验证数据通道</div>',
+            '<div id="detect-detail-3" class="p2p-detect-detail" style="display:none;"></div>',
+            '<div class="p2p-detect-bar-wrap">',
+              '<div class="p2p-detect-bar"><div class="p2p-detect-bar-fill" id="st3-bar"></div></div>',
+              '<span class="p2p-detect-time" id="st3-time">0.0/10.0s</span>',
+            '</div>',
+          '</div>',
+        '</div>',
+
+        /* 结果 */
+        '<div id="detect-summary" style="display:none;"></div>',
+        '<div id="detect-btn-wrap" class="p2p-detect-btn-wrap" style="display:none;"></div>',
+        '<div class="p2p-detect-spacer"></div>',
+      '</div>',
+    ].join('');
+  }
+
+  function setDetectStep(n, status, detail) {
+    var el = document.getElementById('detect-step-' + n);
+    if (!el) return;
+    el.className = el.className.replace(/pending|running|pass|fail/g, '') + ' ' + status;
+
+    // 切换 SVG 图标可见性
+    var pendingIcon = el.querySelector('.icon-pending');
+    var runningIcon = el.querySelector('.icon-running');
+    var passIcon = el.querySelector('.icon-pass');
+    var failIcon = el.querySelector('.icon-fail');
+    [pendingIcon, runningIcon, passIcon, failIcon].forEach(function(svg) { if (svg) svg.style.display = 'none'; });
+    if (status === 'pending' && pendingIcon) pendingIcon.style.display = '';
+    if (status === 'running' && runningIcon) runningIcon.style.display = '';
+    if (status === 'pass' && passIcon) passIcon.style.display = '';
+    if (status === 'fail' && failIcon) failIcon.style.display = '';
+
+    var statusEl = document.getElementById('status-' + n);
+    if (statusEl) {
+      if (status === 'running') statusEl.textContent = '检测中';
+      else if (status === 'pass') statusEl.textContent = '通过';
+      else if (status === 'fail') statusEl.textContent = '失败';
+      else statusEl.textContent = '';
+    }
+
+    var detailEl = document.getElementById('detect-detail-' + n);
+    if (detail && detailEl) {
+      detailEl.innerHTML = detail;
+      detailEl.style.display = '';
+    }
+  }
+
+  function setProgress(pct) {
+    // 3-step: 0-33=step1, 34-66=step2, 67-100=step3
+    var dots = [
+      document.getElementById('prog-1'),
+      document.getElementById('prog-2'),
+      document.getElementById('prog-3'),
+    ];
+    var lines = [
+      document.getElementById('prog-l1'),
+      document.getElementById('prog-l2'),
+    ];
+
+    // Each step is ~33%
+    var active = pct <= 0 ? -1 : pct <= 33 ? 0 : pct <= 66 ? 1 : 2;
+
+    dots.forEach(function(d, i) {
+      if (!d) return;
+      d.className = 'p2p-detect-progress-dot' + (i < active ? ' done' : '') + (i === active ? ' active' : '');
+    });
+    lines.forEach(function(l, i) {
+      if (!l) return;
+      l.className = 'p2p-detect-progress-line' + (i < active ? ' done' : '');
+    });
+  }
+
+  function showSummary(passed, html) {
+    var el = document.getElementById('detect-summary');
+    if (!el) return;
+    el.className = 'p2p-detect-summary ' + (passed ? 'pass' : 'fail');
+    el.innerHTML = html;
+    el.style.display = '';
+  }
+
+  function showEnterBtn(enabled) {
+    var wrap = document.getElementById('detect-btn-wrap');
+    if (!wrap) return;
+    wrap.style.display = '';
+
+    if (enabled) {
+      wrap.innerHTML =
+        '<button class="p2p-detect-btn" id="btn-enter-p2p">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
+          '进入 P2P 空间' +
+        '</button>';
+      document.getElementById('btn-enter-p2p').addEventListener('click', function() {
+        detect.passed = true;
+        startP2P();
+      });
+    } else {
+      wrap.innerHTML =
+        '<button class="p2p-detect-btn" id="btn-enter-p2p" disabled>请解决以上问题后重试</button>' +
+        '<br><button class="p2p-detect-retry" onclick="location.reload()">重新检测</button>';
+    }
+  }
+
+  // ── Step 1: 浏览器 API 检测 ──
+
+  function checkBrowserAPI() {
+    var issues = [];
+    var details = [];
+
+    var RTCPC = window.RTCPeerConnection || window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
+    if (!RTCPC) {
+      issues.push('浏览器不支持 RTCPeerConnection');
+      details.push('✗ RTCPeerConnection: 不支持');
+    } else {
+      details.push('✓ RTCPeerConnection: 支持');
+      try {
+        new RTCPC({ iceServers: [] }).close();
+        details.push('✓ WebRTC 初始化: 正常');
+      } catch(e) {
+        issues.push('WebRTC 初始化失败: ' + e.message);
+        details.push('✗ WebRTC 初始化: ' + e.message);
+      }
+    }
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+      issues.push('屏幕共享（getDisplayMedia）不被支持');
+      details.push('✗ getDisplayMedia: 不支持（屏幕共享不可用）');
+    } else {
+      details.push('✓ getDisplayMedia: 支持');
+    }
+    // DataChannel
+    if (RTCPC) {
+      try {
+        var pc = new RTCPC({ iceServers: [] });
+        try { pc.createDataChannel('detect', { negotiated: true, id: 0 }); details.push('✓ DataChannel: 支持'); }
+        catch(e) { issues.push('DataChannel 创建失败: ' + e.message); details.push('✗ DataChannel: ' + e.message); }
+        pc.close();
+      } catch(e) { /* already caught */ }
+    }
+    // getUserMedia
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+      details.push('✗ getUserMedia: 不支持（屏幕共享可能受限）');
+    } else {
+      details.push('✓ getUserMedia: 支持');
+    }
+
+    return { pass: issues.length === 0, issues: issues, details: details.join('\n') };
+  }
+
+  // ── Step 2: WebRTC 自测（双端本地回环） ──
+
+  function runSelfTest() {
+    return new Promise(function(resolve) {
+      var timeout = setTimeout(function() {
+        cleanup();
+        resolve({ pass: false, latency: null, error: '自测超时（10s），WebRTC 可能被浏览器或网络环境阻止', details: '⏱ 超时: 10 秒内未完成连接\n→ 可能是防火墙或代理拦截了 UDP 端口' });
+      }, 10000);
+
+      var pc1, pc2, ch1, ch2;
+      var pc1IceCandidates = [];
+      var pc2IceCandidates = [];
+      var log = [];
+
+      function cleanup() {
+        clearTimeout(timeout);
+        try { if (ch1) ch1.close(); } catch(e) {}
+        try { if (ch2) ch2.close(); } catch(e) {}
+        try { if (pc1) pc1.close(); } catch(e) {}
+        try { if (pc2) pc2.close(); } catch(e) {}
+      }
+
+      try {
+        pc1 = new RTCPeerConnection({ iceServers: [] });
+        pc2 = new RTCPeerConnection({ iceServers: [] });
+        log.push('✓ PC1/PC2 创建成功');
+      } catch(e) {
+        cleanup();
+        resolve({ pass: false, latency: null, error: 'RTCPeerConnection 创建失败: ' + e.message, details: '✗ 浏览器可能禁用了 WebRTC' });
+        return;
+      }
+
+      var pc1GotAnswer = false, pc2GotOffer = false, ch1Open = false, ch2Open = false;
+      var messages = { pc1to2: [], pc2to1: [] };
+      var startTime = Date.now();
+
+      // PC1 ICE
+      pc1.onicecandidate = function(e) {
+        if (e.candidate) {
+          pc1IceCandidates.push(e.candidate.toJSON());
+          // 当 PC1 收集到 candidate 且 PC2 已有 remote desc，直接添加
+          if (pc2.remoteDescription && pc2.remoteDescription.type === 'offer') {
+            try { pc2.addIceCandidate(new RTCIceCandidate(e.candidate.toJSON())); } catch(e) {}
+          }
+        }
+      };
+                  // PC2 ICE
+      pc2.onicecandidate = function(e) {
+        if (e.candidate) {
+          pc2IceCandidates.push(e.candidate.toJSON());
+          if (pc1.remoteDescription && pc1.remoteDescription.type === 'answer') {
+            try { pc1.addIceCandidate(new RTCIceCandidate(e.candidate.toJSON())); } catch(e) {}
+          }
+        }
+      };
+
+      // DataChannel
+      ch1 = pc1.createDataChannel('test', { negotiated: true, id: 0 });
+      ch1.onopen = function() {
+        ch1Open = true;
+        log.push('✓ PC1 DataChannel 已打开');
+        ch1.send(JSON.stringify({ type: 'ping', from: 'pc1', ts: Date.now() }));
+        log.push('→ PC1 发送 ping');
+      };
+      ch1.onmessage = function(e) {
+        var msg;
+        try { msg = JSON.parse(e.data); } catch(e) { return; }
+        if (msg.type === 'pong') {
+          var rtt = Date.now() - msg.ts;
+          log.push('← PC1 收到 pong（RTT: ' + rtt + 'ms）');
+          messages.pc2to1.push(msg);
+          checkDone(rtt);
+        }
+      };
+
+// PC2 — 同样主动 create（Firefox 不触发 ondatachannel）
+      ch2 = pc2.createDataChannel('test', { negotiated: true, id: 0 });
+      ch2.onopen = function() {
+        ch2Open = true;
+        log.push('✓ PC2 DataChannel 已打开');
+        ch2.send(JSON.stringify({ type: 'ping', from: 'pc2', ts: Date.now() }));
+        log.push('→ PC2 发送 ping');
+      };
+      ch2.onmessage = function(e) {
+        var msg;
+        try { msg = JSON.parse(e.data); } catch(e) { return; }
+        if (msg.type === 'ping') {
+          ch2.send(JSON.stringify({ type: 'pong', from: 'pc2', ts: msg.ts }));
+          log.push('← PC2 收到 ping，回复 pong');
+          messages.pc1to2.push(msg);
+        }
+        if (msg.type === 'pong') {
+          var rtt = Date.now() - msg.ts;
+          log.push('← PC2 收到 pong（RTT: ' + rtt + 'ms）');
+          messages.pc1to2.push(msg);
+          checkDone(rtt);
+        }
+      };
+
+
+      function checkDone(rtt) {
+        // 只要任意一端完成双向通信即可
+        if (messages.pc2to1.length > 0 || messages.pc1to2.length > 0) {
+          cleanup();
+          resolve({
+            pass: true,
+            latency: Math.round(rtt) + 'ms',
+            error: null,
+            details: log.join('\n') + '\n\n✅ 双向通信测试通过\nPC1 ↔ PC2 可以正常收发消息',
+          });
+        }
+      }
+
+      // 交换 Offer/Answer
+      pc1.createOffer()
+        .then(function(offer) { return pc1.setLocalDescription(offer); })
+        .then(function() {
+          log.push('✓ PC1 创建 Offer');
+          return pc2.setRemoteDescription(pc1.localDescription);
+        })
+        .then(function() {
+          log.push('✓ PC2 设置 Remote (Offer)');
+          return pc2.createAnswer();
+        })
+        .then(function(answer) { return pc2.setLocalDescription(answer); })
+        .then(function() {
+          log.push('✓ PC2 创建 Answer');
+          return pc1.setRemoteDescription(pc2.localDescription);
+        })
+        .then(function() {
+          log.push('✓ PC1 设置 Remote (Answer)');
+          // 处理 PC1 的 ICE candidates（PC2 已有 remote desc）
+          for (var i = 0; i < pc1IceCandidates.length; i++) {
+            try { pc2.addIceCandidate(new RTCIceCandidate(pc1IceCandidates[i])); } catch(e) {}
+          }
+          // 处理 PC2 的 ICE candidates（PC1 已有 remote desc）
+          for (var j = 0; j < pc2IceCandidates.length; j++) {
+            try { pc1.addIceCandidate(new RTCIceCandidate(pc2IceCandidates[j])); } catch(e) {}
+          }
+        })
+        .catch(function(e) {
+          cleanup();
+          resolve({ pass: false, latency: null, error: 'Offer/Answer 交换失败: ' + e.message, details: log.join('\n') + '\n\n✗ ' + e.message });
+        });
+    });
+  }
+
+  // ── Step 3: 后端检测（已有 p2p.checkBackend） ──
+
+  // ── 执行完整检测 ──
+
+  async function runDetection() {
+    renderDetectUI();
+    setProgress(0);
+
+    // === Step 1: 信令服务器（最快，不通直接停） ===
+    setDetectStep(1, 'running');
+    setProgress(15);
+    await sleep(200);
+    try {
+      var backendOk = await p2p.checkBackend();
+      detect.results.backend = { pass: backendOk };
+      if (backendOk) {
+        setDetectStep(1, 'pass', '信令服务器正常');
+        setProgress(33);
+      } else {
+        setDetectStep(1, 'fail', '无法连接信令服务器 — 请通过 <a href="https://reori.cn" target="_blank" style="color:var(--theme-color,#399FFF);text-decoration:underline">reori.cn</a> 访问');
+        showTroubleshoot(1);
+        finishDetection();
+        return;
+      }
+    } catch(e) {
+      detect.results.backend = { pass: false };
+      setDetectStep(1, 'fail', '当前无法连接信令服务器 — 请通过 reori.cn 访问');
+      showTroubleshoot(1);
+      finishDetection();
+      return;
+    }
+
+    // === Step 2: 浏览器兼容性 ===
+    setDetectStep(2, 'running');
+    setProgress(40);
+    await sleep(200);
+    var apiResult = checkBrowserAPI();
+    detect.results.api = apiResult;
+    if (apiResult.pass) {
+      setDetectStep(2, 'pass', apiResult.details);
+      setProgress(60);
+    } else {
+      setDetectStep(2, 'fail', apiResult.details + '\n\n检测到以下问题:\n' + apiResult.issues.join('\n'));
+      showTroubleshoot(2);
+      finishDetection();
+      return;
+    }
+
+    // === Step 3: WebRTC 自测（最耗时，最后） ===
+    setDetectStep(3, 'running');
+    setProgress(70);
+
+    // 步骤进度条动画
+    var st3Start = Date.now();
+    var st3Bar = document.getElementById('st3-bar');
+    var st3Time = document.getElementById('st3-time');
+    var st3Anim = setInterval(function() {
+      var elapsed = Date.now() - st3Start;
+      var pct = elapsed / 10000 * 100;
+      if (st3Bar) st3Bar.style.width = Math.min(100, pct) + '%';
+      if (st3Time) st3Time.textContent = (elapsed / 1000).toFixed(1) + '/10.0s';
+    }, 100);
+
+    var selfTestResult = await runSelfTest();
+    clearInterval(st3Anim);
+    var st3BarWrap = st3Bar && st3Bar.parentNode;
+    if (st3Bar) st3Bar.style.width = '100%';
+    if (st3Time) st3Time.textContent = '';
+    if (st3BarWrap) setTimeout(function() { st3BarWrap.style.display = 'none'; }, 400);
+    detect.results.selfTest = selfTestResult;
+    if (selfTestResult.pass) {
+      setDetectStep(3, 'pass', selfTestResult.details);
+      setProgress(95);
+    } else {
+      setDetectStep(3, 'fail', '自测失败\n\n' + selfTestResult.error + '\n\n' + (selfTestResult.details || ''));
+      showTroubleshoot(3);
+    }
+
+    // === 总结 ===
+    finishDetection();
+  }
+
+  function finishDetection() {
+    setProgress(100);
+    var r = detect.results;
+    var allPass = r.backend && r.backend.pass && r.api && r.api.pass && r.selfTest && r.selfTest.pass;
+    if (allPass) {
+      showSummary(true, '全部通过' + (r.selfTest.latency ? '  延迟 ' + r.selfTest.latency : '') + '，可以正常使用 P2P 功能');
+      showEnterBtn(true);
+    } else {
+      var failReasons = [];
+      if (r.backend && !r.backend.pass) failReasons.push('信令服务器');
+      if (r.api && !r.api.pass) failReasons.push('浏览器兼容性');
+      if (r.selfTest && !r.selfTest.pass) failReasons.push('WebRTC 自测');
+      showSummary(false, '检测未通过（' + failReasons.join('、') + '）');
+      showEnterBtn(false);
+    }
+    detect.step = 4;
+  }
+
+  function showTroubleshoot(step) {
+    var detailEl = document.getElementById('detect-detail-' + step);
+    if (!detailEl) return;
+
+    var tips = {
+      1: {
+        title: '无法连接到信令服务器',
+        reasons: [
+          'P2P 功能需要自建服务器支持，GitHub Pages 无法提供信令服务',
+          '服务器未启动或端口未开放',
+          '防火墙阻止了通信',
+        ],
+        solutions: [
+          '请通过 <a href="https://reori.cn" target="_blank" style="color:var(--theme-color,#399FFF);text-decoration:underline;font-weight:500">reori.cn</a> 访问本站',
+          '检查网络连接是否正常，刷新页面重试',
+        ],
+      },
+      2: {
+        title: '浏览器兼容性问题',
+        reasons: [
+          '浏览器不支持或禁用了 WebRTC',
+          '广告拦截/隐私插件拦截了 WebRTC',
+          'iOS 微信内置浏览器限制 WebRTC',
+        ],
+        solutions: [
+          '使用最新版 Chrome 或 Firefox',
+          '检查 chrome://flags/#enable-webrtc',
+          '关闭广告拦截插件或无痕模式重试',
+          'iOS 请用 Safari 或 Chrome',
+        ],
+      },
+      3: {
+        title: 'WebRTC 自测失败',
+        reasons: [
+          '防火墙拦截了 UDP 端口',
+          'VPN 或代理阻止了本地连接',
+          '反病毒软件拦截了 WebRTC',
+          '网络延迟过高或丢包严重',
+        ],
+        solutions: [
+          '关闭 VPN 或代理后重试',
+          '检查防火墙是否允许 UDP 通信',
+          '尝试切换到手机热点等网络环境',
+          '关闭反病毒软件的实时扫描',
+          '重启路由器',
+        ],
+      },
+    };
+
+    var t = tips[step];
+    if (!t) return;
+
+    var html = '<div class="p2p-detect-troubleshoot">' +
+      '<h4>🔧 ' + t.title + '</h4>' +
+      '<p><strong>可能原因：</strong></p>' +
+      '<ul>' + t.reasons.map(function(r) { return '<li>' + r + '</li>'; }).join('') + '</ul>' +
+      '<p><strong>尝试以下方法：</strong></p>' +
+      '<ul>' + t.solutions.map(function(s) { return '<li>' + s + '</li>'; }).join('') + '</ul>' +
+      '</div>';
+    detailEl.insertAdjacentHTML('afterend', html);
+  }
+
+  function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+  // ═══════════════════════════════════════════
+  //  P2P 主功能（检测通过后启动）
+  // ═══════════════════════════════════════════
+
+  function startP2P() {
+    unavailable.style.display = 'none';
+    renderUI();
+    setupCallbacks();
+    p2p.onPeersChange = updatePeerList;
+    p2p.onMessage = addMessage;
+    p2p.onFile = receiveFile;
+    p2p.onScreenStream = receiveScreen;
+    p2p.onPeerLeave = handlePeerLeave;
+    p2p.onScreenEnd = handleScreenEnd;
+    p2p.onUserName = handleUserName;
+
+    // 如果 URL 有 room 参数，自动加入
+    (function autoJoin() {
+      var p = new URLSearchParams(window.location.search);
+      if (p.get('room')) {
+        var wait = setInterval(function() {
+          if (document.getElementById('btn-join')) {
+            clearInterval(wait);
+            setTimeout(window.joinRoom, 300);
+          }
+        }, 100);
+      }
+    })();
+  }
+
+  // ═══════════════════════════════════════════
+  //  原有 P2P 界面渲染与交互（保持不变）
+  // ═══════════════════════════════════════════
+
+  // ── WebRTC 基础检测（供主检测使用） ──
   function checkWebRTC() {
     var issues = [];
     var RTCPC = window.RTCPeerConnection || window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
@@ -58,17 +627,8 @@
         issues.push('WebRTC 初始化失败: ' + e.message);
       }
     }
-    // 屏幕共享检测
     if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
       issues.push('屏幕共享（getDisplayMedia）不被支持');
-    }
-    // DataChannel 检测
-    if (RTCPC) {
-      try {
-        var pc = new RTCPC({ iceServers: [] });
-        try { pc.createDataChannel('detect', { negotiated: true, id: 0 }); } catch(e) { issues.push('DataChannel 创建失败: ' + e.message); }
-        pc.close();
-      } catch(e) { /* already caught above */ }
     }
     return issues;
   }
@@ -91,30 +651,17 @@
     ].join('');
   }
 
-  // ── WebRTC 检测 ──
+  // ── 启动检测 ──
   var webrtcIssues = checkWebRTC();
   if (webrtcIssues.length > 0) {
+    // 浏览器完全不支持 → 直接显示错误
     showWebRTCError(webrtcIssues);
     return;
   }
 
-  // ── 后端检测 ──
-  p2p.checkBackend().then(function(avail) {
-    if (!avail) {
-      unavailable.style.display = 'block';
-      return;
-    }
-    unavailable.style.display = 'none';
-    renderUI();
-    setupCallbacks();
-    p2p.onPeersChange = updatePeerList;
-    p2p.onMessage = addMessage;
-    p2p.onFile = receiveFile;
-    p2p.onScreenStream = receiveScreen;
-    p2p.onPeerLeave = handlePeerLeave;
-    p2p.onScreenEnd = handleScreenEnd;
-    p2p.onUserName = handleUserName;
-  });
+  // 先显示检测界面
+  detect.passed = false;
+  runDetection();
 
   // ── 渲染界面 ──
   function renderUI() {
@@ -178,7 +725,6 @@
         '</div>',
       '</div>',
     ].join('');
-
     bindEvents();
   }
 
@@ -195,20 +741,15 @@
         sendChat();
       }
     });
-
     document.getElementById('file-input').addEventListener('change', function(e) {
       if (e.target.files.length) sendFile(e.target.files[0], 'file');
       e.target.value = '';
     });
-
     document.getElementById('image-input').addEventListener('change', function(e) {
       if (e.target.files.length) sendFile(e.target.files[0], 'image');
       e.target.value = '';
     });
-
     document.getElementById('btn-screen').addEventListener('click', startScreenShare);
-
-    // 用户名
     var savedName = window.localStorage.getItem('p2p_username') || '';
     var usernameInput = document.getElementById('username-input');
     if (savedName) {
@@ -226,7 +767,6 @@
         delete p2p.userNames[p2p.peerId];
       }
       updatePeerList(connectedPeers, connectingPeers);
-      // 更新 room-info 中的名称
       if (state.connected) {
         var myName = p2p.userNames[p2p.peerId] || p2p.peerId;
         document.getElementById('room-info').textContent = '房间: ' + p2p.room + ' | ' + myName;
@@ -242,51 +782,35 @@
     document.getElementById('btn-screen').disabled = !enabled;
   }
 
-  // ── 回调 ──
   function setupCallbacks() {
     p2p.onError = function(msg) {
       window.showToast && window.showToast(msg, 3000);
     };
   }
 
-  /**
-   * 更新侧栏 peer 列表。
-   * @param {string[]} connected - DataChannel 已连接的 peer ID 列表
-   * @param {string[]} all - 所有正在连接的 peer ID 列表（含正在建立 WebRTC 连接的）
-   */
   function updatePeerList(connected, all) {
     connectedPeers = connected || [];
     connectingPeers = all || [];
-
     var list = document.getElementById('peer-list');
     var countEl = document.querySelector('.peer-count');
-
-    // 更新在线计数（仅显示已连接的）
     var connectedCount = connectedPeers.length;
     var connectingCount = connectingPeers.length - connectedCount;
     if (countEl) {
       countEl.textContent = connectedCount +
         (connectingCount > 0 ? ' (+' + connectingCount + ')' : '');
     }
-
-    // 没有人在房间（含未连接状态）
     if (!state.connected) {
       list.innerHTML = '<div class="p2p-sidebar-status" id="sidebar-status">未连接</div>';
       return;
     }
-
-    // 已加入房间但没有已连接的 peer
     if (connectingPeers.length === 0) {
       list.innerHTML = '<div class="p2p-sidebar-status" id="sidebar-status">等待他人加入…</div>';
       return;
     }
-
-    // 有正在连接或已连接的 peer
     var items = '';
     for (var i = 0; i < connectingPeers.length; i++) {
       var id = connectingPeers[i];
       var isConnected = connectedPeers.indexOf(id) !== -1;
-      // 从 p2p 实例获取 ICE 状态（用于调试）
       var badge = '连接中…';
       var extraClass = ' connecting';
       if (isConnected) {
@@ -323,38 +847,31 @@
     renderMessages();
   }
 
-  /** 添加系统消息并存储到 state，统一由 renderMessages 渲染 */
   function addSystemMsg(text) {
     state.messages.push({ type: 'system', text: text, time: new Date() });
     renderMessages();
   }
 
-  /** 统一渲染所有消息（聊天、文件、系统），不会擦除之前的消息 */
   function renderMessages() {
     var area = document.getElementById('msg-area');
     var empty = document.getElementById('empty-chat');
     if (empty) empty.style.display = 'none';
-
     var msgs = state.messages;
     var html = '';
     for (var i = 0; i < msgs.length; i++) {
       var m = msgs[i];
       var isSelf = m.from === p2p.peerId;
       var time = (m.time ? m.time : new Date()).toLocaleTimeString();
-
       if (m.type === 'system') {
         html += '<div class="p2p-system-msg">' + escapeHtml(m.text) + '</div>';
-
       } else if (m.type === 'chat') {
         html += '<div class="p2p-msg ' + (isSelf ? 'self' : 'other') + '">';
         if (!isSelf) html += '<div class="p2p-msg-from">' + escapeHtml(p2p.userNames[m.from] || m.from) + '</div>';
         html += '<div>' + escapeHtml(m.text) + '</div>';
         html += '<div class="p2p-msg-time">' + time + '</div></div>';
-
       } else if (m.type === 'file') {
         html += '<div class="p2p-msg ' + (isSelf ? 'self' : 'other') + '">';
         if (!isSelf) html += '<div class="p2p-msg-from">' + escapeHtml(p2p.userNames[m.from] || m.from) + '</div>';
-
         if (m.mime && m.mime.startsWith('image/')) {
           var url = URL.createObjectURL(m.blob);
           html += '<img class="p2p-msg-image" src="' + url + '" alt="图片" onclick="window.open(\'' + url + '\')">';
@@ -364,11 +881,9 @@
             '<span>' + escapeHtml(m.name || '文件') + '</span>' +
             '</div>';
         }
-
         html += '<div class="p2p-msg-time">' + time + '</div></div>';
       }
     }
-
     area.innerHTML = html;
     area.scrollTop = area.scrollHeight;
   }
@@ -377,14 +892,9 @@
   window.joinRoom = function() {
     var room = document.getElementById('room-input').value.trim();
     if (!room) { window.showToast && window.showToast('请输入房间ID', 2000); return; }
-
     p2p.joinRoom(room).then(function(data) {
       if (!data) return;
-
-      // 关键修复：必须在 _notifyPeersChange() 之前设 state.connected，
-      // 因为侧栏 updatePeerList 依赖该标志判断显示 "未连接" 还是 peer 列表
       state.connected = true;
-
       document.getElementById('btn-join').style.display = 'none';
       document.getElementById('btn-copy-room').style.display = '';
       document.getElementById('btn-leave').style.display = '';
@@ -393,19 +903,11 @@
       document.getElementById('room-info').textContent = '房间: ' + room + ' | ' + myName;
       document.getElementById('room-info').title = 'ID: ' + p2p.peerId;
       setInputsEnabled(true);
-
-      // 更新 URL
       var url = new URL(window.location);
       url.searchParams.set('room', room);
       history.replaceState(null, '', url);
-
-      // 关键修复：显式触发侧栏刷新，此时 state.connected 已为 true，
-      // updatePeerList 会显示正确的状态（peer 列表 / 等待他人加入）
       p2p._notifyPeersChange();
-
-      // 存储系统消息到 state 统一渲染
       addSystemMsg('你已加入房间 ' + room + '（ID: ' + p2p.peerId + '）');
-
       if (data.peers && data.peers.length) {
         addSystemMsg('房间内已有 ' + data.peers.length + ' 人，正在连接…');
       } else {
@@ -426,13 +928,11 @@
       document.getElementById('room-input').disabled = false;
       document.getElementById('room-info').textContent = '房间: -';
       setInputsEnabled(false);
-      // 重置消息区
       var area = document.getElementById('msg-area');
       area.innerHTML =
         '<div class="p2p-empty-chat" id="empty-chat">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
         '<span>已离开房间</span></div>';
-      // 关键修复：离开房间后侧栏显示 "未连接"
       updatePeerList([], []);
     });
   };
@@ -444,7 +944,6 @@
     });
   };
 
-  // ── 聊天 ──
   function sendChat() {
     var input = document.getElementById('chat-input');
     var text = input.value.trim();
@@ -455,18 +954,14 @@
   }
   window.sendChat = sendChat;
 
-  // ── 文件 ──
   function sendFile(file, type) {
     var progress = createProgress();
     var reader = new FileReader();
     reader.onload = function(e) {
       p2p.sendFile(file);
-
-      // 发送方也看到图片/文件的实际预览（不仅是文字）
       var mime = file.type || 'application/octet-stream';
       var blob = new Blob([e.target.result], { type: mime });
       receiveFile(p2p.peerId, file.name, mime, blob, 'self-' + Date.now());
-
       removeProgress(progress);
     };
     reader.readAsArrayBuffer(file);
@@ -490,7 +985,6 @@
     a.click();
   };
 
-  // ── 屏幕共享 ──
   function startScreenShare() {
     p2p.startScreenShare().then(function(ok) {
       if (ok) {
@@ -516,7 +1010,6 @@
     video.srcObject = stream;
     video.play().catch(function(){});
     addSystemMsg(name + ' 开始屏幕共享');
-    // 视频轨道结束时自动清理
     stream.getVideoTracks()[0].onended = function() {
       if (container.classList.contains('visible')) {
         if (video.srcObject) {
@@ -531,7 +1024,6 @@
     };
   }
 
-  // ── 屏幕共享缩放 ──
   var screenZoom = 1;
   window.screenZoomIn = function() {
     var video = document.getElementById('p2p-screen-video');
@@ -556,7 +1048,6 @@
     video.style.transform = 'scale(' + screenZoom + ')';
     video.style.transformOrigin = 'top left';
     levelEl.textContent = screenZoom + '×';
-    // 放大时调整容器宽度
     var container = document.getElementById('p2p-screen-container');
     var baseW = 320;
     if (screenZoom > 1) {
@@ -566,18 +1057,13 @@
     }
   }
 
-  // ── Peer 断连处理 ──
   function handlePeerLeave(peerId) {
     var name = p2p.userNames[peerId] || peerId;
     addSystemMsg('👋 ' + name + ' 已离开房间');
-    // 清理用户名称缓存
     delete p2p.userNames[peerId];
-    // onPeersChange 已在 p2p._handlePeerLeave 中触发，侧栏会自动更新
   }
 
-  // ── 屏幕共享结束 ──
   function handleScreenEnd(peerId) {
-    // 隐藏停止按钮（可能是自己停止）
     var stopBtn = document.getElementById('btn-stop-share');
     if (stopBtn) stopBtn.style.display = 'none';
     var name = p2p.userNames[peerId] || peerId;
@@ -596,32 +1082,17 @@
     }
   }
 
-  // ── 用户名更新 ──
   function handleUserName(peerId, name) {
     p2p.userNames[peerId] = name;
     updatePeerList(connectedPeers, connectingPeers);
     renderMessages();
   }
 
-  // ── 工具 ──
   function escapeHtml(str) {
     var div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
   }
-
-  // 如果 URL 有 room 参数，自动加入
-  (function autoJoin() {
-    var p = new URLSearchParams(window.location.search);
-    if (p.get('room')) {
-      var wait = setInterval(function() {
-        if (document.getElementById('btn-join')) {
-          clearInterval(wait);
-          setTimeout(window.joinRoom, 300);
-        }
-      }, 100);
-    }
-  })();
 })();
 </script>
 </body>

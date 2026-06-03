@@ -3,7 +3,7 @@
   var loading = true;
   var giscusLoaded = false;
   var wrapper, container;
-  var useProxy = false;  // 是否使用本地代理
+  var activeMode = 'cdn';  // 'cdn' | 'proxy'
 
   function showLoading() {
     loading = true;
@@ -40,17 +40,17 @@
   function sendGiscusMessage(msg) {
     var iframe = document.querySelector('iframe.giscus-frame');
     if (iframe) {
-      var target = useProxy ? window.location.origin : 'https://giscus.app';
+      var target = activeMode === 'proxy' ? window.location.origin : 'https://giscus.app';
       iframe.contentWindow.postMessage({ giscus: msg }, target);
     }
   }
 
-  function renderGiscus(theme) {
+  function renderGiscus(theme, useProxy) {
     while (container.firstChild) container.removeChild(container.firstChild);
+    activeMode = useProxy ? 'proxy' : 'cdn';
 
     var script = document.createElement('script');
-    // 有代理则加载本地 client.js，否则加载 CDN
-    script.src = useProxy ? '/js/giscus-client.js' : 'https://giscus.app/client.js';
+    script.src = useProxy ? '/js/giscus/giscus-client.js' : 'https://giscus.app/client.js';
     script.setAttribute('data-repo', config.repo);
     script.setAttribute('data-repo-id', config.repoId);
     script.setAttribute('data-category', config.category);
@@ -64,15 +64,25 @@
     script.setAttribute('crossorigin', 'anonymous');
     script.async = true;
 
+    var expectedOrigin = useProxy ? window.location.origin : 'https://giscus.app';
+
     script.onerror = function() {
       giscusLoaded = false;
-      var msg = useProxy
-        ? '评论区本地代理加载失败，请检查网络后重试'
-        : '评论区加载失败，请检查网络后重试';
-      showError(msg);
+      if (!useProxy) {
+        // CDN 直连失败，尝试本地代理
+        console.log('[giscus] CDN 直连失败，尝试本地代理…');
+        checkProxy().then(function(proxyAvail) {
+          if (proxyAvail) {
+            console.log('[giscus] 使用服务器代理');
+            renderGiscus(theme, true);
+          } else {
+            showError('评论区加载失败（CDN 与本地代理均不可用），请检查网络后重试');
+          }
+        });
+      } else {
+        showError('评论区加载失败，请检查网络后重试');
+      }
     };
-
-    var expectedOrigin = useProxy ? window.location.origin : 'https://giscus.app';
 
     var messageHandler = function(e) {
       if (e.origin === expectedOrigin && e.data && e.data.giscus) {
@@ -114,16 +124,17 @@
       return;
     }
 
-    // 先检测代理，再决定加载方式
+    // 默认使用服务器代理，代理不可用时回退到 CDN 直连
+    console.log('[giscus] 检测后端…');
     showLoading();
-    checkProxy().then(function(proxyAvail) {
-      useProxy = proxyAvail;
-      if (proxyAvail) {
-        console.log('[giscus] 使用本地代理');
+    checkProxy().then(function(avail) {
+      if (avail) {
+        console.log('[giscus] 使用服务器代理');
+        renderGiscus(getTheme(), true);
       } else {
-        console.log('[giscus] 代理不可用，回退到 CDN 直连');
+        console.log('[giscus] 后端代理不可用，回退到 CDN 直连');
+        renderGiscus(getTheme(), false);
       }
-      renderGiscus(getTheme());
     });
   }
 

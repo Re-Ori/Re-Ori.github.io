@@ -512,3 +512,312 @@
   .p2p-messages { padding: 12px; }
   .p2p-input { padding: 10px 12px; }
 }
+
+/* ── 环境检测页面 ── */
+
+.p2p-detect-wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 64px 20px 32px;
+  min-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 头部 */
+.p2p-detect-header {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.p2p-detect-header-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+  border-radius: 12px;
+  background: rgba(57, 159, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--theme-color, #399FFF);
+}
+
+.p2p-detect-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+  letter-spacing: -0.2px;
+}
+[data-theme="dark"] .p2p-detect-title { color: #e0e0e0; }
+
+.p2p-detect-subtitle {
+  font-size: 14px;
+  color: #8e8e93;
+  line-height: 1.5;
+}
+
+/* 步骤卡片 */
+.p2p-detect-item {
+  background: #fff;
+  border: 1px solid #e5e5ea;
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  transition: border-color 1.2s ease, opacity 0.25s;
+}
+[data-theme="dark"] .p2p-detect-item {
+  background: #1c1c1e;
+  border-color: #2c2c2e;
+}
+
+.p2p-detect-item.pending { opacity: 0.45; }
+.p2p-detect-item.running { border-color: var(--theme-color, #399FFF); }
+.p2p-detect-item.pass   { border-color: #34c759; }
+.p2p-detect-item.fail   { border-color: #ff3b30; }
+
+/* 步骤图标容器 */
+.p2p-detect-icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.p2p-detect-icon svg {
+  width: 22px;
+  height: 22px;
+  transition: opacity 0.25s;
+}
+
+.p2p-detect-icon svg.icon-pending { opacity: 0.3; }
+.p2p-detect-icon svg.icon-running { opacity: 0; }
+.p2p-detect-item.running .p2p-detect-icon svg.icon-running { opacity: 1; }
+
+/* spin animation only for running state indicator */
+@keyframes detect-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.p2p-detect-item.running .p2p-detect-icon svg.icon-running {
+  animation: detect-spin 1s linear infinite;
+}
+
+.p2p-detect-item.pass .p2p-detect-icon svg.icon-pending,
+.p2p-detect-item.pass .p2p-detect-icon svg.icon-running { display: none; }
+.p2p-detect-item.fail .p2p-detect-icon svg.icon-pending,
+.p2p-detect-item.fail .p2p-detect-icon svg.icon-running { display: none; }
+
+/* 步骤内容 */
+.p2p-detect-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.p2p-detect-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a1a;
+  margin-bottom: 1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+[data-theme="dark"] .p2p-detect-label { color: #e0e0e0; }
+
+.p2p-detect-label-status {
+  font-size: 12px;
+  font-weight: 400;
+  color: #8e8e93;
+}
+.p2p-detect-item.pass .p2p-detect-label-status { color: #34c759; }
+.p2p-detect-item.fail .p2p-detect-label-status { color: #ff3b30; }
+.p2p-detect-item.running .p2p-detect-label-status { color: var(--theme-color, #399FFF); }
+
+.p2p-detect-desc {
+  font-size: 13px;
+  color: #8e8e93;
+  line-height: 1.4;
+}
+
+/* 详细日志 */
+.p2p-detect-detail {
+  font-size: 12px;
+  color: #636366;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #f2f2f7;
+  border-radius: 8px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  max-height: 180px;
+  overflow-y: auto;
+}
+[data-theme="dark"] .p2p-detect-detail {
+  background: #2c2c2e;
+  color: #98989d;
+}
+
+/* 进度指示器（细线） */
+.p2p-detect-progress {
+  margin: -4px auto 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+}
+
+.p2p-detect-progress-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d1d1d6;
+  transition: background 0.3s;
+}
+.p2p-detect-progress-dot.active { background: var(--theme-color, #399FFF); }
+.p2p-detect-progress-dot.done { background: #34c759; }
+
+.p2p-detect-progress-line {
+  width: 32px;
+  height: 1px;
+  background: #d1d1d6;
+  transition: background 0.3s;
+}
+.p2p-detect-progress-line.done { background: #34c759; }
+[data-theme="dark"] .p2p-detect-progress-dot { background: #3a3a3c; }
+[data-theme="dark"] .p2p-detect-progress-line { background: #3a3a3c; }
+
+/* 故障排查 */
+.p2p-detect-troubleshoot {
+  margin-top: 10px;
+  padding: 12px 14px;
+  background: #f2f2f7;
+  border-radius: 8px;
+  border-left: 3px solid #ff3b30;
+}
+[data-theme="dark"] .p2p-detect-troubleshoot {
+  background: #2c2c2e;
+}
+.p2p-detect-troubleshoot h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ff3b30;
+  margin: 0 0 6px;
+}
+.p2p-detect-troubleshoot p {
+  font-size: 12px;
+  color: #636366;
+  margin: 0 0 4px;
+  line-height: 1.5;
+}
+.p2p-detect-troubleshoot ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: #636366;
+  line-height: 1.7;
+}
+[data-theme="dark"] .p2p-detect-troubleshoot p,
+[data-theme="dark"] .p2p-detect-troubleshoot ul { color: #98989d; }
+.p2p-detect-troubleshoot li { margin-bottom: 1px; }
+
+/* 总结 */
+.p2p-detect-summary {
+  text-align: center;
+  padding: 16px;
+  margin-top: 6px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+.p2p-detect-summary.pass {
+  color: #34c759;
+  background: #f2f2f7;
+}
+.p2p-detect-summary.fail {
+  color: #ff3b30;
+  background: #f2f2f7;
+}
+[data-theme="dark"] .p2p-detect-summary.pass,
+[data-theme="dark"] .p2p-detect-summary.fail {
+  background: #2c2c2e;
+}
+
+/* 按钮 */
+.p2p-detect-btn-wrap {
+  text-align: center;
+  margin-top: 20px;
+}
+.p2p-detect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 28px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--theme-color, #399FFF);
+  color: #fff;
+  transition: opacity 0.2s;
+}
+.p2p-detect-btn:hover { opacity: 0.8; }
+.p2p-detect-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.p2p-detect-retry {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--theme-color, #399FFF);
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 4px 0;
+  transition: opacity 0.2s;
+}
+.p2p-detect-retry:hover { opacity: 0.6; }
+
+/* 撑开 */
+.p2p-detect-spacer { flex: 1; }
+
+/* 步骤内进度条 */
+.p2p-detect-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.p2p-detect-bar {
+  flex: 1;
+  height: 2px;
+  background: rgba(57,159,255,0.08);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.p2p-detect-bar-fill {
+  height: 100%;
+  background: var(--theme-color, #399FFF);
+  border-radius: 1px;
+  transition: width 0.3s linear;
+  width: 0%;
+}
+.p2p-detect-time {
+  font-size: 11px;
+  color: #8e8e93;
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+}
