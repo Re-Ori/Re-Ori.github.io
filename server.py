@@ -174,7 +174,7 @@ def fetch_github_repo_info() -> dict | None:
     """
     api_url = (
         f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}"
-        f"/commits/main?per_page=1"
+        f"/commits?sha=main&per_page=1"
     )
     req = urllib.request.Request(
         api_url,
