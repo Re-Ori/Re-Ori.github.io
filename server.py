@@ -375,7 +375,17 @@ def download_zip(target_path: Path) -> str | None:
             new_etag = resp.headers.get("ETag")
             if new_etag:
                 state["etag"] = new_etag
-                save_state(state)
+            # 从下载响应头直接获取时间，不依赖 GitHub API
+            last_modified = resp.headers.get("Last-Modified")
+            if last_modified:
+                try:
+                    dt = datetime.strptime(
+                        last_modified, "%a, %d %b %Y %H:%M:%S %Z"
+                    )
+                    state["github_updated_at"] = format_utc8(dt + timedelta(hours=8))
+                except (ValueError, TypeError):
+                    pass
+            save_state(state)
             return new_etag
     except urllib.error.HTTPError as e:
         if e.code == 304:
@@ -400,9 +410,17 @@ def download_zip(target_path: Path) -> str | None:
     etag_fallback = load_state().get("etag")
     curl_result = _download_via_curl(ZIP_URL, target_path, etag_fallback)
     if curl_result:
-        curl_etag, _ = curl_result  # 忽略 Last-Modified，版本信息走 API 统一获取
+        curl_etag, curl_last_modified = curl_result
         state = load_state()
         state["etag"] = curl_etag
+        if curl_last_modified:
+            try:
+                dt = datetime.strptime(
+                    curl_last_modified, "%a, %d %b %Y %H:%M:%S %Z"
+                )
+                state["github_updated_at"] = format_utc8(dt + timedelta(hours=8))
+            except (ValueError, TypeError):
+                pass
         save_state(state)
         return curl_etag
 
