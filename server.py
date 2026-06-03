@@ -714,6 +714,10 @@ def run_update() -> bool:
 
         apply_update(source_dir, PROJECT_ROOT, updated, added, removed)
 
+        global _RESTART_NEEDED
+        if "server.py" in updated or "server.py" in added:
+            _RESTART_NEEDED = True
+
         state["last_updated"] = datetime.now().isoformat()
         save_state(state)
 
