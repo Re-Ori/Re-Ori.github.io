@@ -31,7 +31,7 @@ import urllib.parse
 import urllib.request
 import urllib.error
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 
 # ── 配置 ─────────────────────────────────────────────────
@@ -599,7 +599,7 @@ def get_local_updated_at() -> str | None:
                     latest = mtime
         if latest == 0.0:
             return None
-        dt = datetime.utcfromtimestamp(latest) + timedelta(hours=8)
+        dt = datetime.fromtimestamp(latest, timezone.utc).replace(tzinfo=None) + timedelta(hours=8)
         return format_utc8(dt)
     except Exception:
         return None
@@ -1054,7 +1054,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 # 无论是否有更新，都记录本次检查时间
                 state = load_state()
                 state["last_checked_at"] = format_utc8(
-                    datetime.utcnow() + timedelta(hours=8)
+                    datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=8)
                 )
 
                 # 每次检查都从 GitHub API 获取最新 commit SHA 和时间，
