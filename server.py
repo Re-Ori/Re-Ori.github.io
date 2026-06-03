@@ -462,8 +462,7 @@ TIMESTAMP_MARKER_END   = "// ===== End AutoUpdate Timestamp ====="
 
 # 不被远程仓库管理的本地文件（不参与比对、不被删除）
 LOCAL_ONLY_FILES = frozenset({
-    ".update_state.json", "server.py", "updater.py",
-    "js/giscus-client.js", "js/p2p.js", "css/p2p.css", "p2p.html",
+    ".update_state.json",
 })
 # 被远程管理、但本地可能被注入额外内容的文件 — 计算哈希前先剥离受控区块
 HASH_STRIP_MARKERS: dict[str, tuple[str, str]] = {
