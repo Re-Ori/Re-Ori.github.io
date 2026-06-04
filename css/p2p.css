@@ -193,6 +193,21 @@
   cursor: not-allowed;
 }
 
+/* ── 中转模式标识 ── */
+.p2p-relay-badge {
+  font-size: 11px;
+  color: #e67e22;
+  background: rgba(230,126,34,0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-weight: 600;
+  margin-left: auto;
+}
+[data-theme="dark"] .p2p-relay-badge {
+  background: rgba(230,126,34,0.2);
+}
+
 /* ── 消息区域 ── */
 .p2p-messages {
   flex: 1;
@@ -487,18 +502,169 @@
 @keyframes p2p-spin { to { transform: rotate(360deg); } }
 
 /* ── 文件上传进度条 ── */
-.p2p-progress {
-  height: 4px;
-  background: rgba(var(--theme-color-rgb,57,159,255),0.15);
-  border-radius: 2px;
-  overflow: hidden;
-  margin: 8px 20px 0;
+.p2p-file-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  margin: 6px 0 0;
 }
-.p2p-progress-bar {
+[data-theme="dark"] .p2p-file-progress { background: rgba(26,27,46,0.3); }
+
+.p2p-file-progress-name {
+  font-size: 12px;
+  color: #555;
+  min-width: 80px;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+[data-theme="dark"] .p2p-file-progress-name { color: #aaa; }
+
+.p2p-file-progress-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(var(--theme-color-rgb,57,159,255),0.12);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 60px;
+}
+.p2p-file-progress-fill {
   height: 100%;
   background: var(--theme-color, #399FFF);
-  width: 0%;
+  border-radius: 3px;
   transition: width 0.3s;
+}
+.p2p-file-progress-text {
+  font-size: 12px;
+  color: #8e8e93;
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.p2p-file-cancel {
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255,59,48,0.08);
+  color: #ff3b30;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
+  transition: background 0.15s;
+}
+.p2p-file-cancel:hover {
+  background: rgba(255,59,48,0.2);
+}
+
+/* ── 消息发送状态 ── */
+.p2p-msg-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.p2p-msg-status.sending {
+  color: #8e8e93;
+}
+.p2p-msg-status.sending::after {
+  content: '⋯';
+  animation: p2p-status-blink 0.8s ease-in-out infinite;
+}
+.p2p-msg-status.sent {
+  color: #34c759;
+}
+.p2p-msg-status.sent::after {
+  content: '✓';
+}
+.p2p-msg-status.failed {
+  color: #ff3b30;
+}
+.p2p-msg-status.failed::after {
+  content: '✗';
+}
+@keyframes p2p-status-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ── 中转用量条 ── */
+.p2p-relay-usage {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #8e8e93;
+  margin-left: auto;
+}
+.p2p-relay-usage-track {
+  width: 60px;
+  height: 4px;
+  background: rgba(230,126,34,0.15);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.p2p-relay-usage-fill {
+  height: 100%;
+  background: #e67e22;
+  border-radius: 2px;
+  transition: width 0.5s;
+}
+.p2p-relay-usage-text {
+  white-space: nowrap;
+}
+
+/* ── 最小化警告 ── */
+.p2p-minimize-warn {
+  font-size: 11px;
+  color: #ff9500;
+  background: rgba(255,149,0,0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-weight: 500;
+  margin-left: auto;
+  cursor: default;
+}
+[data-theme="dark"] .p2p-minimize-warn {
+  background: rgba(255,149,0,0.12);
+}
+
+/* ── 房间 ID 文本显示 ── */
+.p2p-room-id-display {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--theme-color, #399FFF);
+  padding: 4px 0;
+  white-space: nowrap;
+}
+
+/* ── 剩余流量右上角显示 ── */
+.p2p-relay-remaining {
+  font-size: 11px;
+  color: #e67e22;
+  background: rgba(230,126,34,0.08);
+  padding: 3px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-weight: 500;
+}
+[data-theme="dark"] .p2p-relay-remaining {
+  background: rgba(230,126,34,0.12);
+}
+.p2p-relay-remaining strong {
+  font-weight: 700;
 }
 
 /* ── 响应式 ── */
@@ -820,4 +986,545 @@
   min-width: 36px;
   text-align: right;
   flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════
+   功能介绍起始页
+   ═══════════════════════════════════════════════ */
+
+.p2p-intro-wrap {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 48px 24px 32px;
+  min-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.p2p-intro-card {
+  background: #fff;
+  border: 1px solid #e5e5ea;
+  border-radius: 16px;
+  padding: 40px 36px;
+  width: 100%;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+  transition: transform 0.2s;
+}
+[data-theme="dark"] .p2p-intro-card {
+  background: #1c1c1e;
+  border-color: #2c2c2e;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+}
+
+.p2p-intro-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  border-radius: 16px;
+  background: rgba(57,159,255,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--theme-color, #399FFF);
+}
+
+.p2p-intro-icon svg { width: 34px; height: 34px; }
+
+.p2p-intro-title {
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+  letter-spacing: -0.3px;
+}
+[data-theme="dark"] .p2p-intro-title { color: #e8e8ed; }
+
+.p2p-intro-subtitle {
+  text-align: center;
+  font-size: 14px;
+  color: #8e8e93;
+  margin-bottom: 28px;
+  line-height: 1.5;
+}
+
+.p2p-intro-features {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.p2p-intro-feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: rgba(57,159,255,0.04);
+  border: 1px solid rgba(57,159,255,0.1);
+  transition: background 0.2s;
+}
+[data-theme="dark"] .p2p-intro-feature {
+  background: rgba(57,159,255,0.06);
+  border-color: rgba(57,159,255,0.12);
+}
+
+.p2p-intro-feature-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: rgba(57,159,255,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--theme-color, #399FFF);
+}
+
+.p2p-intro-feature-icon svg { width: 20px; height: 20px; }
+
+.p2p-intro-feature-body h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 2px;
+}
+[data-theme="dark"] .p2p-intro-feature-body h4 { color: #e0e0e0; }
+
+.p2p-intro-feature-body p {
+  font-size: 12px;
+  color: #8e8e93;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.p2p-intro-mode-tags {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+/* 房间邀请提示横幅 */
+.p2p-intro-invite {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  margin: -8px 0 16px;
+  background: rgba(57,159,255,0.06);
+  border: 1px solid rgba(57,159,255,0.15);
+  border-radius: 8px;
+  font-size: 13px;
+}
+[data-theme="dark"] .p2p-intro-invite {
+  background: rgba(57,159,255,0.08);
+  border-color: rgba(57,159,255,0.2);
+}
+.p2p-intro-invite-icon { font-size: 16px; }
+.p2p-intro-invite-text { color: #555; }
+[data-theme="dark"] .p2p-intro-invite-text { color: #aaa; }
+.p2p-intro-invite-room {
+  font-weight: 600;
+  color: var(--theme-color, #399FFF);
+  background: rgba(57,159,255,0.08);
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+}
+
+.p2p-intro-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-weight: 500;
+}
+
+.p2p-intro-tag.webrtc {
+  background: rgba(52,199,89,0.1);
+  color: #34c759;
+  border: 1px solid rgba(52,199,89,0.2);
+}
+
+.p2p-intro-tag.relay {
+  background: rgba(230,126,34,0.1);
+  color: #e67e22;
+  border: 1px solid rgba(230,126,34,0.2);
+}
+
+.p2p-intro-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 28px;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--theme-color, #399FFF);
+  color: #fff;
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+.p2p-intro-btn:hover { opacity: 0.85; }
+.p2p-intro-btn:active { transform: scale(0.98); }
+
+/* ═══════════════════════════════════════════════
+   房间设置页
+   ═══════════════════════════════════════════════ */
+
+.p2p-settings-wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 48px 20px 32px;
+  min-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+}
+
+.p2p-settings-header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.p2p-settings-header-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  border-radius: 12px;
+  background: rgba(57,159,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--theme-color, #399FFF);
+}
+
+.p2p-settings-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 2px;
+}
+[data-theme="dark"] .p2p-settings-title { color: #e0e0e0; }
+
+.p2p-settings-subtitle {
+  font-size: 13px;
+  color: #8e8e93;
+}
+
+.p2p-settings-section {
+  background: #fff;
+  border: 1px solid #e5e5ea;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 14px;
+}
+[data-theme="dark"] .p2p-settings-section {
+  background: #1c1c1e;
+  border-color: #2c2c2e;
+}
+
+.p2p-settings-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+[data-theme="dark"] .p2p-settings-label { color: #888; }
+
+.p2p-settings-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 8px;
+  font-size: 14px;
+  background: rgba(255,255,255,0.8);
+  color: #333;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+[data-theme="dark"] .p2p-settings-input {
+  background: rgba(40,42,65,0.8);
+  border-color: rgba(255,255,255,0.1);
+  color: #ddd;
+}
+.p2p-settings-input:focus {
+  border-color: var(--theme-color, #399FFF);
+}
+
+/* 房间类型选择卡片 */
+.p2p-settings-room-types {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.p2p-settings-room-type {
+  padding: 16px;
+  border: 2px solid #e5e5ea;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.2s, background 0.2s;
+  background: #f9f9fb;
+}
+[data-theme="dark"] .p2p-settings-room-type {
+  border-color: #3a3a3c;
+  background: #262628;
+}
+
+.p2p-settings-room-type:hover {
+  border-color: rgba(57,159,255,0.3);
+}
+
+.p2p-settings-room-type.selected {
+  border-color: var(--theme-color, #399FFF);
+  background: rgba(57,159,255,0.04);
+}
+[data-theme="dark"] .p2p-settings-room-type.selected {
+  background: rgba(57,159,255,0.08);
+}
+
+.p2p-settings-room-type-icon {
+  font-size: 24px;
+  margin-bottom: 6px;
+}
+
+.p2p-settings-room-type-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 2px;
+}
+[data-theme="dark"] .p2p-settings-room-type-name { color: #e0e0e0; }
+
+.p2p-settings-room-type-desc {
+  font-size: 11px;
+  color: #8e8e93;
+  line-height: 1.4;
+}
+
+.p2p-settings-room-type.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: #e5e5ea;
+  background: #f2f2f7;
+}
+[data-theme="dark"] .p2p-settings-room-type.disabled {
+  border-color: #3a3a3c;
+  background: #1c1c1e;
+  opacity: 0.4;
+}
+.p2p-settings-room-type.disabled:hover {
+  border-color: #e5e5ea;
+  background: #f2f2f7;
+}
+[data-theme="dark"] .p2p-settings-room-type.disabled:hover {
+  border-color: #3a3a3c;
+  background: #1c1c1e;
+}
+
+.p2p-settings-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #555;
+  cursor: pointer;
+}
+[data-theme="dark"] .p2p-settings-checkbox-label { color: #888; }
+.p2p-settings-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--theme-color, #399FFF);
+  cursor: pointer;
+}
+
+.p2p-settings-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.p2p-settings-btn {
+  flex: 1;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  text-align: center;
+}
+
+.p2p-settings-btn.primary {
+  background: var(--theme-color, #399FFF);
+  color: #fff;
+}
+
+.p2p-settings-btn.outline {
+  background: transparent;
+  border: 1px solid rgba(0,0,0,0.1);
+  color: #555;
+}
+[data-theme="dark"] .p2p-settings-btn.outline {
+  border-color: rgba(255,255,255,0.1);
+  color: #999;
+}
+
+.p2p-settings-btn.primary:hover { opacity: 0.85; }
+.p2p-settings-btn.outline:hover { background: rgba(0,0,0,0.03); }
+[data-theme="dark"] .p2p-settings-btn.outline:hover { background: rgba(255,255,255,0.04); }
+
+/* ═══════════════════════════════════════════════
+   流量曲线图 (类似任务管理器)
+   ═══════════════════════════════════════════════ */
+
+.p2p-traffic-chart-wrap {
+  background: rgba(0,0,0,0.03);
+  border-radius: 8px;
+  padding: 10px;
+  margin: 8px 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+[data-theme="dark"] .p2p-traffic-chart-wrap {
+  background: rgba(255,255,255,0.04);
+}
+
+.p2p-traffic-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #8e8e93;
+  padding: 0 4px;
+}
+
+.p2p-traffic-chart-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.p2p-traffic-chart-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e67e22;
+  display: inline-block;
+}
+
+.p2p-traffic-chart-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: #e67e22;
+}
+
+.p2p-traffic-chart-canvas {
+  width: 100%;
+  height: 80px;
+  border-radius: 4px;
+  display: block;
+  background: rgba(0,0,0,0.04);
+}
+[data-theme="dark"] .p2p-traffic-chart-canvas {
+  background: rgba(255,255,255,0.04);
+}
+
+/* ═══════════════════════════════════════════════
+   房间信息提示 (进入前显示)
+   ═══════════════════════════════════════════════ */
+
+.p2p-room-info-hint {
+  font-size: 12px;
+  color: #8e8e93;
+  padding: 6px 10px;
+  background: rgba(57,159,255,0.06);
+  border-radius: 6px;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.p2p-room-info-hint .p2p-room-type-tag {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.p2p-room-type-tag.websrc {
+  background: rgba(52,199,89,0.1);
+  color: #34c759;
+}
+
+.p2p-room-type-tag.server {
+  background: rgba(230,126,34,0.1);
+  color: #e67e22;
+}
+
+/* ═══════════════════════════════════════════════
+   检测结果增强
+   ═══════════════════════════════════════════════ */
+
+.p2p-detect-capabilities {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.p2p-capability-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.p2p-capability-badge.available {
+  background: rgba(52,199,89,0.08);
+  color: #34c759;
+  border: 1px solid rgba(52,199,89,0.15);
+}
+
+.p2p-capability-badge.limited {
+  background: rgba(255,149,0,0.08);
+  color: #ff9500;
+  border: 1px solid rgba(255,149,0,0.15);
+}
+
+.p2p-capability-badge.unavailable {
+  background: rgba(255,59,48,0.08);
+  color: #ff3b30;
+  border: 1px solid rgba(255,59,48,0.15);
+}
+
+@media (max-width: 600px) {
+  .p2p-intro-features { grid-template-columns: 1fr; }
+  .p2p-settings-room-types { grid-template-columns: 1fr; }
+  .p2p-intro-card { padding: 28px 20px; }
+  .p2p-traffic-chart-canvas { height: 60px; }
 }

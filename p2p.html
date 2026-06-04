@@ -26,8 +26,9 @@
     <span class="p2p-screen-zoom-level" id="screen-zoom-level">1×</span>
     <button class="p2p-screen-zoom-btn" onclick="screenZoomIn()" title="放大">+</button>
     <button class="p2p-screen-zoom-btn" onclick="screenZoomReset()" title="重置">⟲</button>
+    <button class="p2p-screen-zoom-btn" id="btn-fullscreen" onclick="toggleFullscreen()" title="全屏">⛶</button>
   </div>
-  <div class="p2p-screen-video-wrap">
+  <div class="p2p-screen-video-wrap" id="screen-video-wrap">
     <video id="p2p-screen-video" autoplay muted></video>
   </div>
 </div>
@@ -39,15 +40,143 @@
   var app = document.getElementById('app');
   var unavailable = document.getElementById('p2p-unavailable');
   var p2p = new P2PManager();
-  var state = { connected: false, messages: [] };
+  var state = { connected: false, messages: [], msgSeq: 0 };
   var connectedPeers = [];
   var connectingPeers = [];
 
-  // ═══════════════════════════════════════════
-  //  环境检测模块
-  // ═══════════════════════════════════════════
+  // 房间配置
+  var roomConfig = {
+    username: window.localStorage.getItem('p2p_username') || generateDefaultName(),
+    roomType: window.localStorage.getItem('p2p_roomType') || 'websrc',
+    roomId: '',
+    password: '',
+  };
 
-  var detect = { step: 0, results: {} };
+  function generateDefaultName() {
+    var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    var suffix = '';
+    for (var i = 0; i < 4; i++) suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+    return '用户_' + suffix;
+  }
+
+  function truncateFileName(name, maxPre, maxSuf) {
+    maxPre = maxPre || 8; maxSuf = maxSuf || 8;
+    var dot = name.lastIndexOf('.');
+    if (dot === -1) dot = name.length;
+    var ext = dot < name.length ? name.substring(dot) : '';
+    var base = dot > 0 ? name.substring(0, dot) : name;
+    if (base.length <= maxPre + maxSuf) return name;
+    return base.substring(0, maxPre) + '...' + base.substring(base.length - maxSuf) + ext;
+  }
+
+  // ════════════════════════════════════════════
+  //  功能介绍起始页
+  // ════════════════════════════════════════════
+
+  function renderIntro() {
+    app.innerHTML = [
+      '<div class="p2p-intro-wrap">',
+        '<div class="p2p-intro-card">',
+          '<div class="p2p-intro-icon">',
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">',
+              '<path d="M5 12.55a11 11 0 0 1 14.08 0"/>',
+              '<path d="M1.42 9a16 16 0 0 1 21.16 0"/>',
+              '<path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>',
+              '<circle cx="12" cy="20" r="1"/>',
+            '</svg>',
+          '</div>',
+          '<div class="p2p-intro-title">P2P 空间</div>',
+          '<div class="p2p-intro-subtitle">点对点通信 · 文件传输 · 屏幕共享 · 隐私安全</div>',
+
+          // 有房间邀请时显示提示
+          (function() {
+            var p = new URLSearchParams(window.location.search);
+            var rid = p.get('room');
+            if (rid) {
+              return '<div class="p2p-intro-invite">' +
+                '<span class="p2p-intro-invite-icon">📨</span>' +
+                '<span class="p2p-intro-invite-text">你收到了一个房间邀请</span>' +
+                '<span class="p2p-intro-invite-room">' + escapeHtml(rid) + '</span>' +
+                '</div>';
+            }
+            return '';
+          })(),
+
+          '<div class="p2p-intro-mode-tags">',
+            '<span class="p2p-intro-tag webrtc">⚡ WebRTC 直连</span>',
+            '<span class="p2p-intro-tag relay">🔄 服务器中转</span>',
+          '</div>',
+
+          '<div class="p2p-intro-features">',
+            /* 聊天 */
+            '<div class="p2p-intro-feature">',
+              '<div class="p2p-intro-feature-icon">',
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+              '</div>',
+              '<div class="p2p-intro-feature-body">',
+                '<h4>即时消息</h4>',
+                '<p>端到端加密聊天，消息不经过服务器</p>',
+              '</div>',
+            '</div>',
+            /* 文件传输 */
+            '<div class="p2p-intro-feature">',
+              '<div class="p2p-intro-feature-icon">',
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>',
+              '</div>',
+              '<div class="p2p-intro-feature-body">',
+                '<h4>文件传输</h4>',
+                '<p>点对点直连分享无大小限制，服务器中转限 5MB</p>',
+              '</div>',
+            '</div>',
+            /* 屏幕共享 */
+            '<div class="p2p-intro-feature">',
+              '<div class="p2p-intro-feature-icon">',
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>',
+              '</div>',
+              '<div class="p2p-intro-feature-body">',
+                '<h4>屏幕共享</h4>',
+                '<p>低延迟共享屏幕，支持缩放和全屏</p>',
+              '</div>',
+            '</div>',
+            /* 隐私 */
+            '<div class="p2p-intro-feature">',
+              '<div class="p2p-intro-feature-icon">',
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+              '</div>',
+              '<div class="p2p-intro-feature-body">',
+                '<h4>隐私安全</h4>',
+                '<p>无需注册，数据直连加密传输</p>',
+              '</div>',
+            '</div>',
+          '</div>',
+
+          '<button class="p2p-intro-btn" id="btn-start-detect">',
+            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
+              '<circle cx="11" cy="11" r="8"/>',
+              '<path d="M21 21l-4.35-4.35"/>',
+              '<path d="M11 8v6"/>',
+              '<path d="M8 11h6"/>',
+            '</svg>',
+            (function() {
+            var p = new URLSearchParams(window.location.search);
+            var rid = p.get('room');
+            return rid ? '接受邀请并检测环境' : '开始环境检测';
+          })(),
+          '</button>',
+        '</div>',
+      '</div>',
+    ].join('');
+
+    document.getElementById('btn-start-detect').addEventListener('click', function() {
+      runDetection();
+    });
+  }
+
+  // ════════════════════════════════════════════
+  //  环境检测模块
+  // ════════════════════════════════════════════
+
+  var detect = { step: 0, results: {}, webrtcAvailable: true };
 
   function renderDetectUI() {
     app.innerHTML = [
@@ -75,7 +204,7 @@
           '<span class="p2p-detect-progress-dot" id="prog-3"></span>',
         '</div>',
 
-        /* 步骤 1：信令服务器（最快，先检测） */
+        /* 步骤 1：信令服务器 */
         '<div id="detect-step-1" class="p2p-detect-item pending">',
           '<div class="p2p-detect-icon">',
             '<svg class="icon-pending" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>',
@@ -109,7 +238,7 @@
           '</div>',
         '</div>',
 
-        /* 步骤 3：WebRTC 自测（最耗时，最后） */
+        /* 步骤 3：WebRTC 自测 */
         '<div id="detect-step-3" class="p2p-detect-item pending">',
           '<div class="p2p-detect-icon">',
             '<svg class="icon-pending" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>',
@@ -132,6 +261,7 @@
 
         /* 结果 */
         '<div id="detect-summary" style="display:none;"></div>',
+        '<div id="detect-capabilities" style="display:none;"></div>',
         '<div id="detect-btn-wrap" class="p2p-detect-btn-wrap" style="display:none;"></div>',
         '<div class="p2p-detect-spacer"></div>',
       '</div>',
@@ -143,7 +273,6 @@
     if (!el) return;
     el.className = el.className.replace(/pending|running|pass|fail/g, '') + ' ' + status;
 
-    // 切换 SVG 图标可见性
     var pendingIcon = el.querySelector('.icon-pending');
     var runningIcon = el.querySelector('.icon-running');
     var passIcon = el.querySelector('.icon-pass');
@@ -170,7 +299,6 @@
   }
 
   function setProgress(pct) {
-    // 3-step: 0-33=step1, 34-66=step2, 67-100=step3
     var dots = [
       document.getElementById('prog-1'),
       document.getElementById('prog-2'),
@@ -180,10 +308,7 @@
       document.getElementById('prog-l1'),
       document.getElementById('prog-l2'),
     ];
-
-    // Each step is ~33%
     var active = pct <= 0 ? -1 : pct <= 33 ? 0 : pct <= 66 ? 1 : 2;
-
     dots.forEach(function(d, i) {
       if (!d) return;
       d.className = 'p2p-detect-progress-dot' + (i < active ? ' done' : '') + (i === active ? ' active' : '');
@@ -194,6 +319,29 @@
     });
   }
 
+  // 显示能力徽章
+  function showCapabilities(allPass, hasWebRTC, hasScreenShare) {
+    var el = document.getElementById('detect-capabilities');
+    if (!el) return;
+    var caps = [
+      { name: '即时聊天', available: true },
+      { name: '文件传输', available: true },
+      { name: 'WebRTC 直连', available: hasWebRTC, key: hasWebRTC ? 'available' : (p2p.backendAvail ? 'limited' : 'unavailable') },
+      { name: '屏幕共享', available: hasScreenShare, key: hasScreenShare ? 'available' : (hasWebRTC ? 'limited' : 'unavailable') },
+    ];
+    var html = '<div class="p2p-detect-capabilities">';
+    for (var i = 0; i < caps.length; i++) {
+      var c = caps[i];
+      var key = allPass && c.available ? 'available' : (!c.available && !p2p.backendAvail ? 'unavailable' : 'limited');
+      if (c.key) key = c.key;
+      var icons = { available: '✓', limited: '⚡', unavailable: '✗' };
+      html += '<span class="p2p-capability-badge ' + key + '">' + icons[key] + ' ' + c.name + '</span>';
+    }
+    html += '</div>';
+    el.innerHTML = html;
+    el.style.display = '';
+  }
+
   function showSummary(passed, html) {
     var el = document.getElementById('detect-summary');
     if (!el) return;
@@ -202,20 +350,20 @@
     el.style.display = '';
   }
 
-  function showEnterBtn(enabled) {
+  function showEnterSettingsBtn(enabled, hasWebRTC, hasScreen) {
     var wrap = document.getElementById('detect-btn-wrap');
     if (!wrap) return;
     wrap.style.display = '';
 
-    if (enabled) {
+    if (enabled || p2p.backendAvail) {
       wrap.innerHTML =
-        '<button class="p2p-detect-btn" id="btn-enter-p2p">' +
-          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
-          '进入 P2P 空间' +
+        '<button class="p2p-detect-btn" id="btn-to-settings">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>' +
+          '进入房间设置' +
         '</button>';
-      document.getElementById('btn-enter-p2p').addEventListener('click', function() {
-        detect.passed = true;
-        startP2P();
+      document.getElementById('btn-to-settings').addEventListener('click', function() {
+        detect.passed = enabled;
+        renderSettings();
       });
     } else {
       wrap.innerHTML =
@@ -223,6 +371,115 @@
         '<br><button class="p2p-detect-retry" onclick="location.reload()">重新检测</button>';
     }
   }
+
+  function finishDetection() {
+    setProgress(100);
+    var r = detect.results;
+    var hasWebRTC = r.api && r.api.pass;
+    var hasScreen = r.api && r.api.details && r.api.details.indexOf('getDisplayMedia: 支持') !== -1;
+    var selfTestPass = r.selfTest && r.selfTest.pass;
+    var backendPass = r.backend && r.backend.pass;
+    var allPass = backendPass && hasWebRTC && selfTestPass;
+    detect.webrtcAvailable = hasWebRTC && selfTestPass;
+
+    if (allPass) {
+      showSummary(true, '✅ 全部通过，<strong>全部功能可用</strong>');
+      showCapabilities(true, true, hasScreen);
+      showEnterSettingsBtn(true, true, hasScreen);
+    } else if (backendPass) {
+      if (hasWebRTC && !selfTestPass) {
+        showSummary(false, '⚠️ <strong>仅部分功能可用</strong> — WebRTC 直连受限，可使用服务器中转模式');
+        showCapabilities(false, true, hasScreen);
+      } else if (!hasWebRTC) {
+        showSummary(false, '⚠️ <strong>仅部分功能可用</strong> — 浏览器不支持 WebRTC，可使用服务器中转模式');
+        showCapabilities(false, false, false);
+      } else {
+        showSummary(false, '⚠️ <strong>仅部分功能可用</strong> — 可使用服务器中转模式');
+        showCapabilities(false, hasWebRTC, hasScreen);
+      }
+      showEnterSettingsBtn(false, hasWebRTC, hasScreen);
+    } else {
+      showSummary(false, '❌ 无法连接信令服务器，请检查网络');
+      showCapabilities(false, hasWebRTC, hasScreen);
+      showEnterSettingsBtn(false, hasWebRTC, hasScreen);
+    }
+    detect.step = 4;
+  }
+
+  function showTroubleshoot(step) {
+    var detailEl = document.getElementById('detect-detail-' + step);
+    if (!detailEl) return;
+
+    var tips = {
+      1: {
+        title: '无法连接到信令服务器',
+        reasons: [
+          'P2P 功能需要自建服务器支持，GitHub Pages 无法提供信令服务',
+          '服务器未启动或端口未开放',
+          '防火墙阻止了通信',
+        ],
+        solutions: [
+          '请通过 <a href="https://reori.cn" target="_blank" style="color:var(--theme-color,#399FFF);text-decoration:underline;font-weight:500">reori.cn</a> 访问本站',
+          '检查网络连接是否正常，刷新页面重试',
+        ],
+      },
+      2: {
+        title: '浏览器兼容性问题',
+        reasons: [
+          '浏览器不支持或禁用了 WebRTC',
+          '广告拦截/隐私插件拦截了 WebRTC',
+          'iOS 微信内置浏览器限制 WebRTC',
+        ],
+        solutions: [
+          '换用 Firefox 或 Chrome（推荐）',
+          '检查 chrome://flags/#enable-webrtc 是否启用',
+          '关闭广告拦截插件或无痕模式重试',
+          'iOS 请用 Safari 或 Chrome',
+        ],
+      },
+      3: {
+        title: 'WebRTC 自测失败',
+        reasons: [
+          '防火墙拦截了 UDP 端口',
+          'VPN 或代理阻止了本地连接',
+          '反病毒软件拦截了 WebRTC',
+          '网络延迟过高或丢包严重',
+        ],
+        solutions: [
+          '换用 Firefox 或 Chrome（推荐）',
+          '关闭 VPN 或代理后重试',
+          '检查防火墙是否允许 UDP 通信',
+          '尝试切换到手机热点等网络环境',
+          '关闭反病毒软件的实时扫描',
+          '重启路由器',
+        ],
+      },
+    };
+
+    var t = tips[step];
+    if (!t) return;
+
+    var html = '<div class="p2p-detect-troubleshoot">' +
+      '<h4>🔧 ' + t.title + '</h4>' +
+      '<p><strong>可能原因：</strong></p>' +
+      '<ul>' + t.reasons.map(function(r) { return '<li>' + r + '</li>'; }).join('') + '</ul>' +
+      '<p><strong>尝试以下方法：</strong></p>' +
+      '<ul>' + t.solutions.map(function(s) { return '<li>' + s + '</li>'; }).join('') + '</ul>' +
+      '</div>';
+    detailEl.insertAdjacentHTML('afterend', html);
+
+    if (step >= 2 && p2p.backendAvail) {
+      var relayHtml =
+        '<div style="text-align:center;margin-top:16px;">' +
+        '<p style="font-size:13px;color:#8e8e93;margin-bottom:8px;">如果尝试以上方法仍无法解决：</p>' +
+        '<button class="p2p-detect-btn" onclick="document.getElementById(\'btn-to-settings\') && document.getElementById(\'btn-to-settings\').click()" style="background:#e67e22;">' +
+        '&#128259; 使用服务器中转模式（&#128203; 限速）</button>' +
+        '</div>';
+      detailEl.insertAdjacentHTML('afterend', relayHtml);
+    }
+  }
+
+  function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
   // ── Step 1: 浏览器 API 检测 ──
 
@@ -250,7 +507,6 @@
     } else {
       details.push('✓ getDisplayMedia: 支持');
     }
-    // DataChannel
     if (RTCPC) {
       try {
         var pc = new RTCPC({ iceServers: [] });
@@ -259,7 +515,6 @@
         pc.close();
       } catch(e) { /* already caught */ }
     }
-    // getUserMedia
     if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
       details.push('✗ getUserMedia: 不支持（屏幕共享可能受限）');
     } else {
@@ -305,17 +560,14 @@
       var messages = { pc1to2: [], pc2to1: [] };
       var startTime = Date.now();
 
-      // PC1 ICE
       pc1.onicecandidate = function(e) {
         if (e.candidate) {
           pc1IceCandidates.push(e.candidate.toJSON());
-          // 当 PC1 收集到 candidate 且 PC2 已有 remote desc，直接添加
           if (pc2.remoteDescription && pc2.remoteDescription.type === 'offer') {
             try { pc2.addIceCandidate(new RTCIceCandidate(e.candidate.toJSON())); } catch(e) {}
           }
         }
       };
-                  // PC2 ICE
       pc2.onicecandidate = function(e) {
         if (e.candidate) {
           pc2IceCandidates.push(e.candidate.toJSON());
@@ -325,7 +577,6 @@
         }
       };
 
-      // DataChannel
       ch1 = pc1.createDataChannel('test', { negotiated: true, id: 0 });
       ch1.onopen = function() {
         ch1Open = true;
@@ -344,7 +595,6 @@
         }
       };
 
-// PC2 — 同样主动 create（Firefox 不触发 ondatachannel）
       ch2 = pc2.createDataChannel('test', { negotiated: true, id: 0 });
       ch2.onopen = function() {
         ch2Open = true;
@@ -368,9 +618,7 @@
         }
       };
 
-
       function checkDone(rtt) {
-        // 只要任意一端完成双向通信即可
         if (messages.pc2to1.length > 0 || messages.pc1to2.length > 0) {
           cleanup();
           resolve({
@@ -382,7 +630,6 @@
         }
       }
 
-      // 交换 Offer/Answer
       pc1.createOffer()
         .then(function(offer) { return pc1.setLocalDescription(offer); })
         .then(function() {
@@ -400,11 +647,9 @@
         })
         .then(function() {
           log.push('✓ PC1 设置 Remote (Answer)');
-          // 处理 PC1 的 ICE candidates（PC2 已有 remote desc）
           for (var i = 0; i < pc1IceCandidates.length; i++) {
             try { pc2.addIceCandidate(new RTCIceCandidate(pc1IceCandidates[i])); } catch(e) {}
           }
-          // 处理 PC2 的 ICE candidates（PC1 已有 remote desc）
           for (var j = 0; j < pc2IceCandidates.length; j++) {
             try { pc1.addIceCandidate(new RTCIceCandidate(pc2IceCandidates[j])); } catch(e) {}
           }
@@ -416,15 +661,13 @@
     });
   }
 
-  // ── Step 3: 后端检测（已有 p2p.checkBackend） ──
-
-  // ── 执行完整检测 ──
+  // ── 执行完整检测（从 startDetectBtn 触发） ──
 
   async function runDetection() {
     renderDetectUI();
     setProgress(0);
 
-    // === Step 1: 信令服务器（最快，不通直接停） ===
+    // === Step 1: 信令服务器 ===
     setDetectStep(1, 'running');
     setProgress(15);
     await sleep(200);
@@ -464,11 +707,10 @@
       return;
     }
 
-    // === Step 3: WebRTC 自测（最耗时，最后） ===
+    // === Step 3: WebRTC 自测 ===
     setDetectStep(3, 'running');
     setProgress(70);
 
-    // 步骤进度条动画
     var st3Start = Date.now();
     var st3Bar = document.getElementById('st3-bar');
     var st3Time = document.getElementById('st3-time');
@@ -494,99 +736,299 @@
       showTroubleshoot(3);
     }
 
-    // === 总结 ===
     finishDetection();
   }
 
-  function finishDetection() {
-    setProgress(100);
-    var r = detect.results;
-    var allPass = r.backend && r.backend.pass && r.api && r.api.pass && r.selfTest && r.selfTest.pass;
-    if (allPass) {
-      showSummary(true, '全部通过' + (r.selfTest.latency ? '  延迟 ' + r.selfTest.latency : '') + '，可以正常使用 P2P 功能');
-      showEnterBtn(true);
-    } else {
-      var failReasons = [];
-      if (r.backend && !r.backend.pass) failReasons.push('信令服务器');
-      if (r.api && !r.api.pass) failReasons.push('浏览器兼容性');
-      if (r.selfTest && !r.selfTest.pass) failReasons.push('WebRTC 自测');
-      showSummary(false, '检测未通过（' + failReasons.join('、') + '）');
-      showEnterBtn(false);
+  // ════════════════════════════════════════════
+  //  房间设置页（动态：先输入房间ID，空房间才选类型，直接进入）
+  // ════════════════════════════════════════════
+
+  function renderSettings() {
+    // 先读取 URL 参数预填房间 ID
+    var p = new URLSearchParams(window.location.search);
+    var urlRoom = p.get('room') || '';
+    if (urlRoom && !roomConfig.roomId) roomConfig.roomId = urlRoom;
+
+    app.innerHTML = [
+      '<div class="p2p-settings-wrap">',
+        '<div class="p2p-settings-header">',
+          '<div class="p2p-settings-header-icon">',
+            '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+          '</div>',
+          '<div class="p2p-settings-title">加入房间</div>',
+          '<div class="p2p-settings-subtitle">输入房间 ID，新房间将选择连接方式</div>',
+        '</div>',
+
+        /* 用户名 */
+        '<div class="p2p-settings-section">',
+          '<div class="p2p-settings-label">👤 昵称</div>',
+          '<input type="text" class="p2p-settings-input" id="settings-username" maxlength="16" placeholder="输入你的昵称" value="' + escapeHtml(roomConfig.username) + '" autocomplete="off">',
+        '</div>',
+
+        /* 房间 ID */
+        '<div class="p2p-settings-section">',
+          '<div class="p2p-settings-label">🏠 房间 ID</div>',
+          '<input type="text" class="p2p-settings-input" id="settings-room" placeholder="输入房间ID" value="' + escapeHtml(roomConfig.roomId) + '" autocomplete="off">',
+          '<div id="room-info-hint" class="p2p-room-info-hint" style="display:none;"></div>',
+          /* 房间类型选择器（新房间时动态显示） */
+          '<div id="settings-type-section" style="display:none;">',
+            '<div style="font-size:13px;font-weight:600;color:#555;margin:12px 0 8px;display:flex;align-items:center;gap:6px;">🔌 选择连接方式</div>',
+            '<div class="p2p-settings-room-types">',
+              '<div class="p2p-settings-room-type' + (detect.webrtcAvailable ? '' : ' disabled') + '" data-type="websrc" id="room-type-websrc">',
+                '<div class="p2p-settings-room-type-icon">⚡</div>',
+                '<div class="p2p-settings-room-type-name">WebRTC 直连' + (detect.webrtcAvailable ? '' : ' <span style="font-size:11px;color:#ff3b30;font-weight:400;">（不可用）</span>') + '</div>',
+                '<div class="p2p-settings-room-type-desc">' + (detect.webrtcAvailable ? '点对点直接通信，低延迟' : '当前环境不支持，请使用服务器中转') + '</div>',
+              '</div>',
+              '<div class="p2p-settings-room-type" data-type="server" id="room-type-server">',
+                '<div class="p2p-settings-room-type-icon">🔄</div>',
+                '<div class="p2p-settings-room-type-name">服务器中转</div>',
+                '<div class="p2p-settings-room-type-desc">通过服务器转发，适合防火墙限制环境<br><span style="font-size:10px;color:#e67e22;">&#9201; 限速 5分钟5MB · 约 100KB/s · 文件最大 5MB · 不支持投屏</span></div>',
+              '</div>',
+            '</div>',
+            '<button class="p2p-settings-btn primary" id="btn-create-room" style="margin-top:14px;width:100%;">创建并加入房间 →</button>',
+          '</div>',
+        '</div>',
+
+        '<div class="p2p-settings-section" id="password-section" style="display:none;">',
+          '<div class="p2p-settings-label">🔒 密码 <span style="font-size:11px;color:#8e8e93;font-weight:400;">（可选）</span></div>',
+          '<input type="password" class="p2p-settings-input" id="settings-password" placeholder="输入房间密码" autocomplete="off">',
+        '</div>',
+
+        '<div class="p2p-settings-actions">',
+          '<button class="p2p-settings-btn outline" id="btn-back-detect">← 重新检测</button>',
+        '</div>',
+      '</div>',
+    ].join('');
+
+    // 用户名输入
+    var usernameInput = document.getElementById('settings-username');
+    usernameInput.addEventListener('change', function() {
+      roomConfig.username = this.value.trim();
+      if (roomConfig.username) window.localStorage.setItem('p2p_username', roomConfig.username);
+    });
+
+    // 房间类型选择（禁用项不可点击）
+    var typeCards = document.querySelectorAll('.p2p-settings-room-type');
+    for (var i = 0; i < typeCards.length; i++) {
+      typeCards[i].addEventListener('click', function() {
+        if (this.classList.contains('disabled')) return;
+        for (var j = 0; j < typeCards.length; j++) typeCards[j].classList.remove('selected');
+        this.classList.add('selected');
+        roomConfig.roomType = this.getAttribute('data-type');
+      });
     }
-    detect.step = 4;
+    // 默认选中 server（或 webrtc 可用时按用户上次选择）
+    if (detect.webrtcAvailable && roomConfig.roomType === 'websrc') {
+      var wsEl = document.getElementById('room-type-websrc');
+      if (wsEl) wsEl.classList.add('selected');
+    } else {
+      var svEl = document.getElementById('room-type-server');
+      if (svEl) svEl.classList.add('selected');
+      roomConfig.roomType = 'server';
+    }
+
+    // 创建新房间
+    document.getElementById('btn-create-room').addEventListener('click', function() {
+      doJoinFromSettings(roomConfig.roomId, roomConfig.roomType);
+    });
+
+    // 返回检测
+    document.getElementById('btn-back-detect').addEventListener('click', function() {
+      runDetection();
+    });
+
+    // 房间 ID 输入 → 动态查询
+    var roomInput = document.getElementById('settings-room');
+    if (roomConfig.roomId) {
+      // 已有 URL 房间参数，直接查询
+      setTimeout(function() {
+        if (p2p.backendAvail) queryRoomInfo(roomConfig.roomId);
+      }, 300);
+    }
+    roomInput.addEventListener('input', debounce(function() {
+      var rid = this.value.trim();
+      roomConfig.roomId = rid;
+      var hint = document.getElementById('room-info-hint');
+      var typeSection = document.getElementById('settings-type-section');
+      if (!hint) return;
+      if (rid && p2p.backendAvail) {
+        queryRoomInfo(rid);
+      } else {
+        hint.style.display = 'none';
+        if (typeSection) typeSection.style.display = 'none';
+      }
+    }, 400));
   }
 
-  function showTroubleshoot(step) {
-    var detailEl = document.getElementById('detect-detail-' + step);
-    if (!detailEl) return;
+  // ── 查询房间信息（动态更新 UI） ──
 
-    var tips = {
-      1: {
-        title: '无法连接到信令服务器',
-        reasons: [
-          'P2P 功能需要自建服务器支持，GitHub Pages 无法提供信令服务',
-          '服务器未启动或端口未开放',
-          '防火墙阻止了通信',
-        ],
-        solutions: [
-          '请通过 <a href="https://reori.cn" target="_blank" style="color:var(--theme-color,#399FFF);text-decoration:underline;font-weight:500">reori.cn</a> 访问本站',
-          '检查网络连接是否正常，刷新页面重试',
-        ],
-      },
-      2: {
-        title: '浏览器兼容性问题',
-        reasons: [
-          '浏览器不支持或禁用了 WebRTC',
-          '广告拦截/隐私插件拦截了 WebRTC',
-          'iOS 微信内置浏览器限制 WebRTC',
-        ],
-        solutions: [
-          '使用最新版 Chrome 或 Firefox',
-          '检查 chrome://flags/#enable-webrtc',
-          '关闭广告拦截插件或无痕模式重试',
-          'iOS 请用 Safari 或 Chrome',
-        ],
-      },
-      3: {
-        title: 'WebRTC 自测失败',
-        reasons: [
-          '防火墙拦截了 UDP 端口',
-          'VPN 或代理阻止了本地连接',
-          '反病毒软件拦截了 WebRTC',
-          '网络延迟过高或丢包严重',
-        ],
-        solutions: [
-          '关闭 VPN 或代理后重试',
-          '检查防火墙是否允许 UDP 通信',
-          '尝试切换到手机热点等网络环境',
-          '关闭反病毒软件的实时扫描',
-          '重启路由器',
-        ],
-      },
+  function queryRoomInfo(roomId) {
+    fetch('/api/p2p/room-info?room=' + encodeURIComponent(roomId))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var hint = document.getElementById('room-info-hint');
+        var typeSection = document.getElementById('settings-type-section');
+        if (!hint) return;
+        if (data.exists) {
+          // 已有房间 → 显示信息 + 直接加入按钮（不选类型）
+          var typeNames = { websrc: '⚡ WebRTC 直连', server: '🔄 服务器中转' };
+          var typeTag = '<span class="p2p-room-type-tag ' + data.type + '">' + (typeNames[data.type] || data.type) + '</span>';
+          var lockIcon = data.has_password ? ' 🔒' : '';
+          hint.innerHTML = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+            '🏠' + lockIcon + ' 已有房间 · 类型: ' + typeTag +
+            ' · <span style="color:#8e8e93;">' + data.user_count + ' 人在线</span>' +
+            '</div>' +
+            '<button class="p2p-settings-btn primary" id="btn-join-existing" style="margin-top:10px;width:100%;">加入房间 →</button>';
+          hint.style.display = '';
+          if (typeSection) typeSection.style.display = 'none';
+          // 有密码时显示密码输入
+          var pwSec = document.getElementById('password-section');
+          if (pwSec) pwSec.style.display = data.has_password ? '' : 'none';
+          if (data.has_password && roomConfig.password) {
+            document.getElementById('settings-password').value = roomConfig.password;
+          }
+          // 绑定加入按钮
+          var joinBtn = document.getElementById('btn-join-existing');
+          if (joinBtn) {
+            joinBtn.onclick = function() { doJoinFromSettings(roomId, data.type); };
+          }
+        } else {
+          // 新房间 → 显示类型选择
+          hint.innerHTML = '🆕 新房间，请选择连接方式';
+          hint.style.display = '';
+          if (typeSection) typeSection.style.display = '';
+          // 新房间显示密码输入（可选）
+          var pwSec = document.getElementById('password-section');
+          if (pwSec) pwSec.style.display = '';
+          hint.style.display = '';
+          if (typeSection) typeSection.style.display = '';
+        }
+      })
+      .catch(function() { /* ignore */ });
+  }
+
+  // ── 从设置页直接加入房间 ──
+
+  function doJoinFromSettings(roomId, roomType) {
+    roomConfig.roomId = roomId;
+    roomConfig.roomType = roomType;
+    roomConfig.username = document.getElementById('settings-username').value.trim();
+    roomConfig.password = document.getElementById('settings-password') ? document.getElementById('settings-password').value.trim() : '';
+    if (roomConfig.username) window.localStorage.setItem('p2p_username', roomConfig.username);
+    window.localStorage.setItem('p2p_roomType', roomType);
+
+    if (roomType === 'server') p2p.relayMode = true;
+
+    detect.passed = true;
+
+    var joinBtn = document.getElementById('btn-create-room') || document.getElementById('btn-join-existing');
+    if (joinBtn) { joinBtn.disabled = true; joinBtn.textContent = '加入中…'; }
+
+    p2p.joinRoomWithConfig(roomId, roomType, roomConfig.username, roomConfig.password).then(function(data) {
+      if (joinBtn) { joinBtn.disabled = false; joinBtn.textContent = '加入房间 →'; }
+      if (!data || data.error === 'wrong_password') {
+        if (data && data.error === 'wrong_password') {
+          window.showToast && window.showToast('🔒 密码错误', 3000);
+          roomConfig.password = '';
+        }
+        return;
+      }
+      // 加入成功 → 直接渲染界面并进入已连接状态
+      startP2P();
+      state.connected = true;
+      document.getElementById('btn-join').style.display = 'none';
+      document.getElementById('btn-copy-room').style.display = '';
+      document.getElementById('btn-leave').style.display = '';
+      document.getElementById('room-input').style.display = 'none';
+      var display = document.getElementById('room-id-display');
+      if (display) { display.textContent = '🏠 ' + roomId; display.style.display = ''; }
+      var myName = p2p.userNames[p2p.peerId] || roomConfig.username || p2p.peerId;
+      document.getElementById('room-info').textContent = '房间: ' + roomId + ' | ' + myName;
+      document.getElementById('room-info').title = 'ID: ' + p2p.peerId;
+      setInputsEnabled(true);
+      var url = new URL(window.location);
+      url.searchParams.set('room', roomId);
+      history.replaceState(null, '', url);
+      p2p._notifyPeersChange();
+      addSystemMsg('你已加入房间 ' + roomId + '（ID: ' + p2p.peerId + '）');
+      if (data.peers && data.peers.length) {
+        addSystemMsg('房间内已有 ' + data.peers.length + ' 人，正在连接…');
+      } else {
+        addSystemMsg('等待其他人加入… 点击「邀请」分享房间链接');
+      }
+    });
+  }
+
+  function debounce(fn, delay) {
+    var timer = null;
+    return function() {
+      var ctx = this, args = arguments;
+      clearTimeout(timer);
+      timer = setTimeout(function() { fn.apply(ctx, args); }, delay);
     };
-
-    var t = tips[step];
-    if (!t) return;
-
-    var html = '<div class="p2p-detect-troubleshoot">' +
-      '<h4>🔧 ' + t.title + '</h4>' +
-      '<p><strong>可能原因：</strong></p>' +
-      '<ul>' + t.reasons.map(function(r) { return '<li>' + r + '</li>'; }).join('') + '</ul>' +
-      '<p><strong>尝试以下方法：</strong></p>' +
-      '<ul>' + t.solutions.map(function(s) { return '<li>' + s + '</li>'; }).join('') + '</ul>' +
-      '</div>';
-    detailEl.insertAdjacentHTML('afterend', html);
   }
 
-  function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
-
-  // ═══════════════════════════════════════════
+  // ════════════════════════════════════════════
   //  P2P 主功能（检测通过后启动）
-  // ═══════════════════════════════════════════
+  // ════════════════════════════════════════════
+
+  // ── 中转模式入口（兼容旧代码） ──
+  window.enterRelayMode = async function() {
+    p2p.relayMode = true;
+    roomConfig.roomType = 'server';
+    console.log('[P2P] 使用服务器中转模式');
+    await p2p.checkBackend();
+    startP2P();
+  };
 
   function startP2P() {
     unavailable.style.display = 'none';
     renderUI();
+    // 中转模式：显示限速标签 + 流量图表
+    if (p2p.relayMode) {
+      var badge = document.getElementById('relay-badge');
+      if (badge) badge.style.display = '';
+      var remaining = document.getElementById('relay-remaining');
+      if (remaining) remaining.style.display = '';
+      var usageWrap = document.getElementById('relay-usage-wrap');
+      if (usageWrap) usageWrap.style.display = '';
+      var chartWrap = document.getElementById('traffic-chart-wrap');
+      if (chartWrap) chartWrap.style.display = '';
+      var btnScreen = document.getElementById('btn-screen');
+      if (btnScreen) { btnScreen.style.display = 'none'; btnScreen.disabled = true; }
+      initTrafficChart();
+
+      p2p.onRelayQuota = function(bytes) {
+        var b = document.getElementById('relay-badge');
+        var fill = document.getElementById('relay-usage-fill');
+        var txt = document.getElementById('relay-usage-text');
+        var rv = document.getElementById('relay-remaining-val');
+        if (!b) return;
+        var kb = Math.round(bytes / 1024);
+        var usedKb = Math.round((5 * 1024 * 1024 - bytes) / 1024);
+        var pct = (1 - bytes / (5 * 1024 * 1024)) * 100;
+        if (fill) fill.style.width = Math.min(100, pct) + '%';
+        if (txt) txt.textContent = usedKb + 'KB/5MB';
+        if (rv) {
+          rv.textContent = (kb > 1024 ? (kb/1024).toFixed(1) + ' MB' : kb + ' KB');
+          rv.style.color = kb >= 1024 ? '#e67e22' : '#ff3b30';
+        }
+        if (kb >= 1024) {
+          b.textContent = '🔄 中转 剩余' + kb + 'KB';
+          b.style.color = '#e67e22';
+        } else if (kb > 0) {
+          b.textContent = '🔄 中转 剩余' + kb + 'KB';
+          b.style.color = '#ff3b30';
+        } else {
+          b.textContent = '🔄 中转 限速中';
+          b.style.color = '#ff3b30';
+        }
+        // 更新曲线图
+        updateTrafficChart(bytes);
+      };
+      // 初始值
+      p2p.onRelayQuota(5 * 1024 * 1024);
+    }
     setupCallbacks();
     p2p.onPeersChange = updatePeerList;
     p2p.onMessage = addMessage;
@@ -596,7 +1038,6 @@
     p2p.onScreenEnd = handleScreenEnd;
     p2p.onUserName = handleUserName;
 
-    // 如果 URL 有 room 参数，自动加入
     (function autoJoin() {
       var p = new URLSearchParams(window.location.search);
       if (p.get('room')) {
@@ -610,11 +1051,144 @@
     })();
   }
 
-  // ═══════════════════════════════════════════
-  //  原有 P2P 界面渲染与交互（保持不变）
-  // ═══════════════════════════════════════════
+  // ════════════════════════════════════════════
+  //  流量曲线图（类似任务管理器）
+  // ════════════════════════════════════════════
 
-  // ── WebRTC 基础检测（供主检测使用） ──
+  var trafficHistory = [];
+  var TRAFFIC_HISTORY_MAX = 60;  // 60 个采样点
+
+  function initTrafficChart() {
+    trafficHistory = [];
+    var canvas = document.getElementById('traffic-canvas');
+    if (!canvas) return;
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    // 填充初始数据
+    for (var i = 0; i < TRAFFIC_HISTORY_MAX; i++) trafficHistory.push(5 * 1024 * 1024);
+    drawTrafficChart();
+  }
+
+  function updateTrafficChart(remaining) {
+    trafficHistory.push(remaining);
+    if (trafficHistory.length > TRAFFIC_HISTORY_MAX) trafficHistory.shift();
+    drawTrafficChart();
+    // 更新数字显示
+    var valEl = document.getElementById('traffic-chart-current');
+    if (valEl) {
+      var kb = Math.round(remaining / 1024);
+      if (kb > 1024) valEl.textContent = (kb / 1024).toFixed(1) + ' MB';
+      else valEl.textContent = kb + ' KB';
+    }
+  }
+
+  function drawTrafficChart() {
+    var canvas = document.getElementById('traffic-canvas');
+    if (!canvas) return;
+    var rect = canvas.getBoundingClientRect();
+    var w = rect.width, h = rect.height;
+    var dpr = window.devicePixelRatio || 1;
+    var ctx = canvas.getContext('2d');
+
+    if (trafficHistory.length === 0) return;
+    var maxVal = 5 * 1024 * 1024; // 5MB
+    var minVal = 0;
+    var data = trafficHistory;
+
+    // 清空
+    ctx.clearRect(0, 0, w * dpr, h * dpr);
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    var gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+    var lineColor = '#e67e22';
+    var fillColor = 'rgba(230,126,34,0.12)';
+    var textColor = isDark ? '#666' : '#bbb';
+
+    var padL = 0, padR = 0, padT = 4, padB = 0;
+    var plotW = w - padL - padR;
+    var plotH = h - padT - padB;
+
+    // 网格线（水平）
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 0.5;
+    for (var i = 0; i <= 4; i++) {
+      var y = padT + (plotH / 4) * i;
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(w - padR, y);
+      ctx.stroke();
+    }
+
+    if (data.length < 2) {
+      ctx.restore();
+      return;
+    }
+
+    // 绘制填充区域
+    ctx.beginPath();
+    var firstX = padL;
+    var firstY = padT + plotH - (data[0] - minVal) / (maxVal - minVal) * plotH;
+    ctx.moveTo(firstX, padT + plotH);
+    ctx.lineTo(firstX, firstY);
+    for (var i = 1; i < data.length; i++) {
+      var x = padL + (i / (data.length - 1)) * plotW;
+      var y = padT + plotH - (data[i] - minVal) / (maxVal - minVal) * plotH;
+      ctx.lineTo(x, y);
+    }
+    var lastX = padL + plotW;
+    ctx.lineTo(lastX, padT + plotH);
+    ctx.closePath();
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+
+    // 绘制线条
+    ctx.beginPath();
+    ctx.moveTo(firstX, firstY);
+    for (var i = 1; i < data.length; i++) {
+      var x = padL + (i / (data.length - 1)) * plotW;
+      var y = padT + plotH - (data[i] - minVal) / (maxVal - minVal) * plotH;
+      ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // 最新值高亮点
+    var lastV = data[data.length - 1];
+    var lastY = padT + plotH - (lastV - minVal) / (maxVal - minVal) * plotH;
+    ctx.beginPath();
+    ctx.arc(lastX, lastY, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = lineColor;
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // 窗口大小变化时重绘
+  window.addEventListener('resize', function() {
+    var canvas = document.getElementById('traffic-canvas');
+    if (canvas && trafficHistory.length > 0) {
+      var dpr = window.devicePixelRatio || 1;
+      var rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      var ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      drawTrafficChart();
+    }
+  });
+
+  // ════════════════════════════════════════════
+  //  原有 P2P 界面渲染与交互
+  // ════════════════════════════════════════════
+
   function checkWebRTC() {
     var issues = [];
     var RTCPC = window.RTCPeerConnection || window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
@@ -644,27 +1218,29 @@
           issues.map(function(i) { return '<li>' + i + '</li>'; }).join(''),
         '</ul>',
         '<p style="font-size:13px;margin-top:8px;">请尝试：<br>',
-        '• 使用 Firefox / Chrome 浏览器<br>',
+        '• 换用 Firefox / Chrome 浏览器<br>',
         '• 检查是否禁用了 WebRTC（<code>edge://flags</code> 或 <code>chrome://flags</code>）<br>',
         '• 检查防火墙 / VPN 是否拦截了 UDP</p>',
+        '<hr style="border:none;border-top:1px solid #fcc;margin:12px 0;">',
+        '<p style="font-size:13px;margin-bottom:8px;">或者使用服务器中转模式（有限速）：</p>',
+        '<button class="p2p-detect-btn" onclick="enterRelayMode()" style="background:#e67e22;">🔄 使用服务器中转模式</button>',
       '</div>',
     ].join('');
   }
 
-  // ── 启动检测 ──
+  // ── 启动：先显示功能介绍页 ──
   var webrtcIssues = checkWebRTC();
   if (webrtcIssues.length > 0) {
-    // 浏览器完全不支持 → 直接显示错误
     showWebRTCError(webrtcIssues);
-    return;
+  } else {
+    // 不再直接检测，先显示功能介绍页
+    detect.passed = false;
+    renderIntro();
   }
-
-  // 先显示检测界面
-  detect.passed = false;
-  runDetection();
 
   // ── 渲染界面 ──
   function renderUI() {
+    var savedType = roomConfig.roomType || window.localStorage.getItem('p2p_roomType') || 'websrc';
     app.innerHTML = [
       '<div class="p2p-layout">',
         /* 侧栏 */
@@ -675,6 +1251,14 @@
           '</div>',
           '<div class="p2p-peer-list" id="peer-list">',
             '<div class="p2p-sidebar-status" id="sidebar-status">未连接</div>',
+          '</div>',
+          /* 中转模式流量曲线图 */
+          '<div id="traffic-chart-wrap" class="p2p-traffic-chart-wrap" style="display:none;">',
+            '<div class="p2p-traffic-chart-header">',
+              '<span class="p2p-traffic-chart-label"><span class="p2p-traffic-chart-dot"></span> 中转流量</span>',
+              '<span class="p2p-traffic-chart-value" id="traffic-chart-current">5 MB</span>',
+            '</div>',
+            '<canvas id="traffic-canvas" class="p2p-traffic-chart-canvas" width="180" height="80"></canvas>',
           '</div>',
           '<div class="p2p-sidebar-footer" id="room-info">',
             '房间: -',
@@ -690,11 +1274,16 @@
           /* 顶栏 */
           '<div class="p2p-topbar">',
             '<label>房间</label>',
-            '<input type="text" id="room-input" placeholder="输入房间ID" value="' + defaultRoom() + '">',
+            '<input type="text" id="room-input" placeholder="输入房间ID" value="' + escapeHtml(roomConfig.roomId || defaultRoom()) + '">',
+            '<span id="room-id-display" class="p2p-room-id-display" style="display:none;"></span>',
             '<button class="p2p-btn" id="btn-join" onclick="joinRoom()">加入/创建</button>',
             '<button class="p2p-btn outline" id="btn-copy-room" onclick="copyRoomLink()" style="display:none;">📋 邀请</button>',
             '<button class="p2p-btn danger" id="btn-leave" onclick="leaveRoom()" style="display:none;">离开</button>',
             '<button class="p2p-btn warning" id="btn-stop-share" onclick="stopMyScreenShare()" style="display:none;">⏹ 停止共享</button>',
+            '<span id="relay-badge" class="p2p-relay-badge" style="display:none;">🔄 中转</span>',
+            '<span id="minimize-warn" class="p2p-minimize-warn" title="后台运行时连接可能不稳定">💡 请勿最小化窗口</span>',
+            '<span id="relay-remaining" class="p2p-relay-remaining" style="display:none;">剩余: <strong id="relay-remaining-val">5 MB</strong></span>',
+            '<div id="relay-usage-wrap" class="p2p-relay-usage" style="display:none;"><div class="p2p-relay-usage-track"><div class="p2p-relay-usage-fill" id="relay-usage-fill"></div></div><span class="p2p-relay-usage-text" id="relay-usage-text">0/5MB</span></div>',
           '</div>',
 
           /* 消息 */
@@ -750,7 +1339,7 @@
       e.target.value = '';
     });
     document.getElementById('btn-screen').addEventListener('click', startScreenShare);
-    var savedName = window.localStorage.getItem('p2p_username') || '';
+    var savedName = roomConfig.username || window.localStorage.getItem('p2p_username') || '';
     var usernameInput = document.getElementById('username-input');
     if (savedName) {
       usernameInput.value = savedName;
@@ -786,6 +1375,10 @@
     p2p.onError = function(msg) {
       window.showToast && window.showToast(msg, 3000);
     };
+    p2p.onDisconnect = function(msg) {
+      window.showToast && window.showToast(msg, 5000);
+      addSystemMsg('⚠️ ' + msg);
+    };
   }
 
   function updatePeerList(connected, all) {
@@ -796,18 +1389,27 @@
     var connectedCount = connectedPeers.length;
     var connectingCount = connectingPeers.length - connectedCount;
     if (countEl) {
-      countEl.textContent = connectedCount +
+      countEl.textContent = (connectedCount + 1) +
         (connectingCount > 0 ? ' (+' + connectingCount + ')' : '');
     }
     if (!state.connected) {
       list.innerHTML = '<div class="p2p-sidebar-status" id="sidebar-status">未连接</div>';
       return;
     }
+    var items = '';
+    // 自己始终显示在最上面
+    var myName = p2p.userNames[p2p.peerId] || roomConfig.username || p2p.peerId;
+    items += '<div class="p2p-peer-item">' +
+      '<div class="p2p-peer-dot self"></div>' +
+      '<span class="p2p-peer-name"><strong>' + escapeHtml(myName) + '</strong> <span style="font-size:11px;color:#999;">(' + (p2p.peerId ? p2p.peerId.substring(0,6) : '') + ')</span></span>' +
+      '<span class="p2p-peer-badge" style="color:var(--theme-color,#399FFF);font-weight:600;">我</span>' +
+      '</div>';
+    // 其他用户
     if (connectingPeers.length === 0) {
-      list.innerHTML = '<div class="p2p-sidebar-status" id="sidebar-status">等待他人加入…</div>';
+      items += '<div class="p2p-sidebar-status" style="padding:12px 16px;">等待他人加入…</div>';
+      list.innerHTML = items;
       return;
     }
-    var items = '';
     for (var i = 0; i < connectingPeers.length; i++) {
       var id = connectingPeers[i];
       var isConnected = connectedPeers.indexOf(id) !== -1;
@@ -817,26 +1419,36 @@
         badge = '已连接';
         extraClass = '';
       } else if (p2p.peers[id]) {
-        var iceState = p2p.peers[id].connection.iceConnectionState;
-        var connState = p2p.peers[id].connection.connectionState;
+        var iceState = p2p.peers[id].connection ? p2p.peers[id].connection.iceConnectionState : '';
+        var connState = p2p.peers[id].connection ? p2p.peers[id].connection.connectionState : '';
         if (iceState === 'connected' || iceState === 'completed') { badge = '已连接'; extraClass = ''; }
         else if (iceState === 'failed') { badge = '❌ 失败'; extraClass = ''; }
         else if (connState === 'failed' || connState === 'disconnected') { badge = '❌ 断连'; extraClass = ''; }
         else badge = iceState;
       }
-      var displayName = p2p.userNames[id] || id;
+      var displayName = p2p.userNames[id] || '?';
       items += '<div class="p2p-peer-item">' +
         '<div class="p2p-peer-dot' + extraClass + '"></div>' +
-        '<span class="p2p-peer-name">' + escapeHtml(displayName) + '</span>' +
+        '<span class="p2p-peer-name">' + escapeHtml(displayName) + ' <span style="font-size:11px;color:#999;">(' + id.substring(0,6) + ')</span></span>' +
         '<span class="p2p-peer-badge">' + badge + '</span>' +
         '</div>';
     }
     list.innerHTML = items;
   }
 
-  function addMessage(peerId, text) {
-    state.messages.push({ from: peerId, text: text, time: new Date(), type: 'chat' });
+  function addMessage(peerId, text, id, status) {
+    state.messages.push({ id: id || ('m' + (++state.msgSeq)), from: peerId, text: text, time: new Date(), type: 'chat', status: status || '' });
     renderMessages();
+  }
+
+  function updateMessageStatus(id, status) {
+    for (var i = 0; i < state.messages.length; i++) {
+      if (state.messages[i].id === id) {
+        state.messages[i].status = status;
+        renderMessages();
+        return;
+      }
+    }
   }
 
   function receiveFile(peerId, name, mime, blob, fileId) {
@@ -868,6 +1480,7 @@
         html += '<div class="p2p-msg ' + (isSelf ? 'self' : 'other') + '">';
         if (!isSelf) html += '<div class="p2p-msg-from">' + escapeHtml(p2p.userNames[m.from] || m.from) + '</div>';
         html += '<div>' + escapeHtml(m.text) + '</div>';
+        if (isSelf) html += '<span class="p2p-msg-status ' + (m.status || 'sent') + '"></span>';
         html += '<div class="p2p-msg-time">' + time + '</div></div>';
       } else if (m.type === 'file') {
         html += '<div class="p2p-msg ' + (isSelf ? 'self' : 'other') + '">';
@@ -889,16 +1502,30 @@
   }
 
   // ── 房间操作 ──
+
   window.joinRoom = function() {
     var room = document.getElementById('room-input').value.trim();
     if (!room) { window.showToast && window.showToast('请输入房间ID', 2000); return; }
-    p2p.joinRoom(room).then(function(data) {
+    var username = roomConfig.username || document.getElementById('username-input').value.trim() || '';
+    var roomType = roomConfig.roomType || 'websrc';
+    var password = roomConfig.password || '';
+    p2p.joinRoomWithConfig(room, roomType, username, password).then(function(data) {
       if (!data) return;
+      if (data.error === 'wrong_password') {
+        window.showToast && window.showToast('🔒 密码错误', 3000);
+        roomConfig.password = '';
+        // 显示密码输入
+        var hint = document.getElementById('room-info-hint');
+        if (hint) { hint.style.display = ''; showPasswordPrompt(room); }
+        return;
+      }
       state.connected = true;
       document.getElementById('btn-join').style.display = 'none';
       document.getElementById('btn-copy-room').style.display = '';
       document.getElementById('btn-leave').style.display = '';
-      document.getElementById('room-input').disabled = true;
+      document.getElementById('room-input').style.display = 'none';
+      var display = document.getElementById('room-id-display');
+      if (display) { display.textContent = '🏠 ' + room; display.style.display = ''; }
       var myName = p2p.userNames[p2p.peerId] || p2p.peerId;
       document.getElementById('room-info').textContent = '房间: ' + room + ' | ' + myName;
       document.getElementById('room-info').title = 'ID: ' + p2p.peerId;
@@ -922,18 +1549,9 @@
       state.messages = [];
       connectedPeers = [];
       connectingPeers = [];
-      document.getElementById('btn-join').style.display = '';
-      document.getElementById('btn-copy-room').style.display = 'none';
-      document.getElementById('btn-leave').style.display = 'none';
-      document.getElementById('room-input').disabled = false;
-      document.getElementById('room-info').textContent = '房间: -';
-      setInputsEnabled(false);
-      var area = document.getElementById('msg-area');
-      area.innerHTML =
-        '<div class="p2p-empty-chat" id="empty-chat">' +
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
-        '<span>已离开房间</span></div>';
-      updatePeerList([], []);
+      roomConfig.roomId = '';
+      roomConfig.password = '';
+      renderSettings();
     });
   };
 
@@ -948,33 +1566,76 @@
     var input = document.getElementById('chat-input');
     var text = input.value.trim();
     if (!text) return;
+    var mid = 'm' + (++state.msgSeq);
+    addMessage(p2p.peerId, text, mid, 'sending');
     p2p.sendChat(text);
-    addMessage(p2p.peerId, text);
+    // DataChannel.send 同步完成，立即标记已发送
+    updateMessageStatus(mid, 'sent');
     input.value = '';
   }
   window.sendChat = sendChat;
 
   function sendFile(file, type) {
-    var progress = createProgress();
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      p2p.sendFile(file);
+    var truncated = truncateFileName(file.name);
+    var progress = createFileProgress(file.name);
+    var localMsgId = 'file-' + Date.now();
+
+    // 本地预览（立即显示）
+    if (type === 'image' || file.type.startsWith('image/')) {
+      receiveFile(p2p.peerId, file.name, file.type, file, localMsgId);
+    } else {
       var mime = file.type || 'application/octet-stream';
-      var blob = new Blob([e.target.result], { type: mime });
-      receiveFile(p2p.peerId, file.name, mime, blob, 'self-' + Date.now());
-      removeProgress(progress);
+      receiveFile(p2p.peerId, file.name, mime, file, localMsgId);
+    }
+
+    // 状态回调
+    p2p.onFileProgress = function(info) {
+      progress.update(info.sent, info.total);
     };
-    reader.readAsArrayBuffer(file);
+    p2p.onTransferStatus = function(tid, st) {
+      if (st === 'cancelled' || st === 'failed') {
+        if (progress.parentNode) progress.parentNode.removeChild(progress);
+      } else if (st === 'sent') {
+        progress.markDone();
+      }
+    };
+
+    var transferId = p2p.sendFile(file);
+    if (!transferId) {
+      if (progress.parentNode) progress.parentNode.removeChild(progress);
+      return;
+    }
+
+    // 取消按钮
+    progress.querySelector('.p2p-file-cancel').onclick = function() {
+      p2p.cancelTransfer(transferId);
+      if (progress.parentNode) progress.parentNode.removeChild(progress);
+    };
   }
 
-  function createProgress() {
-    var p = document.createElement('div');
-    p.className = 'p2p-progress';
-    p.innerHTML = '<div class="p2p-progress-bar" style="width:100%;animation:p2p-spin 1s linear infinite;"></div>';
-    document.getElementById('msg-area').parentNode.insertBefore(p, document.querySelector('.p2p-input'));
-    return p;
+  function createFileProgress(fileName) {
+    var truncated = truncateFileName(fileName);
+    var div = document.createElement('div');
+    div.className = 'p2p-file-progress';
+    div.innerHTML =
+      '<div class="p2p-file-progress-name" title="' + escapeHtml(fileName) + '">' + escapeHtml(truncated) + '</div>' +
+      '<div class="p2p-file-progress-track"><div class="p2p-file-progress-fill"></div></div>' +
+      '<span class="p2p-file-progress-text">0%</span>' +
+      '<button class="p2p-file-cancel" title="取消发送">✕</button>';
+    document.getElementById('msg-area').parentNode.insertBefore(div, document.querySelector('.p2p-input'));
+
+    div.update = function(sent, total) {
+      var pct = Math.round(sent / total * 100);
+      div.querySelector('.p2p-file-progress-fill').style.width = pct + '%';
+      div.querySelector('.p2p-file-progress-text').textContent = pct + '%';
+    };
+    div.markDone = function() {
+      div.querySelector('.p2p-file-progress-text').textContent = '✓';
+      div.querySelector('.p2p-file-cancel').style.display = 'none';
+      setTimeout(function() { if (div.parentNode) div.parentNode.removeChild(div); }, 1200);
+    };
+    return div;
   }
-  function removeProgress(p) { if (p && p.parentNode) p.parentNode.removeChild(p); }
 
   window.downloadFile = function(index) {
     var m = state.messages[index];
@@ -1041,6 +1702,53 @@
     screenZoom = 1;
     applyScreenZoom();
   };
+
+  window.toggleFullscreen = function() {
+    var container = document.getElementById('p2p-screen-container');
+    var video = document.getElementById('p2p-screen-video');
+    if (video && video.requestFullscreen) {
+      video.requestFullscreen().catch(function(){});
+    }
+  };
+
+  (function makeDraggable() {
+    var container = document.getElementById('p2p-screen-container');
+    var label = container.querySelector('.p2p-screen-label');
+    var isDragging = false, startX, startY, origX, origY;
+
+    label.style.cursor = 'grab';
+    label.addEventListener('mousedown', function(e) {
+      if (e.button !== 0) return;
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      var rect = container.getBoundingClientRect();
+      origX = rect.left;
+      origY = rect.top;
+      container.style.left = origX + 'px';
+      container.style.top = origY + 'px';
+      container.style.right = 'auto';
+      container.style.bottom = 'auto';
+      label.style.cursor = 'grabbing';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!isDragging) return;
+      var dx = e.clientX - startX;
+      var dy = e.clientY - startY;
+      container.style.left = (origX + dx) + 'px';
+      container.style.top = (origY + dy) + 'px';
+    });
+
+    document.addEventListener('mouseup', function() {
+      if (isDragging) {
+        isDragging = false;
+        label.style.cursor = 'grab';
+      }
+    });
+  })();
+
   function applyScreenZoom() {
     var video = document.getElementById('p2p-screen-video');
     var levelEl = document.getElementById('screen-zoom-level');

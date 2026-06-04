@@ -65,7 +65,25 @@ GITHUB_API_ORIGIN = "https://api.github.com"
 # ── P2P 信令存储（内存） ──────────────────────────────────
 _p2p_signals: dict[str, list[dict]] = {}
 _p2p_signals_lock = threading.RLock()
-_p2p_rooms: dict[str, dict[str, float]] = {}
+_p2p_rooms: dict[str, dict] = {}
+# {
+#   "room": {
+#       "type": "websrc" | "server",
+#       "password": "",            # 空字符串或无此字段表示无密码
+#       "created_at": float,
+#       "creator": str,
+#       "peers": { "peer_id": {"name": str, "last_seen": float, "joined_at": float} }
+#   }
+# }
+
+# ── P2P 中转数据存储 ──────────────────────────────────────
+_p2p_relay_buffers: dict[str, list[dict]] = {}
+_p2p_relay_lock = threading.RLock()
+_p2p_relay_usage: dict[str, list[float]] = {}
+RELAY_RATE_LIMIT = 5 * 1024 * 1024       # 5 MB 每 5 分钟
+RELAY_RATE_WINDOW = 300                   # 300 秒 = 5 分钟
+RELAY_MAX_BUFFER = 200
+RELAY_FILE_MAX_SIZE = 5 * 1024 * 1024     # 单文件最大 5MB
 
 # ── 日志 ─────────────────────────────────────────────────
 
@@ -755,6 +773,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if req_path == '/api/p2p/signal':
             self._handle_p2p_poll()
             return
+        if req_path == '/api/p2p/room-info':
+            self._handle_p2p_room_info()
+            return
 
         # Giscus 代理 — 透明转发到 giscus.app
         if self._try_giscus_proxy(req_path):
@@ -771,6 +792,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
 
         if req_path == '/api/github-proxy/graphql':
             self._proxy_github_graphql()
+            return
+        if req_path == '/api/p2p/relay/send':
+            self._handle_p2p_relay_send()
             return
         if req_path == '/api/p2p/signal':
             self._handle_p2p_signal()
@@ -872,7 +896,16 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             target += '?' + qs
 
         try:
-            req = urllib.request.Request(target, headers={"User-Agent": user_agent()})
+            req = urllib.request.Request(target, headers={
+                "User-Agent": user_agent(),
+                "Origin": GISCUS_ORIGIN,
+                "Referer": f"{GISCUS_ORIGIN}/",
+            })
+            # 转发浏览器原始请求中的重要头
+            for h in ('Cookie', 'Authorization', 'Accept', 'Accept-Language'):
+                if h in self.headers:
+                    req.headers[h] = self.headers[h]
+
             with _ssl_urlopen(req, 20) as resp:
                 content = resp.read()
                 ct = resp.headers.get("Content-Type", "application/octet-stream")
@@ -892,6 +925,19 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(content)
                 return True
+        except urllib.error.HTTPError as e:
+            # giscus.app 返回非 2xx 是正常的（如讨论未创建时 404）
+            # 转发原始状态码和响应体，而不是返回 502
+            try:
+                body = e.read()
+                self.send_response(e.code)
+                self.send_header("Content-Type", e.headers.get("Content-Type", "application/json"))
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception:
+                self.send_error(e.code, str(e))
+            return True
         except Exception as e:
             log(f"Giscus proxy error ({path}): {e}")
             self.send_error(502, "Bad Gateway")
@@ -928,10 +974,19 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(502, "Bad Gateway")
 
     # -- P2P 信令 --
-    STALE_PEER_TIMEOUT = 15  # 秒 — 超过此时间未轮询视为断连
+    STALE_PEER_TIMEOUT = 120  # 秒 — 浏览器最小化时 setInterval 被节流到约 60s/次，120s 确保不误判
 
     def _store_signal(self, room: str, from_p: str, to_p: str, sig_type: str, data: dict):
         with _p2p_signals_lock:
+            # 存储 peer_leave 时移除该 peer 残留的 peer_join 信号，避免反复触发
+            if sig_type == 'peer_leave':
+                leaving_peer = data.get('peer', '')
+                if leaving_peer and room in _p2p_signals:
+                    _p2p_signals[room] = [
+                        s for s in _p2p_signals[room]
+                        if not (s['type'] == 'peer_join'
+                                and s['data'].get('peer') == leaving_peer)
+                    ]
             _p2p_signals.setdefault(room, []).append({
                 'from': from_p, 'to': to_p, 'type': sig_type,
                 'data': data, 'ts': time.time(),
@@ -942,12 +997,13 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if room not in _p2p_rooms:
             return
         now = time.time()
-        stale = [pid for pid, last_ts in list(_p2p_rooms[room].items())
-                 if now - last_ts > self.STALE_PEER_TIMEOUT]
+        peers_dict = _p2p_rooms[room].get("peers", {})
+        stale = [pid for pid, info in list(peers_dict.items())
+                 if now - info.get("last_seen", 0) > self.STALE_PEER_TIMEOUT]
         for pid in stale:
-            _p2p_rooms[room].pop(pid, None)
+            peers_dict.pop(pid, None)
             self._store_signal(room, pid, '*', 'peer_leave', {'peer': pid})
-        if not _p2p_rooms[room]:
+        if not peers_dict:
             del _p2p_rooms[room]
             _p2p_signals.pop(room, None)
 
@@ -955,16 +1011,52 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
             room = body.get('room', '')
+            room_type = body.get('room_type', 'websrc')
+            username = body.get('username', '')
+            password = body.get('password', '')
             if not room:
                 self.send_error(400, "Missing room"); return
             import uuid
             peer_id = uuid.uuid4().hex[:8]
             with _p2p_signals_lock:
-                _p2p_rooms.setdefault(room, {})[peer_id] = time.time()
-            self._store_signal(room, peer_id, '*', 'peer_join', {'peer': peer_id})
+                if room not in _p2p_rooms:
+                    _p2p_rooms[room] = {
+                        "type": room_type,
+                        "password": password,
+                        "created_at": time.time(),
+                        "creator": peer_id,
+                        "peers": {},
+                    }
+                else:
+                    room_pw = _p2p_rooms[room].get("password", "")
+                    if room_pw and password != room_pw:
+                        self._send_json({'error': 'wrong_password'})
+                        return
+                _p2p_rooms[room]["peers"][peer_id] = {
+                    "name": username or "",
+                    "last_seen": time.time(),
+                    "joined_at": time.time(),
+                }
+            self._store_signal(room, peer_id, '*', 'peer_join',
+                               {'peer': peer_id, 'name': username or ''})
             with _p2p_signals_lock:
-                peers = [p for p in _p2p_rooms.get(room, {}) if p != peer_id]
-            self._send_json({'peer': peer_id, 'peers': peers})
+                peers_info = []
+                for pid, info in _p2p_rooms.get(room, {}).get("peers", {}).items():
+                    if pid != peer_id:
+                        peers_info.append({
+                            "id": pid,
+                            "name": info.get("name", ""),
+                        })
+                room_info = {
+                    "type": _p2p_rooms.get(room, {}).get("type", "websrc"),
+                    "created_at": _p2p_rooms.get(room, {}).get("created_at", 0),
+                }
+            self._send_json({
+                'peer': peer_id,
+                'peers': [p["id"] for p in peers_info],
+                'peers_info': peers_info,
+                'room_info': room_info,
+            })
         except Exception as e:
             log(f"P2P join error: {e}"); self.send_error(400, "Bad request")
 
@@ -974,11 +1066,11 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             room, peer = body.get('room', ''), body.get('peer', '')
             with _p2p_signals_lock:
                 if room in _p2p_rooms:
-                    _p2p_rooms[room].pop(peer, None)
-                    # 广播 peer_leave 给房间内剩余成员
-                    if _p2p_rooms[room]:
+                    _p2p_rooms[room]["peers"].pop(peer, None)
+                    if _p2p_rooms[room]["peers"]:
                         self._store_signal(room, peer, '*', 'peer_leave', {'peer': peer})
                     else:
+                        # 所有用户退出 → 彻底清除房间，包括类型/状态
                         del _p2p_rooms[room]
                         _p2p_signals.pop(room, None)
             self.send_response(200); self.send_header("Content-Length", "0"); self.end_headers()
@@ -1004,10 +1096,19 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
 
         # 收集数据在锁内，发送响应在锁外
         signals = []
+        relay_msgs = []
         with _p2p_signals_lock:
             # 更新此 peer 的最近轮询时间，用于断连检测
-            if room in _p2p_rooms and peer in _p2p_rooms[room]:
-                _p2p_rooms[room][peer] = time.time()
+            if room in _p2p_rooms:
+                if peer in _p2p_rooms[room].get("peers", {}):
+                    _p2p_rooms[room]["peers"][peer]["last_seen"] = time.time()
+                elif _p2p_rooms[room]["peers"]:
+                    # 自己之前因超时被清理 → 自动重新注册（不广播 peer_join 避免通知骚扰）
+                    _p2p_rooms[room]["peers"][peer] = {
+                        "name": "",
+                        "last_seen": time.time(),
+                        "joined_at": time.time(),
+                    }
             # 清理过期的 peer
             self._cleanup_stale_peers(room)
 
@@ -1020,12 +1121,112 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                         signals.append(s)
                     elif is_broadcast:
                         signals.append(s)
-                        keep.append(s)
+                        # 广播信号保留 2s 即可，所有活跃 peer 每 1.2s 轮询，
+                        # 避免信号滞留反复触发回调
+                        if time.time() - s['ts'] < 2:
+                            keep.append(s)
                     else:
                         keep.append(s)
-                _p2p_signals[room] = [s for s in keep if time.time() - s['ts'] < 30]
+                _p2p_signals[room] = [s for s in keep if time.time() - s['ts'] < 10]
 
-        self._send_json({'signals': signals})
+            # 收集该 peer 的中转消息
+            if room in _p2p_relay_buffers:
+                keep_relay = []
+                for msg in _p2p_relay_buffers[room]:
+                    if msg['to'] == peer and msg['from'] != peer:
+                        relay_msgs.append(msg)
+                    else:
+                        keep_relay.append(msg)
+                _p2p_relay_buffers[room] = keep_relay
+
+        # 计算该 peer 的中转配额剩余
+        relay_remaining = self._get_relay_remaining(peer)
+        self._send_json({'signals': signals, 'relay': relay_msgs, 'relay_remaining': relay_remaining})
+
+    def _handle_p2p_room_info(self):
+        """查询房间信息（类型、用户数、用户列表），无需加入房间。"""
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        room = params.get('room', [''])[0]
+        if not room:
+            self._send_json({'exists': False})
+            return
+        with _p2p_signals_lock:
+            if room in _p2p_rooms:
+                peers_dict = _p2p_rooms[room].get("peers", {})
+                info = {
+                    'exists': True,
+                    'type': _p2p_rooms[room].get('type', 'websrc'),
+                    'has_password': bool(_p2p_rooms[room].get('password', '')),
+                    'user_count': len(peers_dict),
+                    'users': [
+                        {'id': pid, 'name': info.get('name', '')}
+                        for pid, info in peers_dict.items()
+                    ],
+                }
+            else:
+                info = {'exists': False}
+        self._send_json(info)
+
+    # ── P2P 中转模式 ──────────────────────────────────────
+
+    def _check_relay_rate(self, peer_id: str, size: int) -> bool:
+        """滑动窗口速率检查：每 peer 每 RELAY_RATE_WINDOW 秒最多 RELAY_RATE_LIMIT 字节。"""
+        now = time.time()
+        with _p2p_relay_lock:
+            records = _p2p_relay_usage.setdefault(peer_id, [])
+            # 移除窗口外的记录
+            cutoff = now - RELAY_RATE_WINDOW
+            _p2p_relay_usage[peer_id] = [(t, s) for (t, s) in records if t > cutoff]
+            total = sum(s for (_, s) in _p2p_relay_usage[peer_id])
+            if total + size > RELAY_RATE_LIMIT:
+                return False
+            _p2p_relay_usage[peer_id].append((now, size))
+            return True
+
+    def _handle_p2p_relay_send(self):
+        """接受中转数据，存入缓冲区供目标 peer 轮询获取。"""
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            room = body.get('room', '')
+            from_p = body.get('from', '')
+            to_p = body.get('to', '')
+            msg_type = body.get('type', 'chat')
+            data = body.get('data', '')
+            msg_id = body.get('id', '')
+
+            if not room or not from_p or not to_p or not data:
+                self._send_json({'ok': False, 'error': 'missing_fields'})
+                return
+
+            # 速率检查
+            data_size = len(data)
+            if not self._check_relay_rate(from_p, data_size):
+                self._send_json({'ok': False, 'error': 'rate_limit',
+                                 'retry_after': RELAY_RATE_WINDOW})
+                return
+
+            with _p2p_relay_lock:
+                _p2p_relay_buffers.setdefault(room, []).append({
+                    'from': from_p, 'to': to_p, 'type': msg_type,
+                    'data': data, 'id': msg_id, 'ts': time.time(),
+                })
+                # 限制缓冲区大小，防止内存泄漏
+                if len(_p2p_relay_buffers[room]) > RELAY_MAX_BUFFER:
+                    _p2p_relay_buffers[room] = _p2p_relay_buffers[room][-RELAY_MAX_BUFFER:]
+
+            self._send_json({'ok': True})
+        except Exception as e:
+            log(f"Relay send error: {e}")
+            self.send_error(400, "Bad request")
+
+    def _get_relay_remaining(self, peer_id: str) -> int:
+        """返回该 peer 在当前窗口内的剩余可用字节数。"""
+        now = time.time()
+        with _p2p_relay_lock:
+            records = _p2p_relay_usage.get(peer_id, [])
+            cutoff = now - RELAY_RATE_WINDOW
+            recent = sum(s for (t, s) in records if t > cutoff)
+            return max(0, RELAY_RATE_LIMIT - recent)
 
     def _send_json(self, data: dict):
         """发送 JSON 响应。"""
