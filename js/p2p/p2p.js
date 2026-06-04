@@ -18,6 +18,8 @@ class P2PManager {
     this.relayMode = false;       // true = 走服务器中转，false = WebRTC 直连
     this.backendAvail = false;
     this._pollTimer = null;
+    this._keepaliveWorker = null;
+    this._keepaliveFallbackTimer = null;
     this._fileBuffers = {};
     this._relayFileBuffers = {};  // 中转模式下的文件接收缓冲区
     this._pendingCandidates = {};
@@ -118,9 +120,11 @@ class P2PManager {
   _startPoll() {
     this._stopPoll();
     this._pollTimer = setInterval(() => this._poll(), 1200);
+    this._startKeepalive();
   }
   _stopPoll() {
     if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
+    this._stopKeepalive();
   }
 
   async _poll() {
@@ -147,6 +151,45 @@ class P2PManager {
     }
 
     if (!this.relayMode) this._checkPeerConnections();
+  }
+
+  /** 轻量保活：每 5s 发送一次，仅更新 last_seen */
+  _startKeepalive() {
+    try {
+      if (!this._keepaliveWorker) {
+        this._keepaliveWorker = new Worker("/js/p2p/keepalive-worker.js");
+      }
+      var url = window.location.origin + "/api/p2p/keepalive?room=" + encodeURIComponent(this.room) + "&peer=" + encodeURIComponent(this.peerId);
+      this._keepaliveWorker.postMessage({ type: "start", url: url });
+    } catch(e) { /* Web Worker 不支持时降级到 setInterval */
+      this._keepaliveFallback();
+    }
+  }
+
+  _stopKeepalive() {
+    if (this._keepaliveWorker) {
+      try { this._keepaliveWorker.postMessage({ type: "stop" }); } catch(e) {}
+    }
+    if (this._keepaliveFallbackTimer) {
+      clearInterval(this._keepaliveFallbackTimer);
+      this._keepaliveFallbackTimer = null;
+    }
+  }
+
+  _keepaliveFallback() {
+    var self = this;
+    this._keepaliveFallbackTimer = setInterval(function() {
+      self._keepalive();
+    }, 5000);
+  }
+
+  async _keepalive() {
+    if (!this.room || !this.peerId) return;
+    try {
+      await fetch(
+        `/api/p2p/keepalive?room=${encodeURIComponent(this.room)}&peer=${encodeURIComponent(this.peerId)}`
+      );
+    } catch { /* ignore */ }
   }
 
   _pollFail() {

@@ -1739,3 +1739,17 @@
   .p2p-detect-progress { margin-bottom: 20px; }
   .p2p-detect-btn { font-size: 13px; padding: 8px 20px; }
 }
+
+
+/* ── 底部刷新指示 ── */
+.p2p-refresh-indicator {
+  font-size: 10px;
+  color: #8e8e93;
+  padding: 4px 12px;
+  text-align: left;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+[data-theme="dark"] .p2p-refresh-indicator {
+  color: #555;
+}

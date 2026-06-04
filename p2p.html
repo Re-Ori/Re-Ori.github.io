@@ -35,7 +35,7 @@
 
 <script src="/js/navbar.js"></script>
 <script src="/js/main.js"></script>
-<script src="/js/p2p.js"></script>
+<script src="/js/p2p/p2p.js"></script>
 <script>
 (function() {
   var app = document.getElementById('app');
@@ -1046,6 +1046,10 @@
     p2p.onScreenEnd = handleScreenEnd;
     p2p.onUserName = handleUserName;
 
+    // 底部刷新时间指示
+    updateRefreshIndicator();
+    window._refreshTimer = setInterval(updateRefreshIndicator, 5000);
+
     // URL 房间参数在设置页自动预填
   }
 
@@ -1249,6 +1253,7 @@
             '</div>',
             '<canvas id="traffic-canvas" class="p2p-traffic-chart-canvas" width="180" height="80"></canvas>',
           '</div>',
+          '<div class="p2p-refresh-indicator" id="refresh-indicator">⏳ 刷新中</div>',
           '<div class="p2p-sidebar-footer" id="room-info">',
             '房间: -',
           '</div>',
@@ -1497,7 +1502,7 @@
             '<div class="p2p-file-card-body">' +
             '<div class="p2p-file-card-name">' + escapeHtml(m.name || '文件') + '</div>' +
             '<div class="p2p-file-card-size">' + formatFileSize(m.size || 0) + '</div>' +
-            '<div class="p2p-file-card-status">⏳ 正在接收…</div>' +
+            '<div class="p2p-file-card-status">⏳ 对方发送中…</div>' +
             '</div>';
         } else if (m.mime && m.mime.startsWith('image/') && m.blob) {
           var url = URL.createObjectURL(m.blob);
@@ -1562,6 +1567,7 @@
   };
 
   window.leaveRoom = function() {
+    if (window._refreshTimer) { clearInterval(window._refreshTimer); window._refreshTimer = null; }
     p2p.leaveRoom().then(function() {
       state.connected = false;
       state.messages = [];
@@ -1569,6 +1575,7 @@
       connectingPeers = [];
       roomConfig.roomId = '';
       roomConfig.password = '';
+      if (window._refreshTimer) { clearInterval(window._refreshTimer); window._refreshTimer = null; }
       renderSettings();
     });
   };
@@ -1812,6 +1819,16 @@
     p2p.userNames[peerId] = name;
     updatePeerList(connectedPeers, connectingPeers);
     renderMessages();
+  }
+
+  function updateRefreshIndicator() {
+    var el = document.getElementById("refresh-indicator");
+    if (!el) return;
+    if (!state.connected) { el.textContent = "⏳ 未连接"; return; }
+    var now = new Date();
+    var m = now.getMinutes(); if (m < 10) m = "0" + m;
+    var s = now.getSeconds(); if (s < 10) s = "0" + s;
+    el.textContent = "⏳ " + m + ":" + s + " · 5min 刷新";
   }
 
   function escapeHtml(str) {

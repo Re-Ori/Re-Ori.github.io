@@ -776,6 +776,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if req_path == '/api/p2p/room-info':
             self._handle_p2p_room_info()
             return
+        if req_path == '/api/p2p/keepalive':
+            self._handle_p2p_keepalive()
+            return
 
         # Giscus 代理 — 透明转发到 giscus.app
         if self._try_giscus_proxy(req_path):
@@ -974,7 +977,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(502, "Bad Gateway")
 
     # -- P2P 信令 --
-    STALE_PEER_TIMEOUT = 120  # 秒 — 浏览器最小化时 setInterval 被节流到约 60s/次，120s 确保不误判
+    STALE_PEER_TIMEOUT = 15   # 秒 — 超过此时间未收到轮询/保活视为断连
 
     def _store_signal(self, room: str, from_p: str, to_p: str, sig_type: str, data: dict):
         with _p2p_signals_lock:
@@ -1031,6 +1034,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                     room_pw = _p2p_rooms[room].get("password", "")
                     if room_pw and password != room_pw:
                         self._send_json({'error': 'wrong_password'})
+                        return
+                    if len(_p2p_rooms[room]["peers"]) >= 4:
+                        self._send_json({'error': 'room_full'})
                         return
                 _p2p_rooms[room]["peers"][peer_id] = {
                     "name": username or "",
@@ -1166,6 +1172,17 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 info = {'exists': False}
         self._send_json(info)
+
+    def _handle_p2p_keepalive(self):
+        """轻量保活：只更新 last_seen，不处理信号/中转消息。"""
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        room = params.get('room', [''])[0]
+        peer = params.get('peer', [''])[0]
+        if room and peer:
+            with _p2p_signals_lock:
+                if room in _p2p_rooms and peer in _p2p_rooms[room].get("peers", {}):
+                    _p2p_rooms[room]["peers"][peer]["last_seen"] = time.time()
+        self._send_json({'ok': True})
 
     # ── P2P 中转模式 ──────────────────────────────────────
 
