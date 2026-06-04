@@ -917,24 +917,29 @@
 .p2p-detect-collapsed .p2p-detect-desc,
 .p2p-detect-collapsed .p2p-detect-detail,
 .p2p-detect-collapsed .p2p-detect-bar-wrap,
-.p2p-detect-collapsed .p2p-detect-troubleshoot { display: none; }
+.p2p-detect-collapsed .p2p-detect-troubleshoot,
+.p2p-detect-collapsed .p2p-detect-troubleshoot ~ * { display: none; }
 .p2p-detect-collapsed.p2p-detect-expanded .p2p-detect-desc,
 .p2p-detect-collapsed.p2p-detect-expanded .p2p-detect-detail,
 .p2p-detect-collapsed.p2p-detect-expanded .p2p-detect-bar-wrap { display: block; }
 .p2p-detect-collapsed.p2p-detect-expanded .p2p-detect-troubleshoot { display: block; }
-.p2p-detect-collapsed .p2p-detect-body { display: flex; align-items: center; gap: 8px; }
-.p2p-detect-collapsed .p2p-detect-label { margin-bottom: 0; }
-.p2p-detect-collapsed .p2p-detect-label-status { display: none; }
+.p2p-detect-collapsed.p2p-detect-expanded .p2p-detect-body { display: block; }
+.p2p-detect-collapsed.p2p-detect-expanded .p2p-detect-label { margin-bottom: 1px; }
+.p2p-detect-collapsed .p2p-detect-body { display: flex; align-items: center; gap: 8px; flex: 1; }
+.p2p-detect-collapsed.p2p-detect-expanded .p2p-detect-label { margin-bottom: 1px; }
+.p2p-detect-collapsed .p2p-detect-icon { flex-shrink: 0; }
 .p2p-detect-collapsed .p2p-detect-body::after {
   content: '';
   width: 14px; height: 14px;
   margin-left: auto;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round'%3E%3Cpolyline points='9 18 15 12 9 6'/%3E%3C/svg%3E") center/contain no-repeat;
-  opacity: 0.5;
+  opacity: 0.4;
   transition: transform 0.2s;
+  flex-shrink: 0;
 }
 .p2p-detect-collapsed.p2p-detect-expanded .p2p-detect-body::after {
   transform: rotate(90deg);
+  opacity: 0.6;
 }
 
 /* 步骤图标容器 */
