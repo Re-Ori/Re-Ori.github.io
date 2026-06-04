@@ -7,13 +7,13 @@
       "html": "<div style=\"background: linear-gradient(135deg, rgba(var(--theme-color-rgb,57,159,255),0.10), rgba(var(--theme-color-rgb,57,159,255),0.02)); border: 1px solid rgba(var(--theme-color-rgb,57,159,255),0.15); border-radius: 8px; padding: 24px 20px; text-align: center;\"><span style=\"font-size: 15px; color: var(--theme-color,#399FFF); letter-spacing: 2px;\">敬请期待</span></div>"
     },
     {
-      "id": "20260602",
-      "priority": 20260602,
-      "title": "1.4.0 20260602 更新",
-      "description": "SSL证书支持,Giscus评论区国内代理加速,P2P直连空间(文字聊天/文件传输/屏幕共享),智能后端检测与降级",
-      "themeColor": "#9C27B0",
-      "date": "2026-06-02",
-      "url": "/blogs/update/20260602.html"
+      "id": "20260604",
+      "priority": 20260604,
+      "title": "1.4.0 20260604 更新",
+      "description": "P2P直连空间,SSL证书,Giscus国内加速,房间密码,流量监控,移动端适配",
+      "themeColor": "#FF6B35",
+      "date": "2026-06-04",
+      "url": "/blogs/update/20260604.html"
     },
     {
       "id": "20260601",

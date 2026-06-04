@@ -936,7 +936,6 @@
       // 加入成功 → 直接渲染界面并进入已连接状态
       startP2P();
       state.connected = true;
-      document.getElementById('btn-join').style.display = 'none';
       document.getElementById('btn-copy-room').style.display = '';
       document.getElementById('btn-leave').style.display = '';
       document.getElementById('room-input').style.display = 'none';
@@ -987,9 +986,7 @@
     // 中转模式：显示限速标签 + 流量图表
     if (p2p.relayMode) {
       var badge = document.getElementById('relay-badge');
-      if (badge) badge.style.display = '';
-      var remaining = document.getElementById('relay-remaining');
-      if (remaining) remaining.style.display = '';
+      if (badge) { badge.style.display = ''; badge.textContent = '🔄 中转 限速5MB/5min'; }
       var usageWrap = document.getElementById('relay-usage-wrap');
       if (usageWrap) usageWrap.style.display = '';
       var chartWrap = document.getElementById('traffic-chart-wrap');
@@ -999,30 +996,12 @@
       initTrafficChart();
 
       p2p.onRelayQuota = function(bytes) {
-        var b = document.getElementById('relay-badge');
         var fill = document.getElementById('relay-usage-fill');
         var txt = document.getElementById('relay-usage-text');
-        var rv = document.getElementById('relay-remaining-val');
-        if (!b) return;
-        var kb = Math.round(bytes / 1024);
         var usedKb = Math.round((5 * 1024 * 1024 - bytes) / 1024);
         var pct = (1 - bytes / (5 * 1024 * 1024)) * 100;
         if (fill) fill.style.width = Math.min(100, pct) + '%';
         if (txt) txt.textContent = usedKb + 'KB/5MB';
-        if (rv) {
-          rv.textContent = (kb > 1024 ? (kb/1024).toFixed(1) + ' MB' : kb + ' KB');
-          rv.style.color = kb >= 1024 ? '#e67e22' : '#ff3b30';
-        }
-        if (kb >= 1024) {
-          b.textContent = '🔄 中转 剩余' + kb + 'KB';
-          b.style.color = '#e67e22';
-        } else if (kb > 0) {
-          b.textContent = '🔄 中转 剩余' + kb + 'KB';
-          b.style.color = '#ff3b30';
-        } else {
-          b.textContent = '🔄 中转 限速中';
-          b.style.color = '#ff3b30';
-        }
         // 更新曲线图
         updateTrafficChart(bytes);
       };
@@ -1038,17 +1017,7 @@
     p2p.onScreenEnd = handleScreenEnd;
     p2p.onUserName = handleUserName;
 
-    (function autoJoin() {
-      var p = new URLSearchParams(window.location.search);
-      if (p.get('room')) {
-        var wait = setInterval(function() {
-          if (document.getElementById('btn-join')) {
-            clearInterval(wait);
-            setTimeout(window.joinRoom, 300);
-          }
-        }, 100);
-      }
-    })();
+    // URL 房间参数在设置页自动预填
   }
 
   // ════════════════════════════════════════════
@@ -1228,15 +1197,9 @@
     ].join('');
   }
 
-  // ── 启动：先显示功能介绍页 ──
-  var webrtcIssues = checkWebRTC();
-  if (webrtcIssues.length > 0) {
-    showWebRTCError(webrtcIssues);
-  } else {
-    // 不再直接检测，先显示功能介绍页
-    detect.passed = false;
-    renderIntro();
-  }
+  // ── 启动：显示功能介绍页（WebRTC 检测整合进环境检测步骤2） ──
+  detect.passed = false;
+  renderIntro();
 
   // ── 渲染界面 ──
   function renderUI() {
@@ -1276,13 +1239,11 @@
             '<label>房间</label>',
             '<input type="text" id="room-input" placeholder="输入房间ID" value="' + escapeHtml(roomConfig.roomId || defaultRoom()) + '">',
             '<span id="room-id-display" class="p2p-room-id-display" style="display:none;"></span>',
-            '<button class="p2p-btn" id="btn-join" onclick="joinRoom()">加入/创建</button>',
             '<button class="p2p-btn outline" id="btn-copy-room" onclick="copyRoomLink()" style="display:none;">📋 邀请</button>',
             '<button class="p2p-btn danger" id="btn-leave" onclick="leaveRoom()" style="display:none;">离开</button>',
             '<button class="p2p-btn warning" id="btn-stop-share" onclick="stopMyScreenShare()" style="display:none;">⏹ 停止共享</button>',
             '<span id="relay-badge" class="p2p-relay-badge" style="display:none;">🔄 中转</span>',
             '<span id="minimize-warn" class="p2p-minimize-warn" title="后台运行时连接可能不稳定">💡 请勿最小化窗口</span>',
-            '<span id="relay-remaining" class="p2p-relay-remaining" style="display:none;">剩余: <strong id="relay-remaining-val">5 MB</strong></span>',
             '<div id="relay-usage-wrap" class="p2p-relay-usage" style="display:none;"><div class="p2p-relay-usage-track"><div class="p2p-relay-usage-fill" id="relay-usage-fill"></div></div><span class="p2p-relay-usage-text" id="relay-usage-text">0/5MB</span></div>',
           '</div>',
 
@@ -1520,7 +1481,6 @@
         return;
       }
       state.connected = true;
-      document.getElementById('btn-join').style.display = 'none';
       document.getElementById('btn-copy-room').style.display = '';
       document.getElementById('btn-leave').style.display = '';
       document.getElementById('room-input').style.display = 'none';
