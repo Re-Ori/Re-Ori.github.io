@@ -784,7 +784,7 @@
 
         /* 房间 ID */
         '<div class="p2p-settings-section">',
-          '<div class="p2p-settings-label">🏠 房间 ID</div>',
+          '<div class="p2p-settings-label">🏠 房间 ID <span class="p2p-settings-random" id="btn-random-room" title="随机生成">🎲</span></div>',
           '<input type="text" class="p2p-settings-input" id="settings-room" placeholder="输入房间ID" value="' + escapeHtml(roomConfig.roomId) + '" autocomplete="off">',
           '<div id="room-info-hint" class="p2p-room-info-hint" style="display:none;"></div>',
           /* 房间类型选择器（新房间时动态显示） */
@@ -852,6 +852,17 @@
     // 返回检测
     document.getElementById('btn-back-detect').addEventListener('click', function() {
       runDetection();
+    });
+
+    // 随机房间号
+    document.getElementById('btn-random-room').addEventListener('click', function() {
+      var chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+      var rid = '';
+      for (var i = 0; i < 6; i++) rid += chars.charAt(Math.floor(Math.random() * chars.length));
+      roomConfig.roomId = rid;
+      var input = document.getElementById('settings-room');
+      input.value = rid;
+      input.dispatchEvent(new Event('input'));
     });
 
     // 房间 ID 输入 → 动态查询

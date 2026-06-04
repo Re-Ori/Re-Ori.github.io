@@ -1438,6 +1438,16 @@
 }
 [data-theme="dark"] .p2p-settings-label { color: #888; }
 
+.p2p-settings-random {
+  cursor: pointer;
+  font-size: 16px;
+  opacity: 0.6;
+  transition: opacity 0.15s, transform 0.15s;
+  user-select: none;
+}
+.p2p-settings-random:hover { opacity: 1; transform: scale(1.15); }
+.p2p-settings-random:active { transform: scale(0.95); }
+
 .p2p-settings-input {
   width: 100%;
   padding: 10px 12px;
