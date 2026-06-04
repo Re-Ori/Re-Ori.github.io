@@ -66,6 +66,7 @@ GITHUB_API_ORIGIN = "https://api.github.com"
 _p2p_signals: dict[str, list[dict]] = {}
 _p2p_signals_lock = threading.RLock()
 _p2p_rooms: dict[str, dict] = {}
+_p2p_last_activity = 0.0  # 最后一次 P2P API 活动时间
 # {
 #   "room": {
 #       "type": "websrc" | "server",
@@ -1011,6 +1012,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             _p2p_signals.pop(room, None)
 
     def _handle_p2p_join(self):
+        global _p2p_last_activity
+        _p2p_last_activity = time.time()
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
             room = body.get('room', '')
@@ -1067,6 +1070,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             log(f"P2P join error: {e}"); self.send_error(400, "Bad request")
 
     def _handle_p2p_leave(self):
+        global _p2p_last_activity
+        _p2p_last_activity = time.time()
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
             room, peer = body.get('room', ''), body.get('peer', '')
@@ -1150,6 +1155,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         self._send_json({'signals': signals, 'relay': relay_msgs, 'relay_remaining': relay_remaining})
 
     def _handle_p2p_room_info(self):
+        global _p2p_last_activity
+        _p2p_last_activity = time.time()
         """查询房间信息（类型、用户数、用户列表），无需加入房间。"""
         params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         room = params.get('room', [''])[0]
@@ -1174,6 +1181,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         self._send_json(info)
 
     def _handle_p2p_keepalive(self):
+        global _p2p_last_activity
+        _p2p_last_activity = time.time()
         """轻量保活：只更新 last_seen，不处理信号/中转消息。"""
         params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         room = params.get('room', [''])[0]
@@ -1365,9 +1374,24 @@ def main():
     inject_timestamp()
 
     try:
-        server.serve_forever()
+        # 后台线程：每 30s 清理残留的空房间（用户直接关标签页不会触发 leave）
+    def _cleanup_loop():
+        while True:
+            time.sleep(60)
+            if time.time() - _p2p_last_activity > 600:
+                continue
+            with _p2p_signals_lock:
+                empty = [r for r, data in list(_p2p_rooms.items()) if not data.get("peers")]
+                for r in empty:
+                    del _p2p_rooms[r]
+                    _p2p_signals.pop(r, None)
+                    _p2p_relay_buffers.pop(r, None)
+
+    threading.Thread(target=_cleanup_loop, daemon=True).start()
+
+    server.serve_forever()
     except KeyboardInterrupt:
-        log("\n👋 服务已停止")
+        log("\n服务已停止")
         server.server_close()
 
 

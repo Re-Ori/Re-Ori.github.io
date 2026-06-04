@@ -75,6 +75,10 @@ class P2PManager {
         if (this.onError) this.onError('密码错误');
         return data;
       }
+      if (data.error === 'room_full') {
+        if (this.onError) this.onError('房间已满');
+        return data;
+      }
       this.room = room;
       this.peerId = data.peer;
       console.log(`[P2P] Joined "${room}" as ${this.peerId} (type=${roomType}), peers:`, data.peers);

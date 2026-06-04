@@ -7,7 +7,7 @@
 与 server.py 使用相同的 HTTP Handler（Giscus 代理、白名单、P2P 信令等），
 但 **禁用了 GitHub 自动更新**，本地文件修改不会被远程覆盖。
 
-适合本地开发和调试。
+自动监控 server.py 变更并重启。
 
 用法:
     python dev_server.py                  # 默认端口 9876
@@ -17,6 +17,9 @@
 from __future__ import annotations
 
 import sys
+import os
+import time
+import threading
 from pathlib import Path
 
 # 把项目根目录加入 sys.path，确保能导入 server.py
@@ -25,6 +28,24 @@ sys.path.insert(0, str(_project_root))
 
 import http.server
 import server as prod  # 导入生产服务器的所有功能
+
+
+# 监控 server.py 的修改时间，自动重启
+_server_py = _project_root / "server.py"
+_server_mtime = _server_py.stat().st_mtime if _server_py.exists() else 0
+
+
+def _watch_server_py():
+    global _server_mtime
+    while True:
+        time.sleep(2)
+        try:
+            if _server_py.exists() and _server_py.stat().st_mtime != _server_mtime:
+                prod.log("检测到 server.py 变更，正在重启…")
+                time.sleep(1)
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+        except Exception:
+            pass
 
 
 class DevHandler(prod.AutoUpdateHandler):
@@ -57,19 +78,22 @@ def main():
     )
     addr = args.host if args.host != "0.0.0.0" else "localhost"
 
+    # 启动文件监控线程
+    threading.Thread(target=_watch_server_py, daemon=True).start()
+
     prod.log("")
     prod.log(f"{'='*50}")
-    prod.log(f"  🧪 开发测试服务器已启动")
+    prod.log(f"  开发测试服务器已启动")
     prod.log(f"  地址: http://{addr}:{args.port}")
     prod.log(f"  目录: {prod.PROJECT_ROOT}")
-    prod.log(f"  自动更新已禁用 — 本地修改不会被覆盖")
+    prod.log(f"  server.py 自动热重启已启用")
     prod.log(f"{'='*50}")
     prod.log("")
 
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        prod.log("\n👋 服务已停止")
+        prod.log("\n服务已停止")
         server.server_close()
 
 

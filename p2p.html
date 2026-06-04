@@ -784,8 +784,11 @@
 
         /* 房间 ID */
         '<div class="p2p-settings-section">',
-          '<div class="p2p-settings-label">🏠 房间 ID <span class="p2p-settings-random" id="btn-random-room" title="随机生成">🎲</span></div>',
-          '<input type="text" class="p2p-settings-input" id="settings-room" placeholder="输入房间ID" value="' + escapeHtml(roomConfig.roomId) + '" autocomplete="off">',
+          '<div class="p2p-settings-label">🏠 房间 ID</div>',
+          '<div class="p2p-settings-room-row">',
+            '<button class="p2p-settings-random-btn" id="btn-random-room" title="随机生成房间号">🎲</button>',
+            '<input type="text" class="p2p-settings-input" id="settings-room" placeholder="输入房间ID" value="' + escapeHtml(roomConfig.roomId) + '" autocomplete="off">',
+          '</div>',
           '<div id="room-info-hint" class="p2p-room-info-hint" style="display:none;"></div>',
           /* 房间类型选择器（新房间时动态显示） */
           '<div id="settings-type-section" style="display:none;">',
@@ -902,11 +905,16 @@
           var typeNames = { websrc: '⚡ WebRTC 直连', server: '🔄 服务器中转' };
           var typeTag = '<span class="p2p-room-type-tag ' + data.type + '">' + (typeNames[data.type] || data.type) + '</span>';
           var lockIcon = data.has_password ? ' 🔒' : '';
+          var isFull = data.user_count >= 4;
+          var capColor = isFull ? "#ff3b30" : "#8e8e93";
+          var capText = data.user_count + "/4 人" + (isFull ? " · 已满" : "");
           hint.innerHTML = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
             '🏠' + lockIcon + ' 已有房间 · 类型: ' + typeTag +
-            ' · <span style="color:#8e8e93;">' + data.user_count + ' 人在线</span>' +
+            ' · <span style="color:' + capColor + ';">' + capText + '</span>' +
             '</div>' +
-            '<button class="p2p-settings-btn primary" id="btn-join-existing" style="margin-top:10px;width:100%;">加入房间 →</button>';
+            (isFull
+              ? '<div style="margin-top:10px;padding:8px 12px;background:rgba(255,59,48,0.06);border-radius:6px;font-size:12px;color:#ff3b30;text-align:center;">🚫 房间已满，无法加入</div>'
+              : '<button class="p2p-settings-btn primary" id="btn-join-existing" style="margin-top:10px;width:100%;">加入房间 →</button>');
           hint.style.display = '';
           if (typeSection) typeSection.style.display = 'none';
           // 有密码时显示密码输入
@@ -954,10 +962,14 @@
 
     p2p.joinRoomWithConfig(roomId, roomType, roomConfig.username, roomConfig.password).then(function(data) {
       if (joinBtn) { joinBtn.disabled = false; joinBtn.textContent = '加入房间 →'; }
-      if (!data || data.error === 'wrong_password') {
+      if (!data || data.peer === undefined) {
         if (data && data.error === 'wrong_password') {
           window.showToast && window.showToast('🔒 密码错误', 3000);
           roomConfig.password = '';
+        } else if (data && data.error === 'room_full') {
+          window.showToast && window.showToast('房间已满（上限 4 人）', 3000);
+        } else if (!data) {
+          window.showToast && window.showToast('加入失败，请重试', 3000);
         }
         return;
       }
