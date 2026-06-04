@@ -264,6 +264,110 @@
   border-radius: 8px;
   cursor: pointer;
 }
+
+/* ── 文件卡片 ── */
+.p2p-file-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  max-width: 260px;
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.06);
+  animation: msgIn 0.2s ease;
+  position: relative;
+}
+[data-theme="dark"] .p2p-file-card {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.08);
+}
+.p2p-file-card.self {
+  align-self: flex-end;
+  background: rgba(var(--theme-color-rgb,57,159,255),0.08);
+  border-color: rgba(var(--theme-color-rgb,57,159,255),0.15);
+}
+.p2p-file-card.other {
+  align-self: flex-start;
+}
+.p2p-file-card .p2p-msg-from {
+  position: absolute;
+  top: -18px;
+  left: 0;
+  font-size: 11px;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+.p2p-file-card-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.p2p-file-card-body {
+  flex: 1;
+  min-width: 0;
+}
+.p2p-file-card-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-theme="dark"] .p2p-file-card-name { color: #ddd; }
+.p2p-file-card-size {
+  font-size: 11px;
+  color: #8e8e93;
+  margin-top: 1px;
+}
+.p2p-file-card-status {
+  font-size: 11px;
+  color: #e67e22;
+  margin-top: 2px;
+}
+.p2p-file-card-status::after {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  margin-left: 4px;
+  animation: p2p-status-blink 0.8s ease-in-out infinite;
+}
+.p2p-file-card-dl {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(var(--theme-color-rgb,57,159,255),0.1);
+  color: var(--theme-color, #399FFF);
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.p2p-file-card-dl:hover {
+  background: rgba(var(--theme-color-rgb,57,159,255),0.2);
+}
+.p2p-file-card-image {
+  width: 100%;
+}
+.p2p-file-card-image img {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: block;
+}
+.p2p-file-card-image-name {
+  font-size: 11px;
+  color: #8e8e93;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .p2p-msg .p2p-msg-time {
   font-size: 10px;
   opacity: 0.5;
@@ -808,6 +912,30 @@
 .p2p-detect-item.running { border-color: var(--theme-color, #399FFF); }
 .p2p-detect-item.pass   { border-color: #34c759; }
 .p2p-detect-item.fail   { border-color: #ff3b30; }
+
+/* 通过项自动收起 */
+.p2p-detect-collapsed .p2p-detect-desc,
+.p2p-detect-collapsed .p2p-detect-detail,
+.p2p-detect-collapsed .p2p-detect-bar-wrap,
+.p2p-detect-collapsed .p2p-detect-troubleshoot { display: none; }
+.p2p-detect-collapsed.p2p-detect-expanded .p2p-detect-desc,
+.p2p-detect-collapsed.p2p-detect-expanded .p2p-detect-detail,
+.p2p-detect-collapsed.p2p-detect-expanded .p2p-detect-bar-wrap { display: block; }
+.p2p-detect-collapsed.p2p-detect-expanded .p2p-detect-troubleshoot { display: block; }
+.p2p-detect-collapsed .p2p-detect-body { display: flex; align-items: center; gap: 8px; }
+.p2p-detect-collapsed .p2p-detect-label { margin-bottom: 0; }
+.p2p-detect-collapsed .p2p-detect-label-status { display: none; }
+.p2p-detect-collapsed .p2p-detect-body::after {
+  content: '';
+  width: 14px; height: 14px;
+  margin-left: auto;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round'%3E%3Cpolyline points='9 18 15 12 9 6'/%3E%3C/svg%3E") center/contain no-repeat;
+  opacity: 0.5;
+  transition: transform 0.2s;
+}
+.p2p-detect-collapsed.p2p-detect-expanded .p2p-detect-body::after {
+  transform: rotate(90deg);
+}
 
 /* 步骤图标容器 */
 .p2p-detect-icon {

@@ -70,6 +70,12 @@
     return base.substring(0, maxPre) + '...' + base.substring(base.length - maxSuf) + ext;
   }
 
+  function formatFileSize(bytes) {
+    if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+    if (bytes >= 1024) return Math.round(bytes / 1024) + ' KB';
+    return bytes + ' B';
+  }
+
   // ════════════════════════════════════════════
   //  功能介绍起始页
   // ════════════════════════════════════════════
@@ -296,6 +302,16 @@
     if (detail && detailEl) {
       detailEl.innerHTML = detail;
       detailEl.style.display = '';
+    }
+
+    // 通过项自动收起，点击可展开
+    if (status === 'pass') {
+      el.classList.add('p2p-detect-collapsed');
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', function toggleDetect(e) {
+        if (e.target.closest('a, button')) return;
+        el.classList.toggle('p2p-detect-expanded');
+      });
     }
   }
 
@@ -1013,6 +1029,7 @@
     p2p.onPeersChange = updatePeerList;
     p2p.onMessage = addMessage;
     p2p.onFile = receiveFile;
+    p2p.onFileMeta = receiveFileMeta;
     p2p.onScreenStream = receiveScreen;
     p2p.onPeerLeave = handlePeerLeave;
     p2p.onScreenEnd = handleScreenEnd;
@@ -1069,9 +1086,9 @@
     var minVal = 0;
     var data = trafficHistory;
 
-    // 清空
-    ctx.clearRect(0, 0, w * dpr, h * dpr);
-    ctx.save();
+    // 重置画布大小+变换矩阵，确保每帧正确
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
     ctx.scale(dpr, dpr);
 
     var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -1096,7 +1113,6 @@
     }
 
     if (data.length < 2) {
-      ctx.restore();
       return;
     }
 
@@ -1137,8 +1153,6 @@
     ctx.arc(lastX, lastY, 2.5, 0, Math.PI * 2);
     ctx.fillStyle = lineColor;
     ctx.fill();
-
-    ctx.restore();
   }
 
   // 窗口大小变化时重绘
@@ -1413,11 +1427,31 @@
     }
   }
 
-  function receiveFile(peerId, name, mime, blob, fileId) {
+  function receiveFileMeta(peerId, name, size, mime, fileId) {
     state.messages.push({
-      from: peerId, name: name, mime: mime,
-      blob: blob, fileId: fileId, type: 'file', time: new Date(),
+      from: peerId, name: name, mime: mime, size: size,
+      fileId: fileId, type: 'file', time: new Date(),
+      status: 'receiving', blob: null,
     });
+    renderMessages();
+  }
+
+  function receiveFile(peerId, name, mime, blob, fileId) {
+    var found = false;
+    for (var i = 0; i < state.messages.length; i++) {
+      if (state.messages[i].fileId === fileId && state.messages[i].type === 'file') {
+        state.messages[i].blob = blob;
+        state.messages[i].status = '';
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      state.messages.push({
+        from: peerId, name: name, mime: mime,
+        blob: blob, fileId: fileId, type: 'file', time: new Date(),
+      });
+    }
     renderMessages();
   }
 
@@ -1445,16 +1479,28 @@
         if (isSelf) html += '<span class="p2p-msg-status ' + (m.status || 'sent') + '"></span>';
         html += '<div class="p2p-msg-time">' + time + '</div></div>';
       } else if (m.type === 'file') {
-        html += '<div class="p2p-msg ' + (isSelf ? 'self' : 'other') + '">';
+        html += '<div class="p2p-file-card' + (isSelf ? ' self' : ' other') + '">';
         if (!isSelf) html += '<div class="p2p-msg-from">' + escapeHtml(p2p.userNames[m.from] || m.from) + '</div>';
-        if (m.mime && m.mime.startsWith('image/')) {
-          var url = URL.createObjectURL(m.blob);
-          html += '<img class="p2p-msg-image" src="' + url + '" alt="图片" onclick="window.open(\'' + url + '\')">';
-        } else {
-          html += '<div class="p2p-msg-file" onclick="downloadFile(' + i + ')">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="12"/><line x1="15" y1="15" x2="12" y2="12"/></svg>' +
-            '<span>' + escapeHtml(m.name || '文件') + '</span>' +
+        if (m.status === 'receiving') {
+          html += '<div class="p2p-file-card-icon">📄</div>' +
+            '<div class="p2p-file-card-body">' +
+            '<div class="p2p-file-card-name">' + escapeHtml(m.name || '文件') + '</div>' +
+            '<div class="p2p-file-card-size">' + formatFileSize(m.size || 0) + '</div>' +
+            '<div class="p2p-file-card-status">⏳ 正在接收…</div>' +
             '</div>';
+        } else if (m.mime && m.mime.startsWith('image/') && m.blob) {
+          var url = URL.createObjectURL(m.blob);
+          html += '<div class="p2p-file-card-image">' +
+            '<img src="' + url + '" alt="图片" onclick="window.open(\'' + url + '\')">' +
+            '<div class="p2p-file-card-image-name">' + escapeHtml(m.name || '图片') + '</div>' +
+            '</div>';
+        } else if (m.blob) {
+          html += '<div class="p2p-file-card-icon">📄</div>' +
+            '<div class="p2p-file-card-body">' +
+            '<div class="p2p-file-card-name">' + escapeHtml(m.name || '文件') + '</div>' +
+            '<div class="p2p-file-card-size">' + formatFileSize(m.blob.size) + '</div>' +
+            '</div>' +
+            '<button class="p2p-file-card-dl" onclick="downloadFile(' + i + ')" title="下载">⬇</button>';
         }
         html += '<div class="p2p-msg-time">' + time + '</div></div>';
       }

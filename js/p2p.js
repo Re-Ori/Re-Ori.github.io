@@ -38,6 +38,7 @@ class P2PManager {
     this.onPeerLeave = null;
     this.onScreenEnd = null;
     this.onUserName = null;
+    this.onFileMeta = null;        // (peerId, name, size, mime, fileId) => {}
     this._activeTransfers = {};    // transferId -> { cancelled: false }
     this.onTransferStatus = null;  // (id, status) => {}
   }
@@ -225,6 +226,7 @@ class P2PManager {
         try {
           const meta = JSON.parse(atob(msg.data));
           this._relayFileBuffers[msg.id] = { ...meta, chunks: [], received: 0 };
+          if (this.onFileMeta) this.onFileMeta(msg.from, meta.name, meta.size, meta.mime, msg.id);
         } catch {}
         break;
       }
@@ -523,6 +525,7 @@ class P2PManager {
               name: msg.name, size: msg.size, mime: msg.mime,
               chunks: [], received: 0,
             };
+            if (this.onFileMeta) this.onFileMeta(peerId, msg.name, msg.size, msg.mime, msg.id);
             break;
           case 'file-chunk': {
             const buf = this._fileBuffers[msg.id];
