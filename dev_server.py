@@ -4,10 +4,10 @@
 =============
 纯 Python 标准库，零依赖。
 
-与 server.py 使用相同的 app.AutoUpdateHandler（Giscus 代理、白名单、P2P 信令等），
+与 server.py 使用相同的 HTTP Handler（Giscus 代理、白名单、P2P 信令等），
 但 **禁用了 GitHub 自动更新**，本地文件修改不会被远程覆盖。
 
-自动监控 app.py / server.py 变更并重启。
+自动监控 server.py 变更并重启。
 
 用法:
     python dev_server.py                  # 默认端口 9876
@@ -22,39 +22,33 @@ import time
 import threading
 from pathlib import Path
 
-# 把项目根目录加入 sys.path，确保能导入 app.py
+# 把项目根目录加入 sys.path，确保能导入 server.py
 _project_root = Path(__file__).resolve().parent
 sys.path.insert(0, str(_project_root))
 
 import http.server
-import app as svc  # 导入远程服务器的所有功能
+import app as prod  # 导入 app.py 的服务功能
 
 
-# 监控 app.py 和 server.py 的修改时间，自动重启
-_watched_files = [
-    _project_root / "app.py",
-    _project_root / "server.py",
-]
-_watched_mtimes = {
-    p: p.stat().st_mtime if p.exists() else 0
-    for p in _watched_files
-}
+# 监控 server.py 的修改时间，自动重启
+_server_py = _project_root / "server.py"
+_server_mtime = _server_py.stat().st_mtime if _server_py.exists() else 0
 
 
-def _watch_files():
+def _watch_server_py():
+    global _server_mtime
     while True:
         time.sleep(2)
         try:
-            for fpath in _watched_files:
-                if fpath.exists() and fpath.stat().st_mtime != _watched_mtimes.get(fpath, 0):
-                    svc.log(f"检测到 {fpath.name} 变更，正在重启…")
-                    time.sleep(1)
-                    os.execv(sys.executable, [sys.executable] + sys.argv)
+            if _server_py.exists() and _server_py.stat().st_mtime != _server_mtime:
+                prod.log("检测到 server.py 变更，正在重启…")
+                time.sleep(1)
+                os.execv(sys.executable, [sys.executable] + sys.argv)
         except Exception:
             pass
 
 
-class DevHandler(svc.AutoUpdateHandler):
+class DevHandler(prod.AutoUpdateHandler):
     """开发模式 Handler — 去掉自动更新，其余功能完全一致。"""
 
     @classmethod
@@ -85,21 +79,21 @@ def main():
     addr = args.host if args.host != "0.0.0.0" else "localhost"
 
     # 启动文件监控线程
-    threading.Thread(target=_watch_files, daemon=True).start()
+    threading.Thread(target=_watch_server_py, daemon=True).start()
 
-    svc.log("")
-    svc.log(f"{'='*50}")
-    svc.log(f"  开发测试服务器已启动")
-    svc.log(f"  地址: http://{addr}:{args.port}")
-    svc.log(f"  目录: {svc.PROJECT_ROOT}")
-    svc.log(f"  app.py / server.py 自动热重启已启用")
-    svc.log(f"{'='*50}")
-    svc.log("")
+    prod.log("")
+    prod.log(f"{'='*50}")
+    prod.log(f"  开发测试服务器已启动")
+    prod.log(f"  地址: http://{addr}:{args.port}")
+    prod.log(f"  目录: {prod.PROJECT_ROOT}")
+    prod.log(f"  server.py 自动热重启已启用")
+    prod.log(f"{'='*50}")
+    prod.log("")
 
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        svc.log("\n服务已停止")
+        prod.log("\n服务已停止")
         server.server_close()
 
 
