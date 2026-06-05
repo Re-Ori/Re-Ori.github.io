@@ -991,3 +991,25 @@ document.addEventListener('DOMContentLoaded', () => {
   blogRenderer.init();
   window.blogRenderer = blogRenderer;
 });
+
+// ===== AutoUpdate Timestamp (do not remove) =====
+// 此区块由 AutoUpdate Server 自动维护
+(function() {
+  console.log(
+    '%c📦 AutoUpdate',
+    'color: #4CAF50; font-size: 13px; font-weight: bold;'
+  );
+  console.log(
+    '  本地文件版本: %s',
+    '2026.06.05 22:51:38 [UTC+8]'
+  );
+  console.log(
+    '  GitHub 远程版本: %s',
+    '2026.06.05 20:59:29 [UTC+8] [63ea5c6]'
+  );
+  console.log(
+    '  最新检查时间: %s',
+    '2026.06.05 22:29:17 [UTC+8]'
+  );
+})();
+// ===== End AutoUpdate Timestamp =====
