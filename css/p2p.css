@@ -268,15 +268,16 @@
 /* ── 文件卡片 ── */
 .p2p-file-card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 10px 14px;
   border-radius: 10px;
-  max-width: 260px;
+  max-width: 280px;
   background: rgba(0,0,0,0.04);
   border: 1px solid rgba(0,0,0,0.06);
   animation: msgIn 0.2s ease;
   position: relative;
+  flex-wrap: wrap;
 }
 [data-theme="dark"] .p2p-file-card {
   background: rgba(255,255,255,0.06);
@@ -352,13 +353,16 @@
 }
 .p2p-file-card-image {
   width: 100%;
+  flex: 0 0 100%;
+  text-align: center;
 }
 .p2p-file-card-image img {
   max-width: 100%;
   max-height: 200px;
   border-radius: 6px;
   cursor: pointer;
-  display: block;
+  display: inline-block;
+  object-fit: contain;
 }
 .p2p-file-card-image-name {
   font-size: 11px;
@@ -370,9 +374,15 @@
 }
 .p2p-msg .p2p-msg-time {
   font-size: 10px;
-  opacity: 0.5;
+  color: #aaa;
   margin-top: 4px;
   text-align: right;
+}
+.p2p-file-card .p2p-msg-time {
+  font-size: 10px;
+  color: #aaa;
+  margin-top: 4px;
+  margin-left: auto;
 }
 
 .p2p-system-msg {

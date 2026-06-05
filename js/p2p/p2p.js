@@ -45,6 +45,14 @@ class P2PManager {
     this.onTransferStatus = null;  // (id, status) => {}
   }
 
+  /** 安全地将字节数组编码为 base64（避免 String.fromCharCode(...largeArray) 的展开限制） */
+  _encodeChunk(chunk) {
+    const len = chunk.length;
+    let binary = "";
+    for (let i = 0; i < len; i++) binary += String.fromCharCode(chunk[i]);
+    return btoa(binary);
+  }
+
   // ── 后端检测 ──
 
   async checkBackend() {
@@ -697,7 +705,7 @@ class P2PManager {
           return;
         }
         const chunk = arr.slice(i * CHUNK, (i + 1) * CHUNK);
-        const b64 = btoa(String.fromCharCode(...chunk));
+        const b64 = self._encodeChunk(chunk);
         const msg = JSON.stringify({ type: 'file-chunk', id: transferId, seq: i, total, data: b64 });
         for (const p of peers) p.channel.send(msg);
         if (self.onFileProgress) {
@@ -737,9 +745,8 @@ class P2PManager {
         return;
       }
       const chunk = arr.slice(i * CHUNK, (i + 1) * CHUNK);
-      const b64 = btoa(String.fromCharCode(...chunk));
+      const b64 = this._encodeChunk(chunk);
       sentBytes += chunk.length;
-      // 发送给所有目标 peer
       for (const pid of targetPeers) {
         this.sendRelayData(pid, 'file-chunk', b64, id);
       }

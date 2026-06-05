@@ -1374,22 +1374,21 @@ def main():
     inject_timestamp()
 
     try:
-        # 后台线程：每 30s 清理残留的空房间（用户直接关标签页不会触发 leave）
-    def _cleanup_loop():
-        while True:
-            time.sleep(60)
-            if time.time() - _p2p_last_activity > 600:
-                continue
-            with _p2p_signals_lock:
-                empty = [r for r, data in list(_p2p_rooms.items()) if not data.get("peers")]
-                for r in empty:
-                    del _p2p_rooms[r]
-                    _p2p_signals.pop(r, None)
-                    _p2p_relay_buffers.pop(r, None)
+        # 后台线程：每 60s 清理残留的空房间（10 分钟无活动则跳过）
+        def _cleanup_loop():
+            while True:
+                time.sleep(60)
+                if time.time() - _p2p_last_activity > 600:
+                    continue
+                with _p2p_signals_lock:
+                    empty = [r for r, data in list(_p2p_rooms.items()) if not data.get("peers")]
+                    for r in empty:
+                        del _p2p_rooms[r]
+                        _p2p_signals.pop(r, None)
+                        _p2p_relay_buffers.pop(r, None)
 
-    threading.Thread(target=_cleanup_loop, daemon=True).start()
-
-    server.serve_forever()
+        threading.Thread(target=_cleanup_loop, daemon=True).start()
+        server.serve_forever()
     except KeyboardInterrupt:
         log("\n服务已停止")
         server.server_close()
