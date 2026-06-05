@@ -283,7 +283,8 @@ class P2PManager {
         break;
       case 'file-meta': {
         try {
-          const meta = JSON.parse(atob(msg.data));
+          const json = decodeURIComponent(escape(atob(msg.data)));
+          const meta = JSON.parse(json);
           this._relayFileBuffers[msg.id] = { ...meta, chunks: [], received: 0 };
           if (this.onFileMeta) this.onFileMeta(msg.from, meta.name, meta.size, meta.mime, msg.id);
         } catch {}
@@ -655,7 +656,7 @@ class P2PManager {
     const CHUNK = 16 * 1024;
     const KB = 1024;
     const FILE_MAX_SIZE = this.relayMode ? 0 : 5 * 1024 * 1024;  // relay 无限制
-    const CHUNK_DELAY = 1000;  // 固定 1s/chunk，配合服务器限速
+    const CHUNK_DELAY = this.relayMode ? 200 : 0;  // relay 200ms=80KB/s, 低于限速线
 
     if (FILE_MAX_SIZE > 0 && file.size > FILE_MAX_SIZE) {
       if (this.onError) this.onError('文件超过 5MB 限制，无法发送');
@@ -676,7 +677,7 @@ class P2PManager {
         name: file.name, size: file.size,
         mime: file.type || 'application/octet-stream',
       });
-      // 先发 meta，确认到达后再发 chunks
+      // 先发 meta（UTF-8 安全编码），确认到达后再发 chunks
       this._sendRelayFile(file, transferId, targetPeers, CHUNK, CHUNK_DELAY, meta);
       return transferId;
     }
@@ -727,58 +728,73 @@ class P2PManager {
 
   /** 中转模式：先发 meta，再分片发送文件，遇限速自动等待后重试 */
   async _sendRelayFile(file, id, targetPeers, CHUNK, delay, metaJson) {
-    // 1. 先发送 meta，确认对方收到
+    // 1. 先发送 meta（UTF-8 安全编码，每个 peer 最多重试 10 次，500ms 间隔）
+    const metaSafe = unescape(encodeURIComponent(metaJson));
     for (const pid of targetPeers) {
+      let ok = false;
       for (let r = 0; r < 10; r++) {
-        const res = await this.sendRelayData(pid, 'file-meta', btoa(metaJson), id);
-        if (res && res.ok) break;
-        await new Promise(ok => setTimeout(ok, 500));
+        const res = await this.sendRelayData(pid, 'file-meta', btoa(metaSafe), id);
+        if (res && res.ok) { ok = true; break; }
+        await new Promise(r => setTimeout(r, 500));
+      }
+      if (!ok) {
+        console.error(`[P2P] meta 发送失败（${pid}）`);
+        this._failTransfer(id);
+        return;
       }
     }
 
     // 2. 读取文件
     const buffer = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result);
-      reader.onerror = reject;
-      reader.readAsArrayBuffer(file);
+      const r2 = new FileReader();
+      r2.onload = e => resolve(e.target.result);
+      r2.onerror = reject;
+      r2.readAsArrayBuffer(file);
     });
     const arr = new Uint8Array(buffer);
     const fileSize = arr.length;
     const totalChunks = Math.ceil(fileSize / CHUNK);
-    let sentBytes = 0;
+    let confirmedBytes = 0;
 
-    // 3. 逐 chunk 发送
+    // 3. 逐 chunk 发送（确认送达后才计入已发送）
     for (let i = 0; i < totalChunks; i++) {
       if (this._activeTransfers[id]?.cancelled) {
-        delete this._activeTransfers[id];
-        if (this.onTransferStatus) this.onTransferStatus(id, 'cancelled');
+        this._failTransfer(id);
         return;
       }
       const chunk = arr.slice(i * CHUNK, (i + 1) * CHUNK);
       const b64 = this._encodeChunk(chunk);
-      sentBytes += chunk.length;
 
-      // 发给所有目标 peer，遇限速则等待后重试
+      let chunkOk = true;
       for (const pid of targetPeers) {
+        let delivered = false;
         for (let r = 0; r < 15; r++) {
           const res = await this.sendRelayData(pid, 'file-chunk', b64, id);
-          if (res && res.ok) break;
+          if (res && res.ok) { delivered = true; break; }
           if (res && res.error === 'rate_limit') {
-            const waitSec = res.retry_after || 10;
-            console.log(`[P2P] 限速，等待 ${Math.min(waitSec, 5)}s 后重试 chunk ${i}`);
-            await new Promise(ok => setTimeout(ok, Math.min(waitSec, 5) * 1000 + 200));
+            // 限速：retry_after=300s（滑动窗口），等待窗口重置
+            const wait = Math.min(res.retry_after || 10, 10);
+            console.log(`[P2P] 限速，等待 ${wait}s`);
+            await new Promise(r => setTimeout(r, wait * 1000));
             continue;
           }
-          await new Promise(ok => setTimeout(ok, 1000));
+          await new Promise(r => setTimeout(r, 1000));
         }
+        if (!delivered) { chunkOk = false; break; }
       }
 
+      if (!chunkOk) {
+        console.error(`[P2P] chunk ${i}/${totalChunks} 发送失败`);
+        this._failTransfer(id);
+        return;
+      }
+
+      confirmedBytes += chunk.length;
       if (this.onFileProgress) {
-        this.onFileProgress({ sent: sentBytes, total: fileSize, id });
+        this.onFileProgress({ sent: confirmedBytes, total: fileSize, id });
       }
       if (i < totalChunks - 1) {
-        await new Promise(ok => setTimeout(ok, delay));
+        await new Promise(r => setTimeout(r, delay));
       }
     }
 
@@ -788,6 +804,12 @@ class P2PManager {
     }
     delete this._activeTransfers[id];
     if (this.onTransferStatus) this.onTransferStatus(id, 'sent');
+  }
+
+  /** 中转模式：发送失败，清理并通知 */
+  _failTransfer(id) {
+    delete this._activeTransfers[id];
+    if (this.onTransferStatus) this.onTransferStatus(id, 'failed');
   }
 
   /** 中转发送文件的方法名（供上层调用） */
