@@ -22,7 +22,6 @@ _p2p_relay_usage: dict[str, list[float]] = {}
 RELAY_RATE_LIMIT = 5 * 1024 * 1024
 RELAY_RATE_WINDOW = 300
 RELAY_MAX_BUFFER = 200
-RELAY_FILE_MAX_SIZE = 5 * 1024 * 1024
 
 _on_access_check = lambda: None  # server.py \u5c06\u66ff\u6362\u6b64\u56de\u8c03
 
@@ -362,6 +361,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             import uuid
             peer_id = uuid.uuid4().hex[:8]
             with _p2p_signals_lock:
+                # 加入前先清理过期 peer
+                self._cleanup_stale_peers(room)
                 if room not in _p2p_rooms:
                     _p2p_rooms[room] = {
                         "type": room_type,
@@ -488,13 +489,13 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 _p2p_relay_buffers[room] = keep_relay
 
         # 计算该 peer 的中转配额剩余
-        relay_remaining = self._get_relay_remaining(peer)
+        relay_remaining = self._get_relay_remaining(peer, room)
         self._send_json({'signals': signals, 'relay': relay_msgs, 'relay_remaining': relay_remaining})
 
     def _handle_p2p_room_info(self):
         global _p2p_last_activity
         _p2p_last_activity = time.time()
-        """查询房间信息（类型、用户数、用户列表），无需加入房间。"""
+        """查询房间信息（类型、用户数、用户列表），先清理过期 peer。"""
         params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         room = params.get('room', [''])[0]
         if not room:
@@ -502,11 +503,12 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             return
         with _p2p_signals_lock:
             if room in _p2p_rooms:
-                peers_dict = _p2p_rooms[room].get("peers", {})
+                self._cleanup_stale_peers(room)  # 清理后再返回
+                peers_dict = _p2p_rooms[room].get("peers", {}) if room in _p2p_rooms else {}
                 info = {
-                    'exists': True,
-                    'type': _p2p_rooms[room].get('type', 'websrc'),
-                    'has_password': bool(_p2p_rooms[room].get('password', '')),
+                    'exists': room in _p2p_rooms,
+                    'type': _p2p_rooms[room].get('type', 'websrc') if room in _p2p_rooms else 'websrc',
+                    'has_password': bool(_p2p_rooms[room].get('password', '')) if room in _p2p_rooms else False,
                     'user_count': len(peers_dict),
                     'users': [
                         {'id': pid, 'name': info.get('name', '')}
@@ -561,20 +563,25 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({'ok': False, 'error': 'missing_fields'})
                 return
 
-            # 速率检查
-            data_size = len(data)
-            if not self._check_relay_rate(from_p, data_size):
-                self._send_json({'ok': False, 'error': 'rate_limit',
-                                 'retry_after': RELAY_RATE_WINDOW})
-                return
+            # WebRTC 直连房间（websrc）无速率与文件大小限制
+            with _p2p_signals_lock:
+                is_webrtc = _p2p_rooms.get(room, {}).get("type") == "websrc"
+
+            if not is_webrtc:
+                # 非 WebRTC 房间：滑动窗口速率检查
+                data_size = len(data)
+                if not self._check_relay_rate(from_p, data_size):
+                    self._send_json({'ok': False, 'error': 'rate_limit',
+                                     'retry_after': RELAY_RATE_WINDOW})
+                    return
 
             with _p2p_relay_lock:
                 _p2p_relay_buffers.setdefault(room, []).append({
                     'from': from_p, 'to': to_p, 'type': msg_type,
                     'data': data, 'id': msg_id, 'ts': time.time(),
                 })
-                # 限制缓冲区大小，防止内存泄漏
-                if len(_p2p_relay_buffers[room]) > RELAY_MAX_BUFFER:
+                # 非 WebRTC 房间限制缓冲区大小，防止内存泄漏
+                if not is_webrtc and len(_p2p_relay_buffers[room]) > RELAY_MAX_BUFFER:
                     _p2p_relay_buffers[room] = _p2p_relay_buffers[room][-RELAY_MAX_BUFFER:]
 
             self._send_json({'ok': True})
@@ -582,8 +589,11 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             log(f"Relay send error: {e}")
             self.send_error(400, "Bad request")
 
-    def _get_relay_remaining(self, peer_id: str) -> int:
-        """返回该 peer 在当前窗口内的剩余可用字节数。"""
+    def _get_relay_remaining(self, peer_id: str, room: str = "") -> int:
+        """返回该 peer 在当前窗口内的剩余可用字节数。WebRTC 房间无限制。"""
+        with _p2p_signals_lock:
+            if room and _p2p_rooms.get(room, {}).get("type") == "websrc":
+                return 2**63 - 1  # 无限制
         now = time.time()
         with _p2p_relay_lock:
             records = _p2p_relay_usage.get(peer_id, [])
@@ -676,18 +686,29 @@ def main():
     # 在 server.py 下运行时由 server.py 注入时间戳
 
     try:
-        # 后台线程：每 60s 清理残留的空房间（10 分钟无活动则跳过）
+        # 后台线程：每 60s 清理残留的空房间与过期 peer
         def _cleanup_loop():
             while True:
                 time.sleep(60)
-                if time.time() - _p2p_last_activity > 600:
-                    continue
-                with _p2p_signals_lock:
-                    empty = [r for r, data in list(_p2p_rooms.items()) if not data.get("peers")]
-                    for r in empty:
-                        del _p2p_rooms[r]
-                        _p2p_signals.pop(r, None)
-                        _p2p_relay_buffers.pop(r, None)
+                try:
+                    now = time.time()
+                    with _p2p_signals_lock:
+                        # 清理超过 15 秒未轮询的 stale peer
+                        stale_rooms = []
+                        for r, rdata in list(_p2p_rooms.items()):
+                            peers = rdata.get("peers", {})
+                            dead = [pid for pid, info in list(peers.items())
+                                    if now - info.get("last_seen", 0) > 15]
+                            for pid in dead:
+                                del peers[pid]
+                            if not peers:
+                                stale_rooms.append(r)
+                        for r in stale_rooms:
+                            del _p2p_rooms[r]
+                            _p2p_signals.pop(r, None)
+                            _p2p_relay_buffers.pop(r, None)
+                except Exception:
+                    pass
 
         threading.Thread(target=_cleanup_loop, daemon=True).start()
         server.serve_forever()

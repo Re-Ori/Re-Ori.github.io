@@ -251,19 +251,23 @@ class P2PManager {
 
   // ── 中转模式 ──────────────────────────────────────────
 
-  /** 发送中转数据到另一个 peer */
-  sendRelayData(to, type, dataBase64, id) {
+  /** 发送中转数据到另一个 peer，返回服务器响应（可能被限速） */
+  async sendRelayData(to, type, dataBase64, id) {
     if (!this.room || !this.peerId) return null;
     const msgId = id || Math.random().toString(36).substring(2, 10);
-    fetch('/api/p2p/relay/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        room: this.room, from: this.peerId, to,
-        type, data: dataBase64, id: msgId,
-      }),
-    }).catch(() => {});
-    return msgId;
+    try {
+      const r = await fetch('/api/p2p/relay/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room: this.room, from: this.peerId, to,
+          type, data: dataBase64, id: msgId,
+        }),
+      });
+      return await r.json();
+    } catch {
+      return null;
+    }
   }
 
   /** 处理从中转轮询收到的消息 */
@@ -723,12 +727,11 @@ class P2PManager {
     return transferId;
   }
 
-  /** 中转模式：限速分片发送文件 */
+  /** 中转模式：限速分片发送文件，自动重试限速 */
   async _sendRelayFileChunks(file, id, targetPeers, CHUNK, delay) {
     const totalChunks = Math.ceil(file.size / CHUNK);
     let sentBytes = 0;
 
-    // 读文件
     const buffer = await new Promise((resolve, reject) => {
       const r = new FileReader();
       r.onload = e => resolve(e.target.result);
@@ -747,21 +750,31 @@ class P2PManager {
       const chunk = arr.slice(i * CHUNK, (i + 1) * CHUNK);
       const b64 = this._encodeChunk(chunk);
       sentBytes += chunk.length;
+
+      // 逐个 peer 发送，遇限速时等待后重试
       for (const pid of targetPeers) {
-        this.sendRelayData(pid, 'file-chunk', b64, id);
+        for (let retry = 0; retry < 10; retry++) {
+          const result = await this.sendRelayData(pid, 'file-chunk', b64, id);
+          if (result && result.ok) break;
+          if (result && result.error === 'rate_limit') {
+            const wait = (result.retry_after || 10) / 1000;
+            console.log(`[P2P] 限速，等待 ${wait}s 后重试 chunk ${i}`);
+            await new Promise(r => setTimeout(r, wait * 1000 + 100));
+            continue;
+          }
+          // 其他错误，短暂等待后重试
+          await new Promise(r => setTimeout(r, 1000));
+        }
       }
-      // 报告进度
+
       if (this.onFileProgress) {
         this.onFileProgress({ sent: sentBytes, total: fileSize, id });
-      } else {
-        console.log('[P2P] No onFileProgress callback for chunk', i, '/', totalChunks);
       }
-      // 限速：等待后再发下一个 chunk
       if (i < totalChunks - 1) {
         await new Promise(r => setTimeout(r, delay));
       }
     }
-    // 完成
+
     if (this.onFileProgress) {
       this.onFileProgress({ sent: fileSize, total: fileSize, id, done: true });
     }

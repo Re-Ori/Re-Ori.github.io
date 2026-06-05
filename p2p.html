@@ -1240,6 +1240,43 @@
   }
 
   // ── 启动：显示功能介绍页（WebRTC 检测整合进环境检测步骤2） ──
+  // ── 断连弹窗与连接状态指示器 ──
+
+  var modalHtml =
+    '<div id="p2p-disconnect-overlay" class="p2p-modal-overlay" style="display:none;">' +
+      '<div class="p2p-modal">' +
+        '<div class="p2p-modal-icon">⚠️</div>' +
+        '<div class="p2p-modal-title">连接已断开</div>' +
+        '<div class="p2p-modal-text" id="disconnect-text">与服务器的连接已断开</div>' +
+        '<div class="p2p-modal-actions">' +
+          '<button class="p2p-modal-btn primary" id="btn-reconnect" onclick="window.reconnect()">&#x1f504; 重新连接</button>' +
+          '<button class="p2p-modal-btn" onclick="window.leaveRoom()">离开房间</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div id="conn-status" class="p2p-conn-status connected" title="与服务器的连接状态">' +
+      '<span class="p2p-conn-dot"></span>' +
+      '<span class="p2p-conn-label">已连接</span>' +
+    '</div>';
+
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+  window.reconnect = function() {
+    document.getElementById('p2p-disconnect-overlay').style.display = 'none';
+    var el = document.getElementById('conn-status');
+    if (el) { el.className = 'p2p-conn-status reconnecting'; el.querySelector(".p2p-conn-label").textContent = '重连中'; }
+    window.location.reload();
+  };
+
+  function setConnStatus(type, label) {
+    var el = document.getElementById('conn-status');
+    if (!el) return;
+    el.className = 'p2p-conn-status ' + (type || 'connected');
+    var d = el.querySelector('.p2p-conn-dot'), l = el.querySelector('.p2p-conn-label');
+    if (d) d.style.backgroundColor = type === 'connected' ? '#34c759' : type === 'disconnected' ? '#ff3b30' : '#ff9500';
+    if (l) l.textContent = label || '已连接';
+  }
+
   detect.passed = false;
   renderIntro();
 
@@ -1380,9 +1417,22 @@
       window.showToast && window.showToast(msg, 3000);
     };
     p2p.onDisconnect = function(msg) {
-      window.showToast && window.showToast(msg, 5000);
+      var overlay = document.getElementById('p2p-disconnect-overlay');
+      if (overlay) {
+        var text = document.getElementById('disconnect-text');
+        if (text) text.textContent = msg || '与服务器的连接已断开';
+        overlay.style.display = '';
+      }
+      setConnStatus('disconnected', '已断连');
       addSystemMsg('⚠️ ' + msg);
     };
+    // 连接成功时更新状态
+    p2p.onPeersChange = (function(orig) {
+      return function(connected, all) {
+        setConnStatus('connected', '已连接');
+        if (orig) orig(connected, all);
+      };
+    })(p2p.onPeersChange);
   }
 
   function updatePeerList(connected, all) {

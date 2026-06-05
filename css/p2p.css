@@ -1789,3 +1789,111 @@
 [data-theme="dark"] .p2p-refresh-indicator {
   color: #555;
 }
+
+/* ── 断连弹窗 ── */
+.p2p-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.p2p-modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 32px 28px 24px;
+  width: 320px;
+  max-width: 90vw;
+  text-align: center;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.2);
+}
+[data-theme="dark"] .p2p-modal {
+  background: #1c1c1e;
+}
+.p2p-modal-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+.p2p-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+[data-theme="dark"] .p2p-modal-title { color: #e8e8ed; }
+.p2p-modal-text {
+  font-size: 14px;
+  color: #8e8e93;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+.p2p-modal-actions {
+  display: flex;
+  gap: 10px;
+}
+.p2p-modal-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(0,0,0,0.05);
+  color: #555;
+  transition: opacity 0.2s;
+}
+[data-theme="dark"] .p2p-modal-btn {
+  background: rgba(255,255,255,0.08);
+  color: #aaa;
+}
+.p2p-modal-btn.primary {
+  background: var(--theme-color, #399FFF);
+  color: #fff;
+}
+.p2p-modal-btn:hover { opacity: 0.8; }
+
+/* ── 连接状态指示器（页面内常驻） ── */
+.p2p-conn-status {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  z-index: 999;
+  background: rgba(255,255,255,0.9);
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+  color: #555;
+  pointer-events: none;
+}
+[data-theme="dark"] .p2p-conn-status {
+  background: rgba(28,28,30,0.9);
+  border-color: rgba(255,255,255,0.08);
+  color: #999;
+}
+.p2p-conn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  transition: background-color 0.3s;
+}
+.p2p-conn-status.connected .p2p-conn-dot { background: #34c759; }
+.p2p-conn-status.disconnected .p2p-conn-dot { background: #ff3b30; }
+.p2p-conn-status.reconnecting .p2p-conn-dot {
+  background: #ff9500;
+  animation: p2p-pulse 0.8s ease-in-out infinite;
+}
+.p2p-conn-label {
+  white-space: nowrap;
+}
