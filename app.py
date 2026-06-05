@@ -338,8 +338,16 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             return
         now = time.time()
         peers_dict = _p2p_rooms[room].get("peers", {})
-        stale = [pid for pid, info in list(peers_dict.items())
-                 if now - info.get("last_seen", 0) > self.STALE_PEER_TIMEOUT]
+        timeout = getattr(self, 'STALE_PEER_TIMEOUT', 15)
+        stale = []
+        for pid, info in list(peers_dict.items()):
+            last = info.get("last_seen", 0)
+            age = now - last
+            if age > timeout:
+                stale.append(pid)
+                log(f"[cleanup] stale peer {pid}, age={age:.1f}s, timeout={timeout}s")
+        if stale:
+            log(f"[cleanup] room={room}, removing {len(stale)} stale peers")
         for pid in stale:
             peers_dict.pop(pid, None)
             self._store_signal(room, pid, '*', 'peer_leave', {'peer': pid})

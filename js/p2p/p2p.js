@@ -70,14 +70,20 @@ class P2PManager {
   }
 
   async joinRoomWithConfig(room, roomType, username, password) {
-    if (!this.backendAvail) return null;
+    if (!this.backendAvail) {
+      console.error('[P2P] joinRoom: backendAvail is false');
+      return null;
+    }
     try {
       const r = await fetch('/api/p2p/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ room, room_type: roomType, username, password: password || '' }),
       });
-      if (!r.ok) throw new Error('join failed');
+      if (!r.ok) {
+        console.error(`[P2P] joinRoom: HTTP ${r.status}`);
+        throw new Error(`HTTP ${r.status}`);
+      }
       const data = await r.json();
       if (data.error === 'wrong_password') {
         if (this.onError) this.onError('密码错误');
@@ -99,13 +105,16 @@ class P2PManager {
         if (this.relayMode) {
           this._addRelayPeer(p);
         } else {
-          this._connectTo(p);
+          try { this._connectTo(p); } catch (e) {
+            console.warn(`[P2P] 连接 ${p} 失败:`, e);
+          }
         }
       }
       this._notifyPeersChange();
       this._startPoll();
       return data;
     } catch (e) {
+      console.error('[P2P] joinRoom 异常:', e);
       if (this.onError) this.onError('加入房间失败: ' + e.message);
       return null;
     }
@@ -125,6 +134,9 @@ class P2PManager {
     console.log(`[P2P] Left "${this.room}"`);
     this.room = '';
     this.peerId = '';
+    this.relayMode = false;
+    this._relayFileBuffers = {};
+    this._fileBuffers = {};
   }
 
   // ── 信令轮询 ──
@@ -655,7 +667,7 @@ class P2PManager {
   sendFile(file) {
     const CHUNK = 16 * 1024;
     const KB = 1024;
-    const FILE_MAX_SIZE = this.relayMode ? 0 : 5 * 1024 * 1024;  // relay 无限制
+    const FILE_MAX_SIZE = this.relayMode ? 5 * 1024 * 1024 : 0;  // WebRTC 无限制，relay 限 5MB
     const CHUNK_DELAY = this.relayMode ? 200 : 0;  // relay 200ms=80KB/s, 低于限速线
 
     if (FILE_MAX_SIZE > 0 && file.size > FILE_MAX_SIZE) {
