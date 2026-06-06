@@ -309,6 +309,9 @@ class P2PManager {
           const bin = Uint8Array.from(atob(msg.data), c => c.charCodeAt(0));
           buf.chunks.push(bin);
           buf.received += bin.length;
+          if (this.onFileProgress) {
+            this.onFileProgress({ sent: buf.received, total: buf.size, id: msg.id, mode: 'download' });
+          }
           if (buf.received >= buf.size) {
             const blob = new Blob(buf.chunks, { type: buf.mime });
             if (this.onFile) this.onFile(msg.from, buf.name, buf.mime, blob, msg.id);
@@ -605,6 +608,9 @@ class P2PManager {
             const bin = Uint8Array.from(atob(msg.data), (c) => c.charCodeAt(0));
             buf.chunks.push(bin);
             buf.received += bin.length;
+            if (this.onFileProgress) {
+              this.onFileProgress({ sent: buf.received, total: buf.size, id: msg.id, mode: 'download' });
+            }
             if (buf.received >= buf.size) {
               const blob = new Blob(buf.chunks, { type: buf.mime });
               if (this.onFile) this.onFile(peerId, buf.name, buf.mime, blob, msg.id);
@@ -709,10 +715,18 @@ class P2PManager {
     for (const p of peers) p.channel.send(meta);
     const self = this;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       if (!ev.target) return;
       const arr = new Uint8Array(ev.target.result);
       const total = Math.ceil(arr.length / CHUNK);
+
+      async function drainBuffer(ch) {
+        const HIGH_WATER = 512 * 1024;
+        while (ch.bufferedAmount > HIGH_WATER) {
+          await new Promise(r => setTimeout(r, 50));
+        }
+      }
+
       for (let i = 0; i < total; i++) {
         if (self._activeTransfers[transferId]?.cancelled) {
           delete self._activeTransfers[transferId];
@@ -722,6 +736,7 @@ class P2PManager {
         const chunk = arr.slice(i * CHUNK, (i + 1) * CHUNK);
         const b64 = self._encodeChunk(chunk);
         const msg = JSON.stringify({ type: 'file-chunk', id: transferId, seq: i, total, data: b64 });
+        for (const p of peers) await drainBuffer(p.channel);
         for (const p of peers) p.channel.send(msg);
         if (self.onFileProgress) {
           self.onFileProgress({ sent: Math.min((i + 1) * CHUNK, arr.length), total: arr.length, id: transferId });

@@ -1053,6 +1053,7 @@
     p2p.onMessage = addMessage;
     p2p.onFile = receiveFile;
     p2p.onFileMeta = receiveFileMeta;
+    p2p.onFileProgress = handleFileProgress;
     p2p.onScreenStream = receiveScreen;
     p2p.onPeerLeave = handlePeerLeave;
     p2p.onScreenEnd = handleScreenEnd;
@@ -1509,9 +1510,25 @@
     state.messages.push({
       from: peerId, name: name, mime: mime, size: size,
       fileId: fileId, type: 'file', time: new Date(),
-      status: 'receiving', blob: null,
+      status: 'receiving', blob: null, progress: 0,
     });
     renderMessages();
+  }
+
+  function handleFileProgress(info) {
+    if (info.mode !== 'download') return;
+    for (var i = 0; i < state.messages.length; i++) {
+      if (state.messages[i].fileId === info.id && state.messages[i].type === 'file') {
+        var pct = Math.round(info.sent / info.total * 100);
+        state.messages[i].progress = pct;
+        // 节流：每 5% 才重新渲染，避免大文件卡 UI
+        if (!state.messages[i]._lastRenderedPct || pct - state.messages[i]._lastRenderedPct >= 5 || pct >= 100) {
+          state.messages[i]._lastRenderedPct = pct;
+          renderMessages();
+        }
+        break;
+      }
+    }
   }
 
   function receiveFile(peerId, name, mime, blob, fileId) {
@@ -1560,11 +1577,13 @@
         html += '<div class="p2p-file-card' + (isSelf ? ' self' : ' other') + '">';
         if (!isSelf) html += '<div class="p2p-msg-from">' + escapeHtml(p2p.userNames[m.from] || m.from) + '</div>';
         if (m.status === 'receiving') {
+          var pct = m.progress || 0;
           html += '<div class="p2p-file-card-icon">📄</div>' +
             '<div class="p2p-file-card-body">' +
             '<div class="p2p-file-card-name">' + escapeHtml(m.name || '文件') + '</div>' +
             '<div class="p2p-file-card-size">' + formatFileSize(m.size || 0) + '</div>' +
-            '<div class="p2p-file-card-status">⏳ 对方发送中…</div>' +
+            '<div class="p2p-file-dl-progress"><div class="p2p-file-dl-fill" style="width:' + pct + '%"></div></div>' +
+            '<div class="p2p-file-card-status">⏳ 接收中 ' + pct + '%</div>' +
             '</div>';
         } else if (m.mime && m.mime.startsWith('image/') && m.blob) {
           if (!m._blobUrl) m._blobUrl = URL.createObjectURL(m.blob);
@@ -1676,8 +1695,13 @@
       receiveFile(p2p.peerId, file.name, mime, file, localMsgId);
     }
 
-    // 状态回调
+    // 状态回调（保留之前的 handler，避免覆盖下载进度）
+    var _prevProgress = p2p.onFileProgress;
     p2p.onFileProgress = function(info) {
+      if (info.mode === 'download') {
+        if (_prevProgress) _prevProgress(info);
+        return;
+      }
       progress.update(info.sent, info.total);
     };
     p2p.onTransferStatus = function(tid, st) {
