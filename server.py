@@ -263,7 +263,10 @@ def _cmp(temp, root):
     upd, add, rem = [], [], []
     tf, lf = {}, {}
     for fp in temp.rglob("*"):
-        if fp.is_file(): tf[fp.relative_to(temp)] = _sha256(fp)
+        if fp.is_file():
+            r = fp.relative_to(temp)
+            if r.name in LOCAL_ONLY or ".versions" in r.parts: continue
+            tf[r] = _sha256(fp)
     for fp in root.rglob("*"):
         if fp.is_file():
             r = fp.relative_to(root)

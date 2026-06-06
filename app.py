@@ -44,7 +44,7 @@ def is_path_allowed(p, wl):
     if not wl: return False
     for e in wl:
         if e == "/" and p == "/": return True
-        if e.endswith("/") and p.startswith(e): return True
+        if e != "/" and e.endswith("/") and p.startswith(e): return True
         if p == e: return True
     return False
 
@@ -117,6 +117,28 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_p2p_keepalive()
             return
 
+        # GitHub API 代理（处理 giscus URL 重写后的请求）
+        if req_path.startswith('/api/github-proxy/'):
+            self._proxy_github_api(req_path)
+            return
+
+        # /session — 重定向到首页
+        if req_path == '/session':
+            self.send_response(302)
+            self.send_header('Location', '/index.html')
+            self.end_headers()
+            return
+
+        # /manifest.json — 浏览器自动请求，返回最小响应避免 404
+        if req_path == '/manifest.json':
+            self._send_json({
+                "name": "ReOri",
+                "short_name": "ReOri",
+                "start_url": "/index.html",
+                "display": "browser"
+            })
+            return
+
         # Giscus 代理 — 透明转发到 giscus.app
         if self._try_giscus_proxy(req_path):
             return
@@ -155,6 +177,12 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         self._try_check_update()          # 先触发更新（403 页面也要触发）
         # ACME HTTP-01 挑战 — 从可能的 web root 提供验证文件
         if self._try_serve_acme_challenge():
+            return
+        # /session — 跟 GET 一样重定向
+        if urllib.parse.urlparse(self.path).path == '/session':
+            self.send_response(302)
+            self.send_header('Location', '/index.html')
+            self.end_headers()
             return
         if not self._check_whitelist():
             return
@@ -250,11 +278,11 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 content = resp.read()
                 ct = resp.headers.get("Content-Type", "application/octet-stream")
 
-                # 在 JS/HTML 中把 GitHub API 地址替换为本地代理
+                # 仅将 JS/HTML 中的 GitHub GraphQL API 地址替换为本地代理
                 if 'javascript' in ct or 'html' in ct:
                     content = content.replace(
-                        b'https://api.github.com',
-                        b'/api/github-proxy'
+                        b'https://api.github.com/graphql',
+                        b'/api/github-proxy/graphql'
                     )
 
                 self.send_response(resp.status)
@@ -311,6 +339,47 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(content)
         except Exception as e:
             log(f"GitHub API proxy error: {e}")
+            self.send_error(502, "Bad Gateway")
+
+    def _proxy_github_api(self, path: str):
+        """通用 GitHub API GET 代理 — 将 /api/github-proxy/... 转发到 api.github.com/..."""
+        # 去掉 /api/github-proxy/ 前缀，构造目标 URL
+        api_path = path[len('/api/github-proxy'):]  # 保留开头的 /
+        qs = urllib.parse.urlparse(self.path).query
+        target = f"{GITHUB_API_ORIGIN}{api_path}"
+        if qs:
+            target += '?' + qs
+
+        headers = {
+            "User-Agent": user_agent(),
+            "Accept": "application/json",
+        }
+        auth = self.headers.get('Authorization')
+        if auth:
+            headers['Authorization'] = auth
+
+        try:
+            req = urllib.request.Request(target, headers=headers, method='GET')
+            with _ssl_urlopen(req, 20) as resp:
+                content = resp.read()
+                ct = resp.headers.get("Content-Type", "application/octet-stream")
+                self.send_response(resp.status)
+                self.send_header("Content-Type", ct)
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+        except urllib.error.HTTPError as e:
+            try:
+                body = e.read()
+                self.send_response(e.code)
+                self.send_header("Content-Type", e.headers.get("Content-Type", "application/json"))
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception:
+                self.send_error(e.code, str(e))
+        except Exception as e:
+            log(f"GitHub API proxy error ({path}): {e}")
             self.send_error(502, "Bad Gateway")
 
     # -- P2P 信令 --
