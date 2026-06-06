@@ -427,6 +427,14 @@
       [data-theme="dark"] .navbar-mobile-overlay {
         background: rgba(0,0,0,0.4);
       }
+      [data-theme="dark"] .copy-url-btn img {
+        filter: brightness(0) invert(0.72);
+        opacity: 0.8;
+      }
+      [data-theme="dark"] .copy-url-btn:hover img {
+        filter: brightness(0) invert(0.85);
+        opacity: 1;
+      }
 
       /* 拖拽进度条时禁用卡片 hover 动画，避免卡顿 */
       body.is-dragging .blog-card {
