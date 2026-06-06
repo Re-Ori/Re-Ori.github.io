@@ -146,10 +146,16 @@ def _rollback():
     if not q: _log("版本队列为空"); return None
     pid, pp = q[-1], VERSIONS_DIR / f"service.v{pid}.py"
     if not pp.exists(): _log(f"回退版本 v{pid} 不存在"); return None
-    ap = PROJECT_ROOT / "app.py"
-    if not ap.exists(): return None
-    try: shutil.copy2(pp, ap)
-    except Exception as e: _log(f"回退失败: {e}"); return None
+
+    # 队列中只剩一个版本，当前 app.py 就是这个版本，不用覆盖直接重启
+    if len(q) > 1:
+        ap = PROJECT_ROOT / "app.py"
+        if not ap.exists(): return None
+        try:
+            shutil.copy2(pp, ap)
+        except Exception as e:
+            _log(f"回退失败: {e}"); return None
+
     now = _fmt(datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=8))
     info = {"error": "程序异常退出", "crashed_version": sv.get("current_version_id", "?"),
             "recovered_to_version": pid, "recovered_at": now}
