@@ -132,8 +132,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         # /manifest.json — 浏览器自动请求，返回最小响应避免 404
         if req_path == '/manifest.json':
             self._send_json({
-                "name": "ReOri",
-                "short_name": "ReOri",
+                "name": "Origin Base",
+                "short_name": "Origin",
                 "start_url": "/index.html",
                 "display": "browser"
             })

@@ -1,7 +1,7 @@
 {
   "site": {
-    "name": "ReOri",
-    "description": "个人博客"
+    "name": "Origin",
+    "description": "Origin Base"
   },
   "theme": {
     "color": "#399FFF",
@@ -36,9 +36,9 @@
     "hoverHeight": 80,
     "logo": {
       "src": "/images/icon.svg",
-      "alt": "ReOri Logo",
+      "alt": "Origin Logo",
       "fixedHeight": "24px",
-      "textFallback": "ReOri Logo[Load Failed]"
+      "textFallback": "Origin Base"
     }
   },
   "blog": {

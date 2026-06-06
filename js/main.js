@@ -27,7 +27,7 @@ class BlogCardRenderer {
     this.mainSiteUrl = "";
     this.currentBlogList = [];
     this.currentListUrl = '/blogs/blogs.json';
-    this.listName = 'ReOri Blog';
+    this.listName = 'Origin Base';
     this.listDescription = '';       // 博客集合的描述
     this.currentSentenceText = '';   // 存储当前一言文本，用于复制
     this.loadingError = false;       // 列表加载失败标志
@@ -127,10 +127,10 @@ class BlogCardRenderer {
 
       if (Array.isArray(data)) {
         this.currentBlogList = data;
-        this.listName = 'ReOri Blog';
+        this.listName = 'Origin Base';
         this.listDescription = '';
       } else if (data && typeof data === 'object') {
-        this.listName = data.name || 'ReOri Blog';
+        this.listName = data.name || 'Origin Base';
         this.listDescription = data.description || '';
         this.currentBlogList = Array.isArray(data.items) ? data.items : [];
       } else {

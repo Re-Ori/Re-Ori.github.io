@@ -720,10 +720,11 @@ class P2PManager {
       const arr = new Uint8Array(ev.target.result);
       const total = Math.ceil(arr.length / CHUNK);
 
+      const HIGH_WATER = 4 * 1024 * 1024; // 4MB 才暂停
+      const LOW_WATER  = 1 * 1024 * 1024; // 降到 1MB 恢复
       async function drainBuffer(ch) {
-        const HIGH_WATER = 512 * 1024;
         while (ch.bufferedAmount > HIGH_WATER) {
-          await new Promise(r => setTimeout(r, 50));
+          await new Promise(r => setTimeout(r, 100));
         }
       }
 

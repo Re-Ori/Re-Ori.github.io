@@ -38,11 +38,11 @@
         navbarHoverHeight: config.navbar?.hoverHeight || 80,
         logo: config.navbar?.logo || {
           src: "/images/icon.svg",
-          alt: "ReOri Logo",
+          alt: "Origin Logo",
           fixedHeight: "24px",
-          textFallback: "ReOri Logo[Load Failed]"
+          textFallback: "Origin Base"
         },
-        siteName: config.site?.name || "ReOri",
+        siteName: config.site?.name || "Origin",
         navItems: config.navigation?.items || [{ name: "首页", url: "/index.html" }]
       };
     } catch (e) {
@@ -54,11 +54,11 @@
         navbarHoverHeight: 80,
         logo: {
           src: "/images/icon.svg",
-          alt: "ReOri Logo",
+          alt: "Origin Logo",
           fixedHeight: "24px",
-          textFallback: "ReOri Logo[Load Failed]"
+          textFallback: "Origin Base"
         },
-        siteName: "ReOri",
+        siteName: "Origin",
         navItems: [{ name: "首页", url: "/index.html" }]
       };
     }
