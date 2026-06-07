@@ -183,15 +183,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({'ok': True, 'server': 'autoupdate'})
             return
 
-        # OAuth 路径（如 /api/oauth/token）— 307 保留 POST 方法重定向到 giscus.app
+        # OAuth 路径（如 /api/oauth/token）— 服务端代理到 giscus.app（避免 CORS 问题）
         if req_path.startswith('/api/oauth/'):
-            target = f"{GISCUS_ORIGIN}{req_path}"
-            qs = urllib.parse.urlparse(self.path).query
-            if qs:
-                target += '?' + qs
-            self.send_response(307)  # 307 保留 POST 方法和请求体
-            self.send_header('Location', target)
-            self.end_headers()
+            self._proxy_giscus_api(req_path)
             return
 
         self.send_error(404, "Not Found")
@@ -403,6 +397,51 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(e.code, str(e))
         except Exception as e:
             log(f"GitHub API proxy error ({path}): {e}")
+            self.send_error(502, "Bad Gateway")
+
+    def _proxy_giscus_api(self, path: str):
+        """服务端代理 OAuth API 请求到 giscus.app（如 /api/oauth/token），避免重定向导致的 CORS 问题。"""
+        target = f"{GISCUS_ORIGIN}{path}"
+        qs = urllib.parse.urlparse(self.path).query
+        if qs:
+            target += '?' + qs
+
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length) if length else b''
+
+        headers = {
+            "User-Agent": user_agent(),
+            "Content-Type": self.headers.get('Content-Type', 'application/json'),
+            "Origin": GISCUS_ORIGIN,
+            "Referer": f"{GISCUS_ORIGIN}/",
+        }
+        for h in ('Authorization',):
+            if h in self.headers:
+                headers[h] = self.headers[h]
+
+        try:
+            req = urllib.request.Request(target, data=body, headers=headers,
+                                         method=self.command)
+            with _ssl_urlopen(req, 20) as resp:
+                content = resp.read()
+                self.send_response(resp.status)
+                ct = resp.headers.get("Content-Type", "application/json")
+                self.send_header("Content-Type", ct)
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = e.read()
+                self.send_response(e.code)
+                self.send_header("Content-Type", e.headers.get("Content-Type", "application/json"))
+                self.send_header("Content-Length", str(len(err_body)))
+                self.end_headers()
+                self.wfile.write(err_body)
+            except Exception:
+                self.send_error(e.code, str(e))
+        except Exception as e:
+            log(f"Giscus OAuth proxy error ({path}): {e}")
             self.send_error(502, "Bad Gateway")
 
     # -- P2P 信令 --
