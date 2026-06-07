@@ -12,12 +12,6 @@ ACME_CHALLENGE_ROOTS: list[Path] = [PROJECT_ROOT]
 GISCUS_ORIGIN = "https://giscus.app"
 GITHUB_API_ORIGIN = "https://api.github.com"
 
-class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """不跟随任何重定向，让客户端浏览器直接处理 3xx 跳转。"""
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-_no_redirect_opener = urllib.request.build_opener(_NoRedirectHandler)
-
 _p2p_signals: dict[str, list[dict]] = {}
 _p2p_signals_lock = threading.RLock()
 _p2p_rooms: dict[str, dict] = {}
@@ -87,17 +81,6 @@ def _ssl_urlopen(req, timeout):
             return urllib.request.urlopen(req, timeout=timeout, context=_make_fallback_ssl_context())
         raise
 
-def _ssl_urlopen_no_redirect(req, timeout):
-    """与 _ssl_urlopen 类似，但不跟随 3xx 重定向（返回原始跳转状态码和 Location 头）。"""
-    try:
-        return _no_redirect_opener.open(req, timeout=timeout, context=_make_ssl_context())
-    except Exception as e:
-        err = str(e).lower()
-        kw = ("eof","certificate","handshake","remote end","connection aborted","connection reset","connection refused","timed out","remote disconnected")
-        if any(k in err for k in kw):
-            return _no_redirect_opener.open(req, timeout=timeout, context=_make_fallback_ssl_context())
-        raise
-
 # ==== AutoUpdateHandler ====
 class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     """纯静态文件服务器，访问时触发 GitHub 更新检查。"""
@@ -139,44 +122,23 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._proxy_github_api(req_path)
             return
 
-        # /session — 将 OAuth code 服务端转发给 giscus.app 处理
-        if req_path == '/session':
+        # OAuth 路径 — 不经过 giscus 代理，直接重定向到 giscus.app
+        # 让客户端浏览器直接处理 GitHub OAuth 跳转，避免代理跟随重定向导致 origin 混乱
+        if req_path.startswith('/api/oauth/'):
+            target = f"{GISCUS_ORIGIN}{req_path}"
             qs = urllib.parse.urlparse(self.path).query
             if qs:
-                target = f"{GISCUS_ORIGIN}/session?{qs}"
-                try:
-                    req = urllib.request.Request(target, headers={
-                        "User-Agent": user_agent(),
-                    })
-                    # 使用不跟随重定向的模式，避免死锁
-                    resp = _ssl_urlopen_no_redirect(req, 20)
-                    # 不跟随重定向时 3xx 由 HTTPError 抛出，不会走到这里
-                    # 如果走到了这里是 2xx 响应（意外情况）
-                    self.send_response(302)
-                    self.send_header('Location', '/index.html')
-                    self.end_headers()
-                except urllib.error.HTTPError as e:
-                    if e.code in (301, 302, 303, 307, 308):
-                        # giscus.app 重定向回 origin?giscus=<session>
-                        loc = e.headers.get('Location', '/index.html')
-                        self.send_response(302)
-                        self.send_header('Location', loc)
-                        self.end_headers()
-                    else:
-                        log(f"Session proxy error: HTTP {e.code}")
-                        self.send_response(302)
-                        self.send_header('Location', '/index.html')
-                        self.end_headers()
-                except Exception as e:
-                    log(f"Session proxy error: {e}")
-                    self.send_response(302)
-                    self.send_header('Location', '/index.html')
-                    self.end_headers()
-            else:
-                # 没有 code（直接访问 /session），重定向到首页
-                self.send_response(302)
-                self.send_header('Location', '/index.html')
-                self.end_headers()
+                target += '?' + qs
+            self.send_response(302)
+            self.send_header('Location', target)
+            self.end_headers()
+            return
+
+        # /session — 重定向到首页（fallback，正常 OAuth 流程不经过这里）
+        if req_path == '/session':
+            self.send_response(302)
+            self.send_header('Location', '/index.html')
+            self.end_headers()
             return
 
         # /manifest.json — 浏览器自动请求，返回最小响应避免 404
@@ -228,38 +190,11 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         # ACME HTTP-01 挑战 — 从可能的 web root 提供验证文件
         if self._try_serve_acme_challenge():
             return
-        # /session — 跟 GET 一样转发 OAuth code 到 giscus.app
+        # /session — 跟 GET 一样重定向
         if urllib.parse.urlparse(self.path).path == '/session':
-            qs = urllib.parse.urlparse(self.path).query
-            if qs:
-                target = f"{GISCUS_ORIGIN}/session?{qs}"
-                try:
-                    req = urllib.request.Request(target, headers={
-                        "User-Agent": user_agent(),
-                    })
-                    resp = _ssl_urlopen_no_redirect(req, 20)
-                    self.send_response(302)
-                    self.send_header('Location', '/index.html')
-                    self.end_headers()
-                except urllib.error.HTTPError as e:
-                    if e.code in (301, 302, 303, 307, 308):
-                        loc = e.headers.get('Location', '/index.html')
-                        self.send_response(302)
-                        self.send_header('Location', loc)
-                        self.end_headers()
-                    else:
-                        self.send_response(302)
-                        self.send_header('Location', '/index.html')
-                        self.end_headers()
-                except Exception as e:
-                    log(f"Session proxy error: {e}")
-                    self.send_response(302)
-                    self.send_header('Location', '/index.html')
-                    self.end_headers()
-            else:
-                self.send_response(302)
-                self.send_header('Location', '/index.html')
-                self.end_headers()
+            self.send_response(302)
+            self.send_header('Location', '/index.html')
+            self.end_headers()
             return
         if not self._check_whitelist():
             return
@@ -351,17 +286,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 if h in self.headers:
                     req.headers[h] = self.headers[h]
 
-            # 不跟随重定向 — OAuth 跳转（302 → GitHub）必须由客户端浏览器处理
-            with _ssl_urlopen_no_redirect(req, 20) as resp:
-                # 3xx 重定向 → 原样转发给客户端
-                if resp.status in (301, 302, 303, 307, 308):
-                    loc = resp.headers.get('Location', '')
-                    self.send_response(resp.status)
-                    if loc:
-                        self.send_header('Location', loc)
-                    self.end_headers()
-                    return True
-
+            with _ssl_urlopen(req, 20) as resp:
                 content = resp.read()
                 ct = resp.headers.get("Content-Type", "application/octet-stream")
 
@@ -382,15 +307,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 return True
         except urllib.error.HTTPError as e:
             # giscus.app 返回非 2xx 是正常的（如讨论未创建时 404）
-            # 3xx 重定向（不跟随模式下由 NoRedirectHandler 抛出）
-            if e.code in (301, 302, 303, 307, 308):
-                loc = e.headers.get('Location', '')
-                self.send_response(e.code)
-                if loc:
-                    self.send_header('Location', loc)
-                self.end_headers()
-                return True
-            # 其他非 2xx 状态码 — 转发原始状态码和响应体
+            # 转发原始状态码和响应体，而不是返回 502
             try:
                 body = e.read()
                 self.send_response(e.code)
