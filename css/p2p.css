@@ -713,9 +713,6 @@
 .p2p-msg-status.sent {
   color: #34c759;
 }
-.p2p-msg-status.sent::after {
-  content: '✓';
-}
 .p2p-msg-status.failed {
   color: #ff3b30;
 }
@@ -869,6 +866,19 @@
   .p2p-screen-zoom-btn { width: 22px; height: 22px; font-size: 13px; }
   .p2p-file-progress { padding: 6px 12px; }
   .p2p-file-progress-name { max-width: 80px; font-size: 11px; }
+  .p2p-intro-wrap { min-height: calc(100dvh - 60px); padding: 16px 12px; justify-content: flex-start; }
+  .p2p-detect-wrap { min-height: calc(100dvh - 60px); padding: 24px 12px 16px; }
+  .p2p-settings-wrap { min-height: calc(100dvh - 60px); padding: 24px 12px 16px; }
+  .p2p-intro-card { padding: 20px 14px; }
+  .p2p-intro-features { grid-template-columns: 1fr; }
+  .p2p-settings-room-types { grid-template-columns: 1fr; }
+  .p2p-detect-progress { margin-bottom: 16px; }
+}
+
+/* 防止页面切换时闪烁跳动 */
+#app {
+  min-height: 0;
+  will-change: contents;
 }
 
 /* ── 环境检测页面 ── */

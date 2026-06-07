@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "PowerShell($c = Get-Content \"E:\\\\Code\\\\ReOri\\\\blogs\\\\tech\\\\article.html\" | Select-Object -Index 215,216,217,218,219,220,221; foreach \\($l in $c\\) { Write-Host \"'$l'\" })",
-      "PowerShell(Get-Content *)"
-    ]
-  }
-}

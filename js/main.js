@@ -37,7 +37,8 @@ class BlogCardRenderer {
     this.hasInitialRender = false;   // 首次渲染完成标志
   }
 
-  async init() {
+  async init(options) {
+    options = options || {};
     // 自动获取主站地址（使用当前域名）
     this.mainSiteUrl = formatMainSiteUrl(window.location.origin);
     
@@ -113,8 +114,10 @@ class BlogCardRenderer {
     // 初始化内联复制按钮
     this.initInlineCopyButtons();
 
-    // 添加底部一言区域
-    this.addFooter();
+    // 添加底部一言区域（默认显示，不传或true时显示）
+    if (options.showFooter !== false) {
+      this.addFooter();
+    }
   }
 
   async loadBlogsData() {
@@ -988,7 +991,7 @@ class BlogCardRenderer {
 
 document.addEventListener('DOMContentLoaded', () => {
   const blogRenderer = new BlogCardRenderer();
-  blogRenderer.init();
+  blogRenderer.init({ showFooter: window.showFooter });
   window.blogRenderer = blogRenderer;
 });
 
@@ -1001,7 +1004,7 @@ document.addEventListener('DOMContentLoaded', () => {
   );
   console.log(
     '  本地文件版本: %s',
-    '2026.06.06 22:20:49 [UTC+8]'
+    '2026.06.07 23:06:31 [UTC+8]'
   );
   console.log(
     '  GitHub 远程版本: %s',

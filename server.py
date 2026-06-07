@@ -35,7 +35,7 @@ REPO_OWNER, REPO_NAME = _REPO_PATH.split("/", 1)
 WORKERS = 8
 MAX_VERSIONS = 4
 DOWNLOAD_TIMEOUT = 60
-LOCAL_ONLY = frozenset({".update_state.json", ".crash_marker.json"})
+LOCAL_ONLY = frozenset({".update_state.json", ".crash_marker.json", "AutoUpdate.disabled"})
 TM_START = "// ===== AutoUpdate Timestamp (do not remove) ====="
 TM_END   = "// ===== End AutoUpdate Timestamp ====="
 HASH_STRIP = {"js/main.js": (TM_START, TM_END)}
@@ -354,16 +354,20 @@ def _inject_ts():
 
 def _run_update():
     st = _load_state()
+    # ── 防护：存在 AutoUpdate.disabled 文件时不拉取代码 ──
+    if (PROJECT_ROOT / "AutoUpdate.disabled").exists():
+        _log("⚠️ AutoUpdate.disabled 存在，自动同步已禁用")
+        return "disabled"
     with tempfile.TemporaryDirectory(prefix="au_") as td:
         td, zp = Path(td), Path(td) / "src.zip"
-        if not _dl_zip(zp): return False
+        if not _dl_zip(zp): return "uptodate"
         ed = td / "ext"; ed.mkdir()
-        if not _extract(zp, ed): return False
+        if not _extract(zp, ed): return "uptodate"
         sd = ed / EXTRACTED_DIR_PREFIX
         if not sd.exists(): sd = ed
         upd, add, rem = _cmp(sd, PROJECT_ROOT)
         if not upd and not add and not rem:
-            _log("本地已是最新"); return False
+            _log("本地已是最新"); return "uptodate"
 
         ac = "app.py" in upd or "app.py" in add
         if ac:
@@ -380,7 +384,7 @@ def _run_update():
 
         _save_state({**_load_state(), "last_updated": datetime.now().isoformat()})
         _log(f"更新完成 ({len(upd)+len(add)+len(rem)} 个文件)")
-        return True
+        return "updated"
 
 # ── 访问时更新检查回调 ──
 
@@ -400,7 +404,7 @@ def _make_checker():
             nonlocal updating
             try:
                 _log("检查 GitHub 更新…")
-                changed = _run_update()
+                status = _run_update()
                 st = _load_state()
                 st["last_checked_at"] = _fmt(datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=8))
                 gi = _gh_info()
@@ -408,7 +412,12 @@ def _make_checker():
                     if gi.get("updated_at"): st["github_updated_at"] = gi["updated_at"]
                     if gi.get("sha"): st["github_commit_sha"] = gi["sha"]
                 _save_state(st); _inject_ts()
-                _log("当前已是最新版本" if not changed else "更新完成，刷新浏览器即可生效")
+                if status == "disabled":
+                    _log("⛔ 自动同步已禁用（存在 AutoUpdate.disabled 文件）")
+                elif status == "uptodate":
+                    _log("当前已是最新版本")
+                elif status == "updated":
+                    _log("更新完成，刷新浏览器即可生效")
 
                 if _RESTART_NEEDED:
                     _log("\n服务器代码已更新，正在重启…"); time.sleep(3)
@@ -440,8 +449,12 @@ def main():
     # ├─ 首次启动：如果 app.py 不存在，先下载 ──
     if not (PROJECT_ROOT / "app.py").exists():
         _log("app.py 不存在，首次从 GitHub 下载…")
-        if _run_update():
+        result = _run_update()
+        if result == "updated":
             _log("下载完成")
+        elif result == "disabled":
+            _log("下载被 AutoUpdate.disabled 阻止，请删除该文件后重试")
+            sys.exit(1)
         else:
             _log("下载失败，请检查网络连接")
             sys.exit(1)
@@ -470,6 +483,8 @@ def main():
             _log(f"  目录: {PROJECT_ROOT}")
             _log(f"  源:   {REPO_URL}")
             _log(f"  冷却: {args.interval}s（访问时触发）")
+            if (PROJECT_ROOT / "AutoUpdate.disabled").exists():
+                _log(f"  {'⚠️' * 3} 自动同步已禁用（AutoUpdate.disabled）{'⚠️' * 3}")
             _log(f"{'='*50}"); _log("")
 
             try: server.serve_forever()
