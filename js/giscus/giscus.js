@@ -46,7 +46,8 @@
   }
 
   function renderGiscus(theme, useProxy) {
-    while (container.firstChild) container.removeChild(container.firstChild);
+    // 保留加载指示器，让 giscus-client.js 创建 iframe 后自然替换
+    // 而不是直接清空容器导致白屏
     activeMode = useProxy ? 'proxy' : 'cdn';
 
     var script = document.createElement('script');
@@ -89,6 +90,11 @@
         loading = false;
         giscusLoaded = true;
         window.removeEventListener('message', messageHandler);
+
+        // 处理 giscus widget 报告的错误
+        if (e.data.giscus.error) {
+          showError('评论区加载失败: ' + e.data.giscus.error);
+        }
       }
     };
     window.addEventListener('message', messageHandler);

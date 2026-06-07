@@ -183,6 +183,17 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({'ok': True, 'server': 'autoupdate'})
             return
 
+        # OAuth 路径（如 /api/oauth/token）— 307 保留 POST 方法重定向到 giscus.app
+        if req_path.startswith('/api/oauth/'):
+            target = f"{GISCUS_ORIGIN}{req_path}"
+            qs = urllib.parse.urlparse(self.path).query
+            if qs:
+                target += '?' + qs
+            self.send_response(307)  # 307 保留 POST 方法和请求体
+            self.send_header('Location', target)
+            self.end_headers()
+            return
+
         self.send_error(404, "Not Found")
 
     def do_HEAD(self):
