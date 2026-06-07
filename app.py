@@ -122,11 +122,31 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._proxy_github_api(req_path)
             return
 
-        # /session — 重定向到首页
+        # /session — 将 OAuth code 服务端转发给 giscus.app 处理
         if req_path == '/session':
-            self.send_response(302)
-            self.send_header('Location', '/index.html')
-            self.end_headers()
+            qs = urllib.parse.urlparse(self.path).query
+            if qs:
+                target = f"{GISCUS_ORIGIN}/session?{qs}"
+                try:
+                    req = urllib.request.Request(target, headers={
+                        "User-Agent": user_agent(),
+                    })
+                    with _ssl_urlopen(req, 20) as resp:
+                        # giscus.app 会重定向到 origin?giscus=<session>
+                        final_url = resp.url
+                        self.send_response(302)
+                        self.send_header('Location', final_url)
+                        self.end_headers()
+                except Exception as e:
+                    log(f"Session proxy error: {e}")
+                    self.send_response(302)
+                    self.send_header('Location', '/index.html')
+                    self.end_headers()
+            else:
+                # 没有 code（直接访问 /session），重定向到首页
+                self.send_response(302)
+                self.send_header('Location', '/index.html')
+                self.end_headers()
             return
 
         # /manifest.json — 浏览器自动请求，返回最小响应避免 404
@@ -178,11 +198,29 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         # ACME HTTP-01 挑战 — 从可能的 web root 提供验证文件
         if self._try_serve_acme_challenge():
             return
-        # /session — 跟 GET 一样重定向
+        # /session — 跟 GET 一样转发 OAuth code 到 giscus.app
         if urllib.parse.urlparse(self.path).path == '/session':
-            self.send_response(302)
-            self.send_header('Location', '/index.html')
-            self.end_headers()
+            qs = urllib.parse.urlparse(self.path).query
+            if qs:
+                target = f"{GISCUS_ORIGIN}/session?{qs}"
+                try:
+                    req = urllib.request.Request(target, headers={
+                        "User-Agent": user_agent(),
+                    })
+                    with _ssl_urlopen(req, 20) as resp:
+                        final_url = resp.url
+                        self.send_response(302)
+                        self.send_header('Location', final_url)
+                        self.end_headers()
+                except Exception as e:
+                    log(f"Session proxy error: {e}")
+                    self.send_response(302)
+                    self.send_header('Location', '/index.html')
+                    self.end_headers()
+            else:
+                self.send_response(302)
+                self.send_header('Location', '/index.html')
+                self.end_headers()
             return
         if not self._check_whitelist():
             return
