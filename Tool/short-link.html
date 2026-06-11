@@ -221,7 +221,7 @@
     <div class="sl-detect-box">
       <div class="sl-detect-spinner"></div>
       <h2>正在连接服务器</h2>
-      <p>验证短链服务的连通性</p>
+      <p>验证短链连通性</p>
     </div>
   </div>
 
@@ -239,7 +239,7 @@
   <div id="sl-app" style="display:none;">
     <div class="sl-body">
       <div class="sl-header">
-        <h1>短链生成器</h1>
+        <h1><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>短链生成器</h1>
         <div class="sl-user">
           <div id="sl-badge" class="sl-badge" style="display:none;">
             <span id="sl-user"></span>
@@ -264,6 +264,7 @@
 
       <div class="sl-list-card">
         <div class="sl-list-header">短链列表</div>
+        <div id="sl-anon-hint" style="display:none;padding:8px 24px 0;font-size:11px;color:#e67e22;">登录后可查看所有短链，未登录仅显示当前设备创建的链接（有效期 72h，链接本身仍可正常跳转）</div>
         <div id="sl-list"><div class="sl-empty">加载中</div></div>
       </div>
     </div>
@@ -368,11 +369,11 @@
     $('sl-login-modal').style.display = '';
     setTimeout(function() { $('sl-login-user').focus(); }, 100);
   });
-  function slCloseLogin() { $('sl-login-modal').style.display = 'none'; }
+  window.slCloseLogin = function() { $('sl-login-modal').style.display = 'none'; };
   $('sl-login-modal').addEventListener('click', function(e) { if (e.target === this) slCloseLogin(); });
   $('sl-login-pass').addEventListener('keydown', function(e) { if (e.key === 'Enter') slDoLogin(); });
 
-  function slDoLogin() {
+  window.slDoLogin = function() {
     var u = $('sl-login-user').value.trim(), p = $('sl-login-pass').value.trim();
     if (!u || !p) { $('sl-login-err').textContent = '请输入用户名和密码'; $('sl-login-err').style.display = 'block'; return; }
     $('sl-login-err').style.display = 'none';
@@ -410,26 +411,49 @@
       btn.disabled = false; btn.textContent = '生成';
       if (res.ok) {
         showRes(window.location.origin + res.url, !!res.expires_at);
+        if (!TOKEN) addMyCode(res.code);
         input.value = ''; render();
       } else { showErr(res.message || '生成失败'); }
     }).catch(function() { btn.disabled = false; btn.textContent = '生成'; showErr('网络错误'); });
   }
 
+  // 匿名用户创建的短链 code 列表（localStorage）
+  function getMyCodes() {
+    try { return JSON.parse(localStorage.getItem('sl_my_codes') || '[]'); } catch(e) { return []; }
+  }
+  function addMyCode(code) {
+    var list = getMyCodes();
+    if (list.indexOf(code) === -1) { list.push(code); localStorage.setItem('sl_my_codes', JSON.stringify(list)); }
+  }
+  function removeMyCode(code) {
+    var list = getMyCodes().filter(function(c) { return c !== code; });
+    localStorage.setItem('sl_my_codes', JSON.stringify(list));
+  }
+
   // 列表
   function render() {
+    var hint = $('sl-anon-hint');
+    if (hint) hint.style.display = TOKEN ? 'none' : '';
     api('GET', '/api/short-links').then(function(items) {
       var el = $('sl-list');
       if (!items || items.length === 0) { el.innerHTML = '<div class="sl-empty">还没有短链</div>'; return; }
+      var myCodes = TOKEN ? null : getMyCodes();
+      var filtered = TOKEN ? items : items.filter(function(it) { return myCodes.indexOf(it.code) !== -1; });
+      if (filtered.length === 0) {
+        el.innerHTML = '<div class="sl-empty">还没有短链</div>';
+        return;
+      }
       var html = '';
-      for (var i = 0; i < items.length; i++) {
-        var it = items[i], exp = it.expires_at || 0;
+      for (var i = 0; i < filtered.length; i++) {
+        var it = filtered[i], exp = it.expires_at || 0;
         var tag = exp ? '<span class="sl-expiry">' + remain(exp) + '</span>' : '';
+        var canDel = TOKEN || myCodes.indexOf(it.code) !== -1;
         html += '<div class="sl-item">' +
           '<span class="sl-code">' + esc(it.code) + '</span>' + tag +
           '<span class="sl-url" title="' + esc(it.url) + '">' + esc(it.url) + '</span>' +
           '<div class="sl-acts">' +
-          '<button onclick="copySL(\'' + it.code + '\')" title="复制">📋</button>' +
-          '<button onclick="delSL(\'' + it.code + '\')" title="删除">🗑</button>' +
+          '<button onclick="copySL(\'' + it.code + '\')" title="复制"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>' +
+          (canDel ? '<button onclick="delSL(\'' + it.code + '\')" title="删除"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' : '') +
           '</div></div>';
       }
       el.innerHTML = html;
@@ -441,7 +465,7 @@
   };
   window.delSL = function(c) {
     api('POST', '/api/short-link/delete', { code: c }).then(function(res) {
-      if (res.ok) { toast('已删除'); render(); }
+      if (res.ok) { removeMyCode(c); toast('已删除'); render(); }
       else if (res.error === 'forbidden') { toast('无权删除'); }
       else { toast('删除失败'); }
     });

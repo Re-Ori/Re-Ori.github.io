@@ -23,7 +23,7 @@
       <!-- 顶部栏 -->
       <div class="bbs-header">
         <div class="bbs-header-title">
-          <span>📢</span> Origin BBS
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px;"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg> Origin BBS
         </div>
         <div class="bbs-user-area">
           <div id="bbs-admin-actions" style="display:none;font-size:12px;">
@@ -65,7 +65,7 @@
 <!-- 登录弹窗 -->
 <div id="bbs-login-modal" class="bbs-modal-overlay" style="display:none;">
   <div class="bbs-modal">
-    <h3>🔑 登录</h3>
+    <h3><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>登录</h3>
     <div class="bbs-modal-error" id="bbs-login-error"></div>
     <input type="text" id="bbs-login-user" placeholder="用户名" autocomplete="off">
     <input type="password" id="bbs-login-pass" placeholder="密码" autocomplete="off">
@@ -80,7 +80,7 @@
 <!-- 发帖全屏页 -->
 <div id="bbs-post-modal" class="bbs-post-overlay" style="display:none;">
   <div class="bbs-post-header">
-    <div class="bbs-post-header-title">📝 发布帖子</div>
+    <div class="bbs-post-header-title"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>发布帖子</div>
     <div class="bbs-post-header-actions">
       <button class="bbs-post-header-btn bbs-post-submit-btn" onclick="bbsDoPost()">发布</button>
       <button class="bbs-post-header-btn bbs-post-cancel-btn" onclick="bbsClosePost()">取消</button>
@@ -320,9 +320,9 @@
         '<span>' + time + '</span>' +
         '</div></div>' +
         '<div class="bbs-topic-stats">' +
-        '<span>💬 ' + t.reply_count + '</span>' +
+        '<span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:2px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> ' + t.reply_count + '</span>' +
         '</div>' +
-        (canDeleteTopic(t.author_id) ? '<button class="bbs-topic-delete-btn" onclick="event.stopPropagation();bbsDeleteTopic(\'' + t.id + '\')" title="删除">🗑</button>' : '') +
+        (canDeleteTopic(t.author_id) ? '<button class="bbs-topic-delete-btn" onclick="event.stopPropagation();bbsDeleteTopic(\'' + t.id + '\')" title="删除"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' : '') +
         '</div>';
     }
     html += '</div>';
@@ -369,7 +369,7 @@
         rBadges += '<span class="bbs-role-badge author">贴主</span>';
       }
       var canDelReply = TOKEN && (ROLE === 'admin' || r.author_id === USER_ID);
-      var delBtn = canDelReply ? '<span class="bbs-reply-del" onclick="bbsDeleteReply(\'' + topic.id + '\',\'' + (r.id || '') + '\')" title="删除">🗑</span>' : '';
+      var delBtn = canDelReply ? '<span class="bbs-reply-del" onclick="bbsDeleteReply(\'' + topic.id + '\',\'' + (r.id || '') + '\')" title="删除"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>' : '';
       repliesHtml += '<div class="bbs-reply-item">' +
         '<div class="bbs-reply-author"><span class="bbs-author-link" onclick="bbsOpenUser(\'' + escapeHtml(r.author_id || '') + '\')">' + escapeHtml(rAuthor) + '</span>' + rBadges + '</div>' +
         '<div class="bbs-reply-content">' + escapeHtml(r.content) + '</div>' +
@@ -399,13 +399,13 @@
       '<button class="bbs-detail-back" onclick="bbsCloseDetail()">← 返回列表</button>' +
       '<div class="bbs-detail-title">' + escapeHtml(topic.title) + '</div>' +
       '<div class="bbs-detail-meta">' +
-      '<span>✍️ <span class="bbs-author-link" onclick="event.stopPropagation();bbsOpenUser(\'' + escapeHtml(topic.author_id || '') + '\')">' + escapeHtml(topic.author_name || '账号不存在') + '</span>' + topicBadges + '</span>' +
+      '<span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> <span class="bbs-author-link" onclick="event.stopPropagation();bbsOpenUser(\'' + escapeHtml(topic.author_id || '') + '\')">' + escapeHtml(topic.author_name || '账号不存在') + '</span>' + topicBadges + '</span>' +
       '<span>' + time + '</span>' +
-      '<span>💬 ' + replies.length + ' 条回复</span>' +
+      '<span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> ' + replies.length + ' 条回复</span>' +
       '</div></div>' +
       '<div class="bbs-detail-content">' + renderMarkdown(topic.content) + '</div>' +
       '<div class="bbs-reply-section">' +
-      '<h3>💬 回复</h3>' +
+      '<h3><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>回复</h3>' +
       (repliesHtml || '<div style="color:#bbb;font-size:13px;padding:8px 0;">暂无回复</div>') +
       '</div>' +
       replyInputHtml +
@@ -452,14 +452,14 @@
         var html = '<div class="bbs-detail">' +
           '<div class="bbs-detail-header">' +
           '<button class="bbs-detail-back" onclick="bbsCloseDetail()">← 返回列表</button>' +
-          '<div class="bbs-detail-title">👤 ' + escapeHtml(res.username) + ' ' + badgesHtml + '</div>' +
+          '<div class="bbs-detail-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' + escapeHtml(res.username) + ' ' + badgesHtml + '</div>' +
           '<div class="bbs-detail-meta">' +
-          '<span>🆔 ' + escapeHtml(res.user_id) + '</span>' +
-          '<span>📝 ' + res.topic_count + ' 个帖子</span>' +
+          '<span>ID ' + escapeHtml(res.user_id) + '</span>' +
+          '<span>' + res.topic_count + ' 个帖子</span>' +
           '</div></div>';
         // 帖子列表
         if (res.topics && res.topics.length > 0) {
-          html += '<div class="bbs-reply-section"><h3>📄 帖子</h3></div>';
+          html += '<div class="bbs-reply-section"><h3><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>帖子</h3></div>';
           for (var i = 0; i < res.topics.length; i++) {
             var t = res.topics[i];
             var preview = t.content_preview ? escapeHtml(t.content_preview) : '';
@@ -467,7 +467,7 @@
               '<div class="bbs-topic-main">' +
               '<div class="bbs-topic-title">' + escapeHtml(t.title) + '</div>' +
               (preview ? '<div class="bbs-topic-preview">' + preview + '</div>' : '') +
-              '<div class="bbs-topic-meta"><span>💬 ' + t.reply_count + '</span></div>' +
+              '<div class="bbs-topic-meta"><span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:2px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> ' + t.reply_count + '</span></div>' +
               '</div></div>';
           }
         } else {
@@ -701,7 +701,7 @@
 </script>
 
 <!-- 悬浮发帖按钮 -->
-<button class="bbs-fab" id="bbs-fab" onclick="bbsShowPost()" title="发布帖子">+</button>
+<button class="bbs-fab" id="bbs-fab" onclick="bbsShowPost()" title="发布帖子"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
 
 </body>
 </html>
