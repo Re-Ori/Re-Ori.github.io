@@ -26,6 +26,11 @@
           <span>📢</span> Origin BBS
         </div>
         <div class="bbs-user-area">
+          <div id="bbs-admin-actions" style="display:none;font-size:12px;">
+            <button class="bbs-login-btn" onclick="bbsExport()" title="导出全部数据">导出</button>
+            <button class="bbs-login-btn" onclick="document.getElementById('bbs-import-input').click()" title="导入数据覆盖全部">导入</button>
+            <input type="file" id="bbs-import-input" accept=".zip" style="display:none">
+          </div>
           <div id="bbs-user-badge" class="bbs-user-badge" style="display:none;">
             <span id="bbs-username"></span>
             <button class="bbs-logout-btn" onclick="bbsLogout()">退出</button>
@@ -187,6 +192,9 @@
           document.getElementById('bbs-login-btn').style.display = 'none';
           document.getElementById('bbs-user-badge').style.display = '';
           document.getElementById('bbs-username').textContent = USER;
+          if (ROLE === 'admin') {
+            document.getElementById('bbs-admin-actions').style.display = '';
+          }
         } else {
           // token 无效，清理登录状态
           TOKEN = ''; USER = ''; USER_ID = ''; ROLE = '';
@@ -562,6 +570,57 @@
         }
       });
   };
+
+  // ── 数据导入导出 ──
+
+  window.bbsExport = function() {
+    var url = '/api/bbs/export';
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.setRequestHeader('X-Auth-Token', TOKEN);
+    xhr.responseType = 'blob';
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(xhr.response);
+        a.download = 'bbs-backup.zip';
+        a.click();
+        showToast('导出成功');
+      } else {
+        showToast('导出失败：' + (xhr.status === 403 ? '无权限' : '服务器错误'));
+      }
+    };
+    xhr.onerror = function() { showToast('导出失败'); };
+    xhr.send();
+  };
+
+  document.getElementById('bbs-import-input').addEventListener('change', function() {
+    var file = this.files[0];
+    if (!file) return;
+    if (!confirm('确定导入数据？这将覆盖全部现有论坛数据。')) { this.value = ''; return; }
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/bbs/import', true);
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      xhr.setRequestHeader('X-Auth-Token', TOKEN);
+      xhr.responseType = 'json';
+      xhr.onload = function() {
+        if (xhr.response && xhr.response.ok) {
+          showToast('导入成功');
+          loadTopics();
+        } else if (xhr.status === 403) {
+          showToast('无权限');
+        } else {
+          showToast('导入失败');
+        }
+      };
+      xhr.onerror = function() { showToast('导入失败'); };
+      xhr.send(e.target.result);
+    };
+    reader.readAsArrayBuffer(file);
+    this.value = '';
+  });
 
   // ── 发帖弹窗 ──
 

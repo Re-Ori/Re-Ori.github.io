@@ -273,10 +273,10 @@
 }
 [data-theme="dark"] .bbs-reply-time { color: #555; }
 .bbs-reply-del {
-  cursor: pointer; font-size: 12px; opacity: 0.3; transition: opacity 0.15s;
-  margin-left: auto; user-select: none;
+  cursor: pointer; font-size: 13px; opacity: 0.7; transition: opacity 0.15s;
+  margin-left: auto; user-select: none; padding: 2px 4px; border-radius: 4px;
 }
-.bbs-reply-del:hover { opacity: 1; }
+.bbs-reply-del:hover { opacity: 1; background: rgba(255,59,48,0.1); }
 
 /* ── 回复输入区 ── */
 .bbs-reply-input-area {

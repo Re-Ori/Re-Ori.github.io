@@ -191,6 +191,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if uid:
                 self._handle_bbs_user_profile(uid)
                 return
+        if req_path == '/api/bbs/export':
+            self._handle_bbs_export()
+            return
 
         # 短链跳转 /s/<code>
         if req_path.startswith('/s/') and len(req_path) > 3:
@@ -320,6 +323,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if len(parts) == 2 and parts[1] == 'delete':
                 self._handle_bbs_topic_delete(parts[0])
                 return
+        if req_path == '/api/bbs/import':
+            self._handle_bbs_import()
+            return
 
         # OAuth 路径（如 /api/oauth/token）— 服务端代理到 giscus.app（避免 CORS 问题）
         if req_path.startswith('/api/oauth/'):
@@ -1313,6 +1319,69 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             topics = [t for t in topics if t['id'] != tid]
             BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False), encoding='utf-8')
             log(f'BBS 删帖: {tid} by {user_id}')
+            self._send_json({'ok': True})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    # ── 数据导入导出（ZIP）──────────────────────────────────
+
+    def _handle_bbs_export(self):
+        """GET /api/bbs/export — 导出全部论坛数据为 ZIP（仅管理员）"""
+        user = _bbs_check(self.headers)
+        if not user or user.get('role') != 'admin':
+            self._send_json({'ok': False, 'error': 'forbidden'})
+            return
+        try:
+            import io, zipfile
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                # users.json
+                if BBS_USERS_FILE.exists():
+                    zf.writestr('users.json', BBS_USERS_FILE.read_text(encoding='utf-8'))
+                # topics.json（索引）
+                if BBS_TOPICS_FILE.exists():
+                    zf.writestr('topics.json', BBS_TOPICS_FILE.read_text(encoding='utf-8'))
+                # 每个帖子的详情
+                if BBS_TOPICS_DIR.exists():
+                    for fp in BBS_TOPICS_DIR.iterdir():
+                        if fp.suffix == '.json':
+                            zf.writestr(f'topics/{fp.name}', fp.read_text(encoding='utf-8'))
+            data = buf.getvalue()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/zip')
+            self.send_header('Content-Disposition', 'attachment; filename="bbs-backup.zip"')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            log(f'BBS 导出 ZIP by {user.get("user_id", "?")}')
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_import(self):
+        """POST /api/bbs/import — 从 ZIP 导入论坛数据覆盖全部（仅管理员）"""
+        user = _bbs_check(self.headers)
+        if not user or user.get('role') != 'admin':
+            self._send_json({'ok': False, 'error': 'forbidden'})
+            return
+        try:
+            import io, zipfile
+            length = int(self.headers.get('Content-Length', 0))
+            raw = self.rfile.read(length)
+            zf = zipfile.ZipFile(io.BytesIO(raw), 'r')
+            namelist = zf.namelist()
+            # 覆盖 users.json
+            if 'users.json' in namelist:
+                BBS_USERS_FILE.write_text(zf.read('users.json').decode('utf-8'), encoding='utf-8')
+            # 覆盖 topics.json
+            if 'topics.json' in namelist:
+                BBS_TOPICS_FILE.write_text(zf.read('topics.json').decode('utf-8'), encoding='utf-8')
+            # 覆盖 topics/*.json
+            BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
+            for name in namelist:
+                if name.startswith('topics/') and name.endswith('.json'):
+                    (BBS_TOPICS_DIR / name[7:]).write_text(zf.read(name).decode('utf-8'), encoding='utf-8')
+            zf.close()
+            log(f'BBS 导入 ZIP by {user.get("user_id", "?")}')
             self._send_json({'ok': True})
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
