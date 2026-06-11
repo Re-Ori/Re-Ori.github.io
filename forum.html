@@ -102,6 +102,7 @@
   var TOKEN = localStorage.getItem('bbs_token') || '';
   var USER = localStorage.getItem('bbs_user') || '';
   var USER_ID = localStorage.getItem('bbs_user_id') || '';
+  window.USER_ID = USER_ID; // 供 HTML onclick 使用
   var ROLE = '';
 
   // ── 工具函数 ──
@@ -114,13 +115,11 @@
   }
 
   function handleUnauthorized() {
-    TOKEN = ''; USER = ''; USER_ID = ''; ROLE = '';
+    TOKEN = ''; USER = ''; USER_ID = ''; ROLE = ''; window.USER_ID = '';
     localStorage.removeItem('bbs_token');
     localStorage.removeItem('bbs_user');
     localStorage.removeItem('bbs_user_id');
-    document.getElementById('bbs-user-badge').style.display = 'none';
-    document.getElementById('bbs-login-btn').style.display = '';
-    bbsShowLogin();
+    location.reload();
   }
 
   function escapeHtml(s) {
@@ -188,7 +187,7 @@
         if (res.ok) {
           ROLE = res.role || 'user';
           USER = res.user || USER;
-          USER_ID = res.user_id || USER_ID;
+          USER_ID = res.user_id || USER_ID; window.USER_ID = USER_ID;
           document.getElementById('bbs-login-btn').style.display = 'none';
           document.getElementById('bbs-user-badge').style.display = '';
           document.getElementById('bbs-username').textContent = USER;
