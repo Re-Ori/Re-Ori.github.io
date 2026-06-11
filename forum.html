@@ -338,6 +338,7 @@
   // ── 打开帖子详情 ──
 
   window.bbsOpenTopic = function(id) {
+    history.pushState({ topic: id }, '', '?topic=' + id);
     api('GET', '/api/bbs/topics/' + id).then(function(topic) {
       if (topic && topic.id) {
         renderDetail(topic);
@@ -424,6 +425,7 @@
   }
 
   window.bbsCloseDetail = function() {
+    history.pushState({ list: true }, '', window.location.pathname);
     document.getElementById('bbs-detail').style.display = 'none';
     document.getElementById('bbs-topic-list').style.display = '';
     loadTopics();
@@ -665,6 +667,33 @@
       document.getElementById('bbs-post-content').focus();
     }
   });
+
+  // ── 浏览器前进/后退 ──
+  window.addEventListener('popstate', function(e) {
+    if (e.state && e.state.topic) {
+      bbsOpenTopic(e.state.topic);
+    } else if (document.getElementById('bbs-detail').style.display !== 'none') {
+      document.getElementById('bbs-detail').style.display = 'none';
+      document.getElementById('bbs-topic-list').style.display = '';
+      loadTopics();
+    }
+  });
+
+  // ── 从 URL 参数打开帖子 ──
+  (function() {
+    var p = new URLSearchParams(window.location.search);
+    var tid = p.get('topic');
+    if (tid) {
+      var checkLoaded = setInterval(function() {
+        var el = document.getElementById('bbs-topic-list');
+        if (el && el.innerHTML.indexOf('bbs-topic-item') !== -1) {
+          clearInterval(checkLoaded);
+          bbsOpenTopic(tid);
+        }
+      }, 100);
+      setTimeout(function() { clearInterval(checkLoaded); }, 10000);
+    }
+  })();
 
   // ── 启动 ──
   detectBackend();

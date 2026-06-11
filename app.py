@@ -1164,7 +1164,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 'replies': [],
             }
             BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
-            topic_path.write_text(json.dumps(topic_data, ensure_ascii=False), encoding='utf-8')
+            topic_path.write_text(json.dumps(topic_data, ensure_ascii=False, indent=2), encoding='utf-8')
             topics = []
             if BBS_TOPICS_FILE.exists():
                 topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8'))
@@ -1177,7 +1177,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 'reply_count': 0, 'created_at': now, 'updated_at': now,
                 'content_preview': preview,
             })
-            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False), encoding='utf-8')
+            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False, indent=2), encoding='utf-8')
             log(f'BBS 新帖: {tid} "{title}" by {author_id}')
             self._send_json({'ok': True, 'id': tid})
         except Exception as e:
@@ -1236,14 +1236,14 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             }
             topic.setdefault('replies', []).append(reply)
             topic['updated_at'] = time.time()
-            topic_path.write_text(json.dumps(topic, ensure_ascii=False), encoding='utf-8')
+            topic_path.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
             topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8')) if BBS_TOPICS_FILE.exists() else []
             for t in topics:
                 if t['id'] == tid:
                     t['reply_count'] = len(topic['replies'])
                     t['updated_at'] = time.time()
                     break
-            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False), encoding='utf-8')
+            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False, indent=2), encoding='utf-8')
             log(f'BBS 回复: {tid} by {user.get("user_id", "?")}')
             self._send_json({'ok': True, 'reply_id': reply_id})
         except Exception as e:
@@ -1283,7 +1283,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             # 删除回复
             topic['replies'].pop(idx)
             topic['updated_at'] = time.time()
-            topic_path.write_text(json.dumps(topic, ensure_ascii=False), encoding='utf-8')
+            topic_path.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
             # 更新索引
             topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8')) if BBS_TOPICS_FILE.exists() else []
             for t in topics:
@@ -1291,7 +1291,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                     t['reply_count'] = len(topic['replies'])
                     t['updated_at'] = time.time()
                     break
-            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False), encoding='utf-8')
+            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False, indent=2), encoding='utf-8')
             log(f'BBS 删除回复: {tid} reply={reply_id} by {user_id}')
             self._send_json({'ok': True})
         except Exception as e:
@@ -1317,7 +1317,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             topic_path.unlink()
             topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8')) if BBS_TOPICS_FILE.exists() else []
             topics = [t for t in topics if t['id'] != tid]
-            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False), encoding='utf-8')
+            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False, indent=2), encoding='utf-8')
             log(f'BBS 删帖: {tid} by {user_id}')
             self._send_json({'ok': True})
         except Exception as e:
@@ -1380,6 +1380,17 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             for name in namelist:
                 if name.startswith('topics/') and name.endswith('.json'):
                     (BBS_TOPICS_DIR / name[7:]).write_text(zf.read(name).decode('utf-8'), encoding='utf-8')
+            # 重新计算回复数，确保索引和实际一致
+            try:
+                topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8')) if BBS_TOPICS_FILE.exists() else []
+                for t in topics:
+                    tp = BBS_TOPICS_DIR / f'{t["id"]}.json'
+                    if tp.exists():
+                        td = json.loads(tp.read_text(encoding='utf-8'))
+                        t['reply_count'] = len(td.get('replies', []))
+                BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False, indent=2), encoding='utf-8')
+            except Exception:
+                pass
             zf.close()
             log(f'BBS 导入 ZIP by {user.get("user_id", "?")}')
             self._send_json({'ok': True})
