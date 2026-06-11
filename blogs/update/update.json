@@ -1,10 +1,15 @@
 {
   "name": "更新日志",
+  "navActive": ["更新日志"],
   "items": [
     {
-      "type": "html",
-      "priority": 99999999,
-      "html": "<div style=\"background: linear-gradient(135deg, rgba(var(--theme-color-rgb,57,159,255),0.10), rgba(var(--theme-color-rgb,57,159,255),0.02)); border: 1px solid rgba(var(--theme-color-rgb,57,159,255),0.15); border-radius: 8px; padding: 24px 20px; text-align: center;\"><span style=\"font-size: 15px; color: var(--theme-color,#399FFF); letter-spacing: 2px;\">敬请期待</span></div>"
+      "id": "20260611",
+      "priority": 20260611,
+      "title": "1.5.0 20260611 更新",
+      "description": "Origin BBS论坛系统,本地账号系统,用户主页与身份标识,短链生成器改造,导航栏高亮,安全增强",
+      "themeColor": "#FF6B35",
+      "date": "2026-06-11",
+      "url": "/blogs/update/20260611.html"
     },
     {
       "id": "20260604",

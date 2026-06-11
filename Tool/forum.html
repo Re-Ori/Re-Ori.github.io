@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Origin BBS</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/forum.css">
+</head>
+<body>
+<div class="container">
+  <!-- 环境检测遮罩 -->
+  <div id="bbs-detect" class="bbs-detect-overlay">
+    <div class="bbs-detect-box">
+      <div class="bbs-detect-spinner"></div>
+      <h2>🔍 检测服务器环境</h2>
+      <p>验证与 BBS 服务的连通性…</p>
+    </div>
+  </div>
+
+  <div id="bbs-app" style="display:none;">
+    <div class="bbs-layout">
+      <!-- 顶部栏 -->
+      <div class="bbs-header">
+        <div class="bbs-header-title">
+          <span>📢</span> Origin BBS
+        </div>
+        <div class="bbs-user-area">
+          <div id="bbs-user-badge" class="bbs-user-badge" style="display:none;">
+            <span id="bbs-username"></span>
+            <button class="bbs-logout-btn" onclick="bbsLogout()">退出</button>
+          </div>
+          <button class="bbs-login-btn" id="bbs-login-btn" onclick="bbsShowLogin()">登录</button>
+        </div>
+      </div>
+
+      <!-- 帖子列表 -->
+      <div id="bbs-topic-list">
+        <div class="bbs-loading">加载中…</div>
+      </div>
+
+      <!-- 帖子详情（隐藏） -->
+      <div id="bbs-detail" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- 无后端提示 -->
+  <div id="bbs-unavailable" class="bbs-detect-overlay" style="display:none;">
+    <div class="bbs-detect-box">
+      <h2>🌐 Origin BBS</h2>
+      <p style="color:#ff3b30;font-size:15px;">
+        此功能需要自建服务器运行。<br>
+        请前往 <a href="https://reori.cn" style="color:var(--theme-color,#399FFF);text-decoration:underline;">reori.cn</a> 访问。
+      </p>
+      <button class="bbs-detect-btn" onclick="location.reload()">重新检测</button>
+    </div>
+  </div>
+</div>
+
+<!-- 登录弹窗 -->
+<div id="bbs-login-modal" class="bbs-modal-overlay" style="display:none;">
+  <div class="bbs-modal">
+    <h3>🔑 登录</h3>
+    <div class="bbs-modal-error" id="bbs-login-error"></div>
+    <input type="text" id="bbs-login-user" placeholder="用户名" autocomplete="off">
+    <input type="password" id="bbs-login-pass" placeholder="密码" autocomplete="off">
+    <div class="bbs-modal-actions">
+      <button class="bbs-modal-primary" onclick="bbsDoLogin()">登录</button>
+      <button class="bbs-modal-secondary" onclick="bbsCloseLogin()">取消</button>
+    </div>
+    <div class="bbs-modal-hint">账号需管理员在服务器上手动创建</div>
+  </div>
+</div>
+
+<!-- 发帖弹窗 -->
+<div id="bbs-post-modal" class="bbs-modal-overlay bbs-post-modal" style="display:none;">
+  <div class="bbs-modal">
+    <h3>📝 发布帖子</h3>
+    <input type="text" id="bbs-post-title" placeholder="标题" autocomplete="off">
+    <textarea id="bbs-post-content" placeholder="内容（支持 Markdown 格式）"></textarea>
+    <div class="bbs-post-hint">支持 Markdown 语法</div>
+    <div class="bbs-modal-actions">
+      <button class="bbs-modal-primary" onclick="bbsDoPost()">发布</button>
+      <button class="bbs-modal-secondary" onclick="bbsClosePost()">取消</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/navbar.js"></script>
+<script>window.showFooter = false;</script>
+<script src="/js/main.js"></script>
+<script>
+(function() {
+  var TOKEN = localStorage.getItem('bbs_token') || '';
+  var USER = localStorage.getItem('bbs_user') || '';
+  var USER_ID = localStorage.getItem('bbs_user_id') || '';
+  var ROLE = '';
+
+  // ── 工具函数 ──
+
+  function api(method, path, body) {
+    var opts = { method: method, headers: { 'Content-Type': 'application/json' } };
+    if (TOKEN) opts.headers['X-Auth-Token'] = TOKEN;
+    if (body) opts.body = JSON.stringify(body);
+    return fetch(path, opts).then(function(r) { return r.json(); });
+  }
+
+  function escapeHtml(s) {
+    var d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+  }
+
+  function showToast(msg, duration) {
+    duration = duration || 2500;
+    var t = document.createElement('div');
+    t.className = 'bbs-toast'; t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, duration);
+  }
+
+  function showLoginError(msg) {
+    var el = document.getElementById('bbs-login-error');
+    el.textContent = msg; el.style.display = 'block';
+  }
+  function hideLoginError() {
+    document.getElementById('bbs-login-error').style.display = 'none';
+  }
+
+  // ── 环境检测 ──
+
+  function detectBackend() {
+    fetch('/api/ping', { cache: 'no-store' })
+      .then(function(r) {
+        if (r.ok) {
+          document.getElementById('bbs-detect').style.display = 'none';
+          document.getElementById('bbs-app').style.display = '';
+          initBBS();
+        } else {
+          throw new Error('not ok');
+        }
+      })
+      .catch(function() {
+        document.getElementById('bbs-detect').style.display = 'none';
+        document.getElementById('bbs-unavailable').style.display = '';
+      });
+  }
+
+  // ── 初始化 ──
+
+  function initBBS() {
+    // 恢复登录状态
+    if (TOKEN) {
+      document.getElementById('bbs-login-btn').style.display = 'none';
+      var badge = document.getElementById('bbs-user-badge');
+      badge.style.display = '';
+      document.getElementById('bbs-username').textContent = USER;
+    }
+    loadTopics();
+  }
+
+  // ── 登录 ──
+
+  window.bbsShowLogin = function() {
+    hideLoginError();
+    document.getElementById('bbs-login-user').value = '';
+    document.getElementById('bbs-login-pass').value = '';
+    document.getElementById('bbs-login-modal').style.display = '';
+    setTimeout(function() { document.getElementById('bbs-login-user').focus(); }, 100);
+  };
+
+  window.bbsCloseLogin = function() {
+    document.getElementById('bbs-login-modal').style.display = 'none';
+  };
+
+  window.bbsDoLogin = function() {
+    var username = document.getElementById('bbs-login-user').value.trim();
+    var password = document.getElementById('bbs-login-pass').value.trim();
+    if (!username || !password) {
+      showLoginError('请输入用户名和密码');
+      return;
+    }
+    hideLoginError();
+    api('POST', '/api/bbs/auth', { username: username, password: password })
+      .then(function(res) {
+        if (res.ok) {
+          TOKEN = res.token;
+          USER = res.user;
+          USER_ID = res.user_id || '';
+          ROLE = res.role || 'user';
+          localStorage.setItem('bbs_token', TOKEN);
+          localStorage.setItem('bbs_user', USER);
+          localStorage.setItem('bbs_user_id', USER_ID);
+          document.getElementById('bbs-login-modal').style.display = 'none';
+          document.getElementById('bbs-login-btn').style.display = 'none';
+          var badge = document.getElementById('bbs-user-badge');
+          badge.style.display = '';
+          document.getElementById('bbs-username').textContent = USER;
+          showToast('登录成功，欢迎 ' + USER);
+        } else if (res.error === 'auth_failed') {
+          showLoginError('用户名或密码错误');
+        } else {
+          showLoginError('登录失败，请重试');
+        }
+      })
+      .catch(function() {
+        showLoginError('网络错误，请重试');
+      });
+  };
+
+  window.bbsLogout = function() {
+    TOKEN = '';
+    USER = '';
+    USER_ID = '';
+    ROLE = '';
+    localStorage.removeItem('bbs_token');
+    localStorage.removeItem('bbs_user');
+    localStorage.removeItem('bbs_user_id');
+    document.getElementById('bbs-user-badge').style.display = 'none';
+    document.getElementById('bbs-login-btn').style.display = '';
+    showToast('已退出登录');
+  };
+
+  document.getElementById('bbs-login-modal').addEventListener('click', function(e) {
+    if (e.target === this) bbsCloseLogin();
+  });
+  document.getElementById('bbs-login-pass').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') bbsDoLogin();
+  });
+
+  // ── 加载帖子列表 ──
+
+  function loadTopics() {
+    var container = document.getElementById('bbs-topic-list');
+    container.innerHTML = '<div class="bbs-loading">加载中…</div>';
+    api('GET', '/api/bbs/topics').then(function(res) {
+      if (res && res.topics) {
+        renderTopicList(res.topics);
+      } else {
+        container.innerHTML = '<div class="bbs-empty">加载失败</div>';
+      }
+    }).catch(function() {
+      container.innerHTML = '<div class="bbs-empty">加载失败，请检查网络</div>';
+    });
+  }
+
+  function renderTopicList(topics) {
+    var container = document.getElementById('bbs-topic-list');
+    if (!topics || topics.length === 0) {
+      container.innerHTML = '<div class="bbs-empty">还没有帖子，点击右下角 + 发布第一条</div>';
+      return;
+    }
+    var html = '<div class="bbs-topic-list">';
+    for (var i = 0; i < topics.length; i++) {
+      var t = topics[i];
+      var time = new Date(t.created_at * 1000).toLocaleString();
+      var aname = t.author_name || '账号不存在';
+      html += '<div class="bbs-topic-item" onclick="bbsOpenTopic(\'' + t.id + '\')">' +
+        '<div class="bbs-topic-main">' +
+        '<div class="bbs-topic-title">' + escapeHtml(t.title) + '</div>' +
+        '<div class="bbs-topic-meta">' +
+        '<span>' + escapeHtml(aname) + '</span>' +
+        '<span>·</span>' +
+        '<span>' + time + '</span>' +
+        '</div></div>' +
+        '<div class="bbs-topic-stats">' +
+        '<span>💬 ' + t.reply_count + '</span>' +
+        '</div>' +
+        (canDeleteTopic(t.author_id) ? '<button class="bbs-topic-delete-btn" onclick="event.stopPropagation();bbsDeleteTopic(\'' + t.id + '\')" title="删除">🗑</button>' : '') +
+        '</div>';
+    }
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  function canDeleteTopic(authorId) {
+    if (!TOKEN) return false;
+    if (ROLE === 'admin') return true;
+    return USER_ID === authorId;
+  }
+
+  // ── 打开帖子详情 ──
+
+  window.bbsOpenTopic = function(id) {
+    api('GET', '/api/bbs/topics/' + id).then(function(topic) {
+      if (topic && topic.id) {
+        renderDetail(topic);
+      } else {
+        showToast('帖子不存在或已被删除');
+        loadTopics();
+      }
+    });
+  };
+
+  function renderDetail(topic) {
+    var listEl = document.getElementById('bbs-topic-list');
+    var detailEl = document.getElementById('bbs-detail');
+    listEl.style.display = 'none';
+    detailEl.style.display = '';
+
+    var time = new Date(topic.created_at * 1000).toLocaleString();
+    var authorName = topic.author_name || '账号不存在';
+    var replies = topic.replies || [];
+    var repliesHtml = '';
+    for (var i = 0; i < replies.length; i++) {
+      var r = replies[i];
+      var rt = new Date(r.created_at * 1000).toLocaleString();
+      var rAuthor = r.author_name || '账号不存在';
+      repliesHtml += '<div class="bbs-reply-item">' +
+        '<div class="bbs-reply-author">' + escapeHtml(rAuthor) + '</div>' +
+        '<div class="bbs-reply-content">' + escapeHtml(r.content) + '</div>' +
+        '<div class="bbs-reply-time">' + rt + '</div>' +
+        '</div>';
+    }
+
+    // 回复输入区域（登录后可见）
+    var replyInputHtml = '';
+    if (TOKEN) {
+      replyInputHtml =
+        '<div class="bbs-reply-input-area">' +
+        '<textarea id="bbs-reply-content" placeholder="输入回复…"></textarea>' +
+        '<div class="bbs-reply-submit-wrap">' +
+        '<button class="bbs-reply-submit" onclick="bbsDoReply(\'' + topic.id + '\')">回复</button>' +
+        '</div></div>';
+    } else {
+      replyInputHtml =
+        '<div class="bbs-reply-input-area" style="text-align:center;color:#bbb;font-size:13px;">' +
+        '登录后可以回复' +
+        '</div>';
+    }
+
+    detailEl.innerHTML =
+      '<div class="bbs-detail">' +
+      '<div class="bbs-detail-header">' +
+      '<button class="bbs-detail-back" onclick="bbsCloseDetail()">← 返回列表</button>' +
+      '<div class="bbs-detail-title">' + escapeHtml(topic.title) + '</div>' +
+      '<div class="bbs-detail-meta">' +
+      '<span>✍️ ' + escapeHtml(topic.author_name || '账号不存在') + '</span>' +
+      '<span>' + time + '</span>' +
+      '<span>💬 ' + replies.length + ' 条回复</span>' +
+      '</div></div>' +
+      '<div class="bbs-detail-content">' + renderMarkdown(topic.content) + '</div>' +
+      '<div class="bbs-reply-section">' +
+      '<h3>💬 回复</h3>' +
+      (repliesHtml || '<div style="color:#bbb;font-size:13px;padding:8px 0;">暂无回复</div>') +
+      '</div>' +
+      replyInputHtml +
+      '</div>';
+
+    // 键盘快捷键：回车回复
+    var replyInput = document.getElementById('bbs-reply-content');
+    if (replyInput) {
+      replyInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          document.querySelector('.bbs-reply-submit').click();
+        }
+      });
+      setTimeout(function() { replyInput.focus(); }, 200);
+    }
+  }
+
+  window.bbsCloseDetail = function() {
+    document.getElementById('bbs-detail').style.display = 'none';
+    document.getElementById('bbs-topic-list').style.display = '';
+    loadTopics();
+  };
+
+  // ── Markdown 简单渲染 ──
+
+  function renderMarkdown(text) {
+    if (!text) return '';
+    var html = escapeHtml(text);
+    // 代码块
+    html = html.replace(/```([\s\S]*?)```/g, function(m, c) {
+      return '<pre><code>' + c.trim() + '</code></pre>';
+    });
+    // 行内代码
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // 标题
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+    // 加粗
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // 斜体
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    // 链接
+    html = html.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank">$1</a>');
+    // 换行
+    html = html.replace(/\n/g, '<br>');
+    return html;
+  }
+
+  // ── 回复 ──
+
+  window.bbsDoReply = function(topicId) {
+    var input = document.getElementById('bbs-reply-content');
+    var content = input.value.trim();
+    if (!content) { showToast('请输入回复内容'); return; }
+    var btn = document.querySelector('.bbs-reply-submit');
+    btn.disabled = true; btn.textContent = '提交中…';
+    api('POST', '/api/bbs/topics/' + topicId + '/reply', { content: content })
+      .then(function(res) {
+        if (res.ok) {
+          input.value = '';
+          showToast('回复成功');
+          bbsOpenTopic(topicId);
+        } else if (res.error === 'unauthorized') {
+          showToast('请先登录');
+          bbsShowLogin();
+        } else {
+          showToast('回复失败');
+        }
+      })
+      .catch(function() { showToast('网络错误'); })
+      .finally(function() { btn.disabled = false; btn.textContent = '回复'; });
+  };
+
+  // ── 删除帖子 ──
+
+  window.bbsDeleteTopic = function(id) {
+    if (!confirm('确定删除这个帖子吗？')) return;
+    api('POST', '/api/bbs/topics/' + id + '/delete')
+      .then(function(res) {
+        if (res.ok) {
+          showToast('已删除');
+          loadTopics();
+        } else if (res.error === 'unauthorized') {
+          showToast('请先登录');
+        } else if (res.error === 'forbidden') {
+          showToast('无权删除此帖子');
+        } else {
+          showToast('删除失败');
+        }
+      });
+  };
+
+  // ── 发帖弹窗 ──
+
+  window.bbsShowPost = function() {
+    if (!TOKEN) { showToast('请先登录'); bbsShowLogin(); return; }
+    document.getElementById('bbs-post-title').value = '';
+    document.getElementById('bbs-post-content').value = '';
+    document.getElementById('bbs-post-modal').style.display = '';
+    setTimeout(function() { document.getElementById('bbs-post-title').focus(); }, 100);
+  };
+
+  window.bbsClosePost = function() {
+    document.getElementById('bbs-post-modal').style.display = 'none';
+  };
+
+  window.bbsDoPost = function() {
+    var title = document.getElementById('bbs-post-title').value.trim();
+    var content = document.getElementById('bbs-post-content').value.trim();
+    if (!title) { showToast('请输入标题'); return; }
+    if (!content) { showToast('请输入内容'); return; }
+    var btn = document.querySelector('#bbs-post-modal .bbs-modal-primary');
+    btn.disabled = true; btn.textContent = '发布中…';
+    api('POST', '/api/bbs/topics', { title: title, content: content })
+      .then(function(res) {
+        if (res.ok) {
+          document.getElementById('bbs-post-modal').style.display = 'none';
+          showToast('发布成功');
+          loadTopics();
+        } else if (res.error === 'unauthorized') {
+          showToast('请先登录');
+          bbsClosePost();
+          bbsShowLogin();
+        } else {
+          showToast('发布失败');
+        }
+      })
+      .catch(function() { showToast('网络错误'); })
+      .finally(function() { btn.disabled = false; btn.textContent = '发布'; });
+  };
+
+  document.getElementById('bbs-post-modal').addEventListener('click', function(e) {
+    if (e.target === this) bbsClosePost();
+  });
+  document.getElementById('bbs-post-title').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('bbs-post-content').focus();
+    }
+  });
+
+  // ── 启动 ──
+  detectBackend();
+})();
+</script>
+
+<!-- 悬浮发帖按钮 -->
+<button class="bbs-fab" id="bbs-fab" onclick="bbsShowPost()" title="发布帖子">+</button>
+
+</body>
+</html>

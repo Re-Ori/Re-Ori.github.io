@@ -18,6 +18,10 @@
         "url": "/index.html?blog_list=/blogs/update/update.json"
       },
       {
+        "name": "BBS",
+        "url": "/forum.html"
+      },
+      {
         "name": "工具",
         "url": "/index.html?blog_list=/blogs/tools/tools.json"
       },

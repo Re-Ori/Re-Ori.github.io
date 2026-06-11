@@ -36,10 +36,30 @@ WORKERS = 8
 MAX_VERSIONS = 4
 DOWNLOAD_TIMEOUT = 60
 LOCAL_ONLY = frozenset({".update_state.json", ".crash_marker.json", "AutoUpdate.disabled"})
+# 同步黑名单：路径前缀匹配，长度越长优先级越高（范围越小优先级越大）
+# 匹配的文件不会被 GitHub 同步覆盖
+SYNC_LOCAL_PATHS = (
+    "bbs/topics.json",
+    "bbs/topics/",
+    "short_links.json",
+)
 TM_START = "// ===== AutoUpdate Timestamp (do not remove) ====="
 TM_END   = "// ===== End AutoUpdate Timestamp ====="
 HASH_STRIP = {"js/main.js": (TM_START, TM_END)}
 _RESTART_NEEDED = False
+
+def _is_sync_local(path: str) -> bool:
+    """检查路径是否在同步黑名单中（不应被 GitHub 覆盖），使用最长前缀匹配。
+    目录路径以 / 结尾做前缀匹配，文件路径做精确匹配。"""
+    best = ""
+    for p in SYNC_LOCAL_PATHS:
+        if path == p:
+            if len(p) > len(best):
+                best = p
+        elif p.endswith('/') and path.startswith(p):
+            if len(p) > len(best):
+                best = p
+    return bool(best)
 
 # ── 日志 ──
 
@@ -265,13 +285,15 @@ def _cmp(temp, root):
     for fp in temp.rglob("*"):
         if fp.is_file():
             r = fp.relative_to(temp)
-            if r.name in LOCAL_ONLY or ".versions" in r.parts: continue
+            rp = r.as_posix()
+            if r.name in LOCAL_ONLY or ".versions" in r.parts or _is_sync_local(rp): continue
             tf[r] = _sha256(fp)
     for fp in root.rglob("*"):
         if fp.is_file():
             r = fp.relative_to(root)
-            if r.name in LOCAL_ONLY or ".versions" in r.parts: continue
-            m = HASH_STRIP.get(str(r.as_posix()))
+            rp = r.as_posix()
+            if r.name in LOCAL_ONLY or ".versions" in r.parts or _is_sync_local(rp): continue
+            m = HASH_STRIP.get(rp)
             lf[r] = _chash(fp, m[0], m[1]) if m else _sha256(fp)
     allk = set(tf) | set(lf)
     def cls(k):

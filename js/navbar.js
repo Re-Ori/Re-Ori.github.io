@@ -205,6 +205,16 @@
         background: rgba(var(--theme-color-rgb, 57,159,255), 0.12);
         color: var(--theme-color, #399FFF);
       }
+      .navbar-nav li.active a {
+        background: rgba(var(--theme-color-rgb, 57,159,255), 0.12);
+        color: var(--theme-color, #399FFF);
+        font-weight: 600;
+      }
+      .navbar-mobile-menu a.active {
+        background: rgba(var(--theme-color-rgb, 57,159,255), 0.1);
+        color: var(--theme-color, #399FFF);
+        font-weight: 600;
+      }
       .navbar-sitename {
         font-size: 16px;
         font-weight: 700;
@@ -652,6 +662,25 @@
 
     const ul = document.createElement('ul');
     ul.className = 'navbar-nav';
+    function applyNavHighlight() {
+      var activeNames = Array.isArray(window.__navActive) ? window.__navActive : [];
+      var currentUrl = window.location.pathname + window.location.search;
+      Array.from(ul.children).forEach(function(li) {
+        var a = li.querySelector('a');
+        if (!a) return;
+        var isActive = false;
+        if (activeNames.length > 0) {
+          isActive = activeNames.indexOf(a.textContent) !== -1;
+        } else {
+          isActive = currentUrl === a.getAttribute('href');
+        }
+        li.className = isActive ? 'active' : '';
+      });
+      document.querySelectorAll('.navbar-mobile-menu a').forEach(function(link) {
+        var activeN = Array.isArray(window.__navActive) ? window.__navActive : [];
+        link.className = activeN.length > 0 && activeN.indexOf(link.textContent) !== -1 ? 'active' : '';
+      });
+    }
     (Array.isArray(navbarConfig.navItems) ? navbarConfig.navItems : []).forEach(item => {
       const li = document.createElement('li');
       const a = document.createElement('a');
@@ -660,6 +689,8 @@
       li.appendChild(a);
       ul.appendChild(li);
     });
+    applyNavHighlight();
+    window.updateNavHighlight = applyNavHighlight;
 
     const siteName = document.createElement('div');
     siteName.className = 'navbar-sitename';
@@ -696,8 +727,11 @@
     mobHeader.append(mobLogo, mobTitle);
     mobileMenu.appendChild(mobHeader);
 
-    ul.querySelectorAll('a').forEach(a => {
-      const link = a.cloneNode(true);
+    ul.querySelectorAll('li').forEach(function(li) {
+      var a = li.querySelector('a');
+      if (!a) return;
+      var link = a.cloneNode(true);
+      if (li.className === 'active') link.className = 'active';
       link.addEventListener('click', closeMobileMenu);
       mobileMenu.appendChild(link);
     });

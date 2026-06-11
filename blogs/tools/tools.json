@@ -1,7 +1,17 @@
 {
   "name": "工具",
   "description": "实用在线工具",
+  "navActive": ["工具"],
   "items": [
+    {
+      "id": "bbs",
+      "priority": 10,
+      "title": "📢 Origin BBS",
+      "description": "论坛板块，自由创建帖子、发布信息",
+      "themeColor": "#FF6B35",
+      "date": "2026-06-11",
+      "url": "/forum.html"
+    },
     {
       "id": "p2p",
       "priority": 10,

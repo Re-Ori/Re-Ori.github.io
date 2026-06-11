@@ -1,0 +1,21 @@
+[
+  {
+    "id": "0",
+    "username": "Origin",
+    "password": "lcj100219",
+    "role": "admin",
+    "tags": ["ReOri"]
+  },
+  {
+    "id": "admin",
+    "username": "admin",
+    "password": "lcj100219",
+    "role": "admin"
+  },
+  {
+    "id": "user001",
+    "username": "梧桐",
+    "password": "wantong20100305",
+    "role": "user"
+  }
+]

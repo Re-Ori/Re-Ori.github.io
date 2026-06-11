@@ -23,19 +23,27 @@ RELAY_RATE_LIMIT = 5 * 1024 * 1024
 RELAY_RATE_WINDOW = 300
 RELAY_MAX_BUFFER = 200
 SHORT_LINKS_FILE = PROJECT_ROOT / "short_links.json"
-SL_TOKENS: dict[str, dict] = {}
-SL_TOKEN_TTL = 86400  # 24h
+ANON_SL_TTL = 259200  # 72h
 
-def _sl_token():
+BLACKLIST_FILE = PROJECT_ROOT / "blacklist.json"
+BBS_DIR = PROJECT_ROOT / "bbs"
+BBS_USERS_FILE = BBS_DIR / "users.json"
+BBS_TOPICS_FILE = BBS_DIR / "topics.json"
+BBS_TOPICS_DIR = BBS_DIR / "topics"
+
+BBS_TOKENS: dict[str, dict] = {}
+BBS_TOKEN_TTL = 86400  # 24h
+
+def _bbs_token():
     import hashlib, os
     return hashlib.sha256(os.urandom(32)).hexdigest()[:32]
 
-def _sl_check(headers):
+def _bbs_check(headers):
     t = headers.get('X-Auth-Token', '')
-    e = SL_TOKENS.get(t)
-    if e and time.time() - e['at'] < SL_TOKEN_TTL:
-        return e.get('user', '')
-    SL_TOKENS.pop(t, None)
+    e = BBS_TOKENS.get(t)
+    if e and time.time() - e['at'] < BBS_TOKEN_TTL:
+        return e  # {user_id, username, role, at}
+    BBS_TOKENS.pop(t, None)
     return None
 
 def _sl_load():
@@ -65,6 +73,15 @@ def load_whitelist():
         return [str(p).replace("\\", "/") for p in data] if isinstance(data, list) else []
     except: return None
 
+def load_blacklist():
+    """加载黑名单，黑名单中的路径直接返回 403。"""
+    if not BLACKLIST_FILE.exists():
+        return []
+    try:
+        data = json.loads(BLACKLIST_FILE.read_text(encoding="utf-8"))
+        return [str(p).replace("\\", "/") for p in data] if isinstance(data, list) else []
+    except: return []
+
 def is_path_allowed(p, wl):
     if not wl: return False
     for e in wl:
@@ -72,6 +89,21 @@ def is_path_allowed(p, wl):
         if e != "/" and e.endswith("/") and p.startswith(e): return True
         if p == e: return True
     return False
+
+def _bbs_resolve_author(author_id):
+    """根据 author_id 查找用户信息，找不到返回 None（表示账号不存在）。"""
+    try:
+        users = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
+        for u in users:
+            if u.get('id') == author_id:
+                return {
+                    'username': u.get('username', ''),
+                    'role': u.get('role', 'user'),
+                    'tags': u.get('tags', []),
+                }
+    except:
+        pass
+    return None
 
 def user_agent():
     return f"AutoUpdate/2.0 Python/{sys.version_info.major}.{sys.version_info.minor}"
@@ -145,6 +177,21 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_sl_list()
             return
 
+        # BBS API — GET 路由
+        if req_path == '/api/bbs/topics':
+            self._handle_bbs_topics()
+            return
+        if req_path.startswith('/api/bbs/topics/'):
+            parts = req_path[16:].split('/')
+            if len(parts) == 1 and parts[0]:
+                self._handle_bbs_topic_detail(parts[0])
+                return
+        if req_path.startswith('/api/bbs/user/'):
+            uid = req_path[14:]
+            if uid:
+                self._handle_bbs_user_profile(uid)
+                return
+
         # 短链跳转 /s/<code>
         if req_path.startswith('/s/') and len(req_path) > 3:
             code = req_path[3:]
@@ -152,6 +199,14 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if code in links:
                 target = links[code]
                 if isinstance(target, dict):
+                    # 检查匿名短链是否过期
+                    expires_at = target.get('expires_at', 0)
+                    if expires_at and time.time() > expires_at:
+                        self.send_response(410)
+                        self.send_header('Content-Type', 'text/plain; charset=utf-8')
+                        self.end_headers()
+                        self.wfile.write('短链已过期\n'.encode('utf-8'))
+                        return
                     target = target.get('url', '')
                 if target:
                     self.send_response(302)
@@ -233,19 +288,35 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._handle_sl_auth()
             return
         if req_path == '/api/short-link':
-            user = _sl_check(self.headers)
-            if not user:
-                self._send_json({'ok': False, 'error': 'unauthorized'})
-                return
+            user = _bbs_check(self.headers)
             self._handle_sl_create(user)
             return
         if req_path == '/api/short-link/delete':
-            user = _sl_check(self.headers)
-            if not user:
-                self._send_json({'ok': False, 'error': 'unauthorized'})
-                return
+            user = _bbs_check(self.headers)
             self._handle_sl_delete(user)
             return
+
+        # BBS API
+        if req_path == '/api/bbs/auth':
+            self._handle_bbs_auth()
+            return
+        if req_path == '/api/bbs/topics':
+            if self.command == 'GET':
+                self._handle_bbs_topics()
+            else:
+                self._handle_bbs_topic_create()
+            return
+        if req_path.startswith('/api/bbs/topics/'):
+            parts = req_path[16:].split('/')
+            if len(parts) == 1 and parts[0]:
+                self._handle_bbs_topic_detail(parts[0])
+                return
+            if len(parts) == 2 and parts[1] == 'reply':
+                self._handle_bbs_topic_reply(parts[0])
+                return
+            if len(parts) == 2 and parts[1] == 'delete':
+                self._handle_bbs_topic_delete(parts[0])
+                return
 
         # OAuth 路径（如 /api/oauth/token）— 服务端代理到 giscus.app（避免 CORS 问题）
         if req_path.startswith('/api/oauth/'):
@@ -271,13 +342,20 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
 
     # -- 白名单检查 --
     def _check_whitelist(self) -> bool:
-        """检查请求路径是否在白名单内。不在则返回 403。"""
+        """检查路径是否在黑名单内，再检查是否在白名单内。不在则返回 403。"""
         # whitelist.json 本身永远不允许直接访问
         WHITELIST_PATH = "/whitelist.json"
         parsed = urllib.parse.urlparse(self.path)
         req_path = parsed.path
 
         if req_path == WHITELIST_PATH:
+            self.send_error(403, "Forbidden")
+            return False
+
+        # 黑名单检查（优先级高于白名单）
+        blacklist = load_blacklist()
+        if blacklist and is_path_allowed(req_path, blacklist):
+            log(f"⛔ 访问被黑名单拒绝: {req_path}")
             self.send_error(403, "Forbidden")
             return False
 
@@ -385,11 +463,17 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(body)
             except Exception:
-                self.send_error(e.code, str(e))
+                try:
+                    self.send_error(e.code, str(e))
+                except Exception:
+                    pass
             return True
         except Exception as e:
             log(f"Giscus proxy error ({path}): {e}")
-            self.send_error(502, "Bad Gateway")
+            try:
+                self.send_error(502, "Bad Gateway")
+            except Exception:
+                pass
             return True
 
     # -- GitHub API 代理 --
@@ -848,40 +932,42 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
 
     def _handle_sl_list(self):
         links = _sl_load()
+        now = time.time()
         items = sorted(
             ({'code': k, 'url': v.get('url', v) if isinstance(v, dict) else v,
               'created': v.get('created', 0) if isinstance(v, dict) else 0,
-              'user': v.get('user', '') if isinstance(v, dict) else ''}
-             for k, v in links.items()),
+              'user': v.get('user', '') if isinstance(v, dict) else '',
+              'expires_at': v.get('expires_at', 0) if isinstance(v, dict) else 0,
+              'expired': v.get('expires_at', 0) and now > v.get('expires_at', 0)}
+             for k, v in links.items()
+             if not (isinstance(v, dict) and v.get('expires_at') and now > v['expires_at'])),
             key=lambda x: x['created'], reverse=True
         )
         self._send_json(items)
 
     def _handle_sl_auth(self):
+        """使用 BBS 账号认证，供短链生成器使用。"""
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
-            gs = body.get('token', '').strip()
-            if not gs:
-                self._send_json({'ok': False, 'error': 'token_required'})
+            username = body.get('username', '').strip()
+            password = body.get('password', '').strip()
+            if not username or not password:
+                self._send_json({'ok': False, 'error': 'credentials_required'})
                 return
-            import json as _json
-            login = ''
+            # 从 BBS 用户表校验
             try:
-                req = urllib.request.Request(
-                    'https://api.github.com/user',
-                    headers={'Authorization': f'Bearer {gs}', 'User-Agent': 'AutoUpdate/2.0'}
-                )
-                resp = urllib.request.urlopen(req, timeout=10)
-                user_data = _json.loads(resp.read())
-                login = user_data.get('login', '')
+                users = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
             except Exception:
-                pass
-            if not login:
-                login = gs[:8]
-            token = _sl_token()
-            SL_TOKENS[token] = {'user': login, 'at': time.time()}
-            log(f'短链登录: {login}')
-            self._send_json({'ok': True, 'token': token, 'user': login})
+                self._send_json({'ok': False, 'error': 'server_error'})
+                return
+            for u in users:
+                if u.get('username') == username and u.get('password') == password:
+                    token = _bbs_token()
+                    BBS_TOKENS[token] = {'user': username, 'at': time.time()}
+                    log(f'短链/BBS 登录: {username}')
+                    self._send_json({'ok': True, 'token': token, 'user': username})
+                    return
+            self._send_json({'ok': False, 'error': 'auth_failed'})
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
 
@@ -901,24 +987,26 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 if existing == url:
                     self._send_json({'ok': True, 'code': code, 'url': f'/s/{code}'})
                     return
-            # 数量限制（管理员 Re-Ori 不受限）
-            if user != 'Re-Ori':
-                user_count = sum(1 for v in links.values()
-                                 if isinstance(v, dict) and v.get('user') == user)
-                if user_count >= 5:
-                    self._send_json({'ok': False, 'error': 'limit_reached',
-                                     'message': '每个用户最多 5 个短链'})
-                    return
             import random, string
             chars = string.ascii_letters + string.digits
             while True:
                 code = ''.join(random.choice(chars) for _ in range(6))
                 if code not in links:
                     break
-            links[code] = {'url': url, 'created': time.time(), 'user': user}
+            entry = {'url': url, 'created': time.time()}
+            username = user.get('username', '') if user else ''
+            if user:
+                # 已登录 → 永久链接
+                entry['user'] = username
+                log(f"短链创建: {code} → {url} (by {username})")
+            else:
+                # 匿名 → 72h 过期
+                entry['expires_at'] = time.time() + ANON_SL_TTL
+                log(f"短链创建: {code} → {url} (匿名, 72h过期)")
+            links[code] = entry
             _sl_save(links)
-            log(f"短链创建: {code} → {url} (by {user})")
-            self._send_json({'ok': True, 'code': code, 'url': f'/s/{code}'})
+            self._send_json({'ok': True, 'code': code, 'url': f'/s/{code}',
+                             'expires_at': entry.get('expires_at', 0)})
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
 
@@ -935,14 +1023,277 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 return
             entry = links[code]
             owner = entry.get('user', '') if isinstance(entry, dict) else ''
-            # 只能删除自己的链接，管理员可以删除所有
-            if user != 'Re-Ori' and owner != user:
+            username = user.get('username', '') if user else ''
+            # 已登录用户：只能删除自己的，管理员可以删除所有
+            # 匿名：任何人都可以删除（凭 code）
+            if user and user.get('role') != 'admin' and owner != username:
                 self._send_json({'ok': False, 'error': 'forbidden'})
                 return
             del links[code]
             _sl_save(links)
-            log(f"短链删除: {code} (by {user})")
+            log(f"短链删除: {code} (by {username or 'anonymous'})")
             self._send_json({'ok': True})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+
+    # ── BBS 论坛服务 ────────────────────────────────────────
+
+    def _handle_bbs_auth(self):
+        """POST /api/bbs/auth — BBS 账号密码登录或 token 验证"""
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            # 支持 token 验证：前端启动时检查 token 是否有效
+            if body.get('verify'):
+                info = _bbs_check(self.headers)
+                if info:
+                    self._send_json({'ok': True, 'token': self.headers.get('X-Auth-Token', ''),
+                                     'user_id': info.get('user_id', ''),
+                                     'user': info.get('username', ''),
+                                     'role': info.get('role', 'user')})
+                else:
+                    self._send_json({'ok': False, 'error': 'token_invalid'})
+                return
+            username = body.get('username', '').strip()
+            password = body.get('password', '').strip()
+            if not username or not password:
+                self._send_json({'ok': False, 'error': 'credentials_required'})
+                return
+            try:
+                users = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
+            except Exception:
+                self._send_json({'ok': False, 'error': 'server_error'})
+                return
+            for u in users:
+                if u.get('username') == username and u.get('password') == password:
+                    token = _bbs_token()
+                    BBS_TOKENS[token] = {
+                        'user_id': u.get('id', ''),
+                        'username': u.get('username', ''),
+                        'role': u.get('role', 'user'),
+                        'at': time.time(),
+                    }
+                    log(f'BBS 登录: {u.get("id", "?")}({username})')
+                    self._send_json({'ok': True, 'token': token,
+                                     'user_id': u.get('id', ''),
+                                     'user': u.get('username', ''),
+                                     'role': u.get('role', 'user')})
+                    return
+            self._send_json({'ok': False, 'error': 'auth_failed'})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_topics(self):
+        """GET /api/bbs/topics — 帖子列表（含作者名解析）"""
+        try:
+            if not BBS_TOPICS_FILE.exists():
+                self._send_json({'topics': [], 'total': 0, 'page': 1, 'limit': 20})
+                return
+            topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8'))
+            topics.sort(key=lambda t: t.get('created_at', 0), reverse=True)
+            # 解析作者名
+            for t in topics:
+                aid = t.get('author_id', '')
+                info = _bbs_resolve_author(aid)
+                t['author_name'] = info['username'] if info else '账号不存在'
+                t['author_role'] = info['role'] if info else ''
+                t['author_tags'] = info['tags'] if info else []
+                # 旧帖子兼容：从内容文件生成预览
+                if 'content_preview' not in t:
+                    try:
+                        tp = BBS_TOPICS_DIR / f'{t["id"]}.json'
+                        if tp.exists():
+                            td = json.loads(tp.read_text(encoding='utf-8'))
+                            raw = td.get('content', '')
+                            plain = __import__('re').sub(r'[#*`\[\]]+', '', raw).replace('\n', ' ').strip()
+                            t['content_preview'] = plain[:120] + ('...' if len(plain) > 120 else '')
+                        else:
+                            t['content_preview'] = ''
+                    except Exception:
+                        t['content_preview'] = ''
+            params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            page = int(params.get('page', ['1'])[0])
+            limit = int(params.get('limit', ['20'])[0])
+            limit = min(limit, 50)
+            start = (page - 1) * limit
+            end = start + limit
+            page_items = topics[start:end] if start < len(topics) else []
+            self._send_json({
+                'topics': page_items,
+                'total': len(topics),
+                'page': page,
+                'limit': limit,
+            })
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_topic_create(self):
+        """POST /api/bbs/topics — 创建帖子"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'})
+            return
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            title = body.get('title', '').strip()
+            content = body.get('content', '').strip()
+            if not title or not content:
+                self._send_json({'ok': False, 'error': 'title_and_content_required'})
+                return
+            import random, string, hashlib
+            chars = string.ascii_lowercase + string.digits
+            while True:
+                tid = ''.join(random.choice(chars) for _ in range(8))
+                topic_path = BBS_TOPICS_DIR / f'{tid}.json'
+                if not topic_path.exists():
+                    break
+            now = time.time()
+            author_id = user.get('user_id', '')
+            topic_data = {
+                'id': tid, 'title': title, 'author_id': author_id,
+                'content': content, 'created_at': now, 'updated_at': now,
+                'replies': [],
+            }
+            BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
+            topic_path.write_text(json.dumps(topic_data, ensure_ascii=False), encoding='utf-8')
+            topics = []
+            if BBS_TOPICS_FILE.exists():
+                topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8'))
+            # 生成内容预览（取纯文本前 120 字）
+            import re as _re
+            plain = _re.sub(r'[#*`\[\]]+', '', content).replace('\n', ' ').strip()
+            preview = plain[:120] + ('...' if len(plain) > 120 else '')
+            topics.append({
+                'id': tid, 'title': title, 'author_id': author_id,
+                'reply_count': 0, 'created_at': now, 'updated_at': now,
+                'content_preview': preview,
+            })
+            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False), encoding='utf-8')
+            log(f'BBS 新帖: {tid} "{title}" by {author_id}')
+            self._send_json({'ok': True, 'id': tid})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_topic_detail(self, tid):
+        """GET /api/bbs/topics/<id> — 帖子详情（含作者名解析）"""
+        try:
+            topic_path = BBS_TOPICS_DIR / f'{tid}.json'
+            if not topic_path.exists():
+                self._send_json({'ok': False, 'error': 'not_found'})
+                return
+            topic = json.loads(topic_path.read_text(encoding='utf-8'))
+            # 解析作者名
+            aid = topic.get('author_id', '')
+            info = _bbs_resolve_author(aid)
+            topic['author_name'] = info['username'] if info else '账号不存在'
+            topic['author_role'] = info['role'] if info else ''
+            topic['author_tags'] = info['tags'] if info else []
+            # 解析回复作者名
+            for r in topic.get('replies', []):
+                rid = r.get('author_id', '')
+                rinfo = _bbs_resolve_author(rid)
+                r['author_name'] = rinfo['username'] if rinfo else '账号不存在'
+                r['author_role'] = rinfo['role'] if rinfo else ''
+                r['author_tags'] = rinfo['tags'] if rinfo else []
+                r.pop('author', None)  # 清理旧字段
+            self._send_json(topic)
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_topic_reply(self, tid):
+        """POST /api/bbs/topics/<id>/reply — 回复帖子"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'})
+            return
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            content = body.get('content', '').strip()
+            if not content:
+                self._send_json({'ok': False, 'error': 'content_required'})
+                return
+            topic_path = BBS_TOPICS_DIR / f'{tid}.json'
+            if not topic_path.exists():
+                self._send_json({'ok': False, 'error': 'not_found'})
+                return
+            topic = json.loads(topic_path.read_text(encoding='utf-8'))
+            reply = {
+                'author_id': user.get('user_id', ''),
+                'content': content,
+                'created_at': time.time(),
+            }
+            topic.setdefault('replies', []).append(reply)
+            topic['updated_at'] = time.time()
+            topic_path.write_text(json.dumps(topic, ensure_ascii=False), encoding='utf-8')
+            topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8')) if BBS_TOPICS_FILE.exists() else []
+            for t in topics:
+                if t['id'] == tid:
+                    t['reply_count'] = len(topic['replies'])
+                    t['updated_at'] = time.time()
+                    break
+            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False), encoding='utf-8')
+            log(f'BBS 回复: {tid} by {user.get("user_id", "?")}')
+            self._send_json({'ok': True})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_topic_delete(self, tid):
+        """POST /api/bbs/topics/<id>/delete — 删除帖子"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'})
+            return
+        try:
+            topic_path = BBS_TOPICS_DIR / f'{tid}.json'
+            if not topic_path.exists():
+                self._send_json({'ok': False, 'error': 'not_found'})
+                return
+            topic = json.loads(topic_path.read_text(encoding='utf-8'))
+            user_id = user.get('user_id', '')
+            role = user.get('role', 'user')
+            if topic.get('author_id') != user_id and role != 'admin':
+                self._send_json({'ok': False, 'error': 'forbidden'})
+                return
+            topic_path.unlink()
+            topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8')) if BBS_TOPICS_FILE.exists() else []
+            topics = [t for t in topics if t['id'] != tid]
+            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False), encoding='utf-8')
+            log(f'BBS 删帖: {tid} by {user_id}')
+            self._send_json({'ok': True})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    # ── 用户主页 ──────────────────────────────────────────
+
+    def _handle_bbs_user_profile(self, uid):
+        """GET /api/bbs/user/<id> — 用户主页：用户信息 + 帖子列表"""
+        try:
+            info = _bbs_resolve_author(uid)
+            if not info:
+                self._send_json({'ok': False, 'error': 'user_not_found'})
+                return
+            # 收集该用户的所有帖子
+            topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8')) if BBS_TOPICS_FILE.exists() else []
+            user_topics = []
+            for t in topics:
+                if t.get('author_id') == uid:
+                    user_topics.append({
+                        'id': t['id'],
+                        'title': t['title'],
+                        'reply_count': t.get('reply_count', 0),
+                        'created_at': t.get('created_at', 0),
+                        'content_preview': t.get('content_preview', ''),
+                    })
+            user_topics.sort(key=lambda x: x.get('created_at', 0), reverse=True)
+            self._send_json({
+                'ok': True,
+                'user_id': uid,
+                'username': info['username'],
+                'role': info['role'],
+                'tags': info.get('tags', []),
+                'topics': user_topics,
+                'topic_count': len(user_topics),
+            })
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
 
@@ -1010,6 +1361,19 @@ def main():
                             del _p2p_rooms[r]
                             _p2p_signals.pop(r, None)
                             _p2p_relay_buffers.pop(r, None)
+                except Exception:
+                    pass
+                # 清理过期的匿名短链
+                try:
+                    now = time.time()
+                    links = _sl_load()
+                    changed = False
+                    for code, v in list(links.items()):
+                        if isinstance(v, dict) and v.get('expires_at') and now > v['expires_at']:
+                            del links[code]
+                            changed = True
+                    if changed:
+                        _sl_save(links)
                 except Exception:
                     pass
 

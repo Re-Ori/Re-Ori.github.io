@@ -9,9 +9,12 @@
   "/OLDReOri/",
   "/favicon.ico",
   "/.well-known/",
+  "/forum.html",
   "/p2p.html",
   "/css/p2p.css",
   "/Tool/",
   "/css/tools.css",
-  "/s/"
+  "/s/",
+  "/bbs/",
+  "/api/bbs/"
 ]

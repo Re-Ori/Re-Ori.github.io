@@ -136,6 +136,13 @@ class BlogCardRenderer {
         this.listName = data.name || 'Origin Base';
         this.listDescription = data.description || '';
         this.currentBlogList = Array.isArray(data.items) ? data.items : [];
+        // 博客 JSON 可以指定导航栏高亮项
+        if (data.navActive) {
+          window.__navActive = data.navActive;
+          if (typeof window.updateNavHighlight === 'function') {
+            setTimeout(window.updateNavHighlight, 0);
+          }
+        }
       } else {
         this.currentBlogList = [];
         this.listDescription = '';
@@ -1004,15 +1011,15 @@ document.addEventListener('DOMContentLoaded', () => {
   );
   console.log(
     '  本地文件版本: %s',
-    '2026.06.08 00:08:42 [UTC+8]'
+    '2026.06.11 23:24:54 [UTC+8]'
   );
   console.log(
     '  GitHub 远程版本: %s',
-    '2026.06.07 23:27:55 [UTC+8] [d983ed5]'
+    '2026.06.11 21:04:06 [UTC+8] [c49aaf6]'
   );
   console.log(
     '  最新检查时间: %s',
-    '2026.06.08 00:10:40 [UTC+8]'
+    '2026.06.11 23:24:57 [UTC+8]'
   );
 })();
 // ===== End AutoUpdate Timestamp =====
