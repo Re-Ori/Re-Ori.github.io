@@ -106,11 +106,13 @@
 .bbs-topic-list { list-style: none; padding: 0; margin: 0; }
 .bbs-topic-item {
   display: flex; align-items: center; gap: 12px;
-  padding: 14px 16px; border-bottom: 1px solid rgba(0,0,0,0.04);
-  cursor: pointer; transition: background 0.12s; border-radius: 8px;
+  padding: 16px 16px; border-bottom: 1px solid rgba(0,0,0,0.06);
+  cursor: pointer; transition: background 0.12s;
 }
+.bbs-topic-item:first-child { border-top: 1px solid rgba(0,0,0,0.06); }
 .bbs-topic-item:hover { background: rgba(0,0,0,0.02); }
-[data-theme="dark"] .bbs-topic-item { border-color: rgba(255,255,255,0.04); }
+[data-theme="dark"] .bbs-topic-item { border-color: rgba(255,255,255,0.06); }
+[data-theme="dark"] .bbs-topic-item:first-child { border-color: rgba(255,255,255,0.06); }
 [data-theme="dark"] .bbs-topic-item:hover { background: rgba(255,255,255,0.03); }
 .bbs-topic-main { flex: 1; min-width: 0; }
 .bbs-topic-title {
@@ -149,11 +151,11 @@
 .bbs-author-link:hover { opacity: 0.7; text-decoration: underline; }
 .bbs-topic-delete-btn {
   background: none; border: none; font-size: 14px; cursor: pointer;
-  color: #ccc; padding: 4px; border-radius: 4px; opacity: 0; transition: all 0.15s;
+  color: #bbb; padding: 4px; border-radius: 4px; opacity: 0.5; transition: all 0.15s;
 }
-.bbs-topic-item:hover .bbs-topic-delete-btn { opacity: 1; }
-.bbs-topic-delete-btn:hover { color: #ff3b30; background: rgba(255,59,48,0.08); }
-[data-theme="dark"] .bbs-topic-delete-btn { color: #555; }
+.bbs-topic-delete-btn:hover { opacity: 1; color: #ff3b30; background: rgba(255,59,48,0.08); }
+[data-theme="dark"] .bbs-topic-delete-btn { color: #666; opacity: 0.6; }
+[data-theme="dark"] .bbs-topic-delete-btn:hover { color: #ff6b35; }
 
 /* ── 加载/空状态 ── */
 .bbs-loading, .bbs-empty {
@@ -250,16 +252,19 @@
 .bbs-detail-content img { max-width: 100%; border-radius: 6px; }
 
 /* ── 回复 ── */
-.bbs-reply-section { margin-top: 8px; }
 .bbs-reply-section h3 {
   font-size: 15px; font-weight: 600; color: #555; margin-bottom: 12px;
 }
 [data-theme="dark"] .bbs-reply-section h3 { color: #888; }
 .bbs-reply-item {
-  padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.04);
+  padding: 16px 0; border-bottom: 1px solid rgba(0,0,0,0.06);
+  position: relative;
 }
-[data-theme="dark"] .bbs-reply-item { border-color: rgba(255,255,255,0.04); }
+[data-theme="dark"] .bbs-reply-item { border-color: rgba(255,255,255,0.06); }
 .bbs-reply-item:last-child { border-bottom: none; }
+.bbs-reply-item:first-child { border-top: none; }
+.bbs-reply-section { border-top: 1px solid rgba(0,0,0,0.06); padding-top: 8px; }
+[data-theme="dark"] .bbs-reply-section { border-color: rgba(255,255,255,0.06); }
 .bbs-reply-author {
   font-size: 13px; font-weight: 600; color: var(--theme-color,#399FFF); margin-bottom: 4px;
 }
@@ -269,14 +274,16 @@
 [data-theme="dark"] .bbs-reply-content { color: #bbb; }
 .bbs-reply-time {
   font-size: 11px; color: #bbb; margin-top: 4px;
-  display: flex; align-items: center; gap: 6px;
 }
 [data-theme="dark"] .bbs-reply-time { color: #555; }
 .bbs-reply-del {
-  cursor: pointer; font-size: 13px; opacity: 0.7; transition: opacity 0.15s;
-  margin-left: auto; user-select: none; padding: 2px 4px; border-radius: 4px;
+  position: absolute; top: 14px; right: 0;
+  cursor: pointer; font-size: 13px; opacity: 0.5; transition: opacity 0.15s;
+  user-select: none; padding: 4px 6px; border-radius: 6px;
 }
 .bbs-reply-del:hover { opacity: 1; background: rgba(255,59,48,0.1); }
+[data-theme="dark"] .bbs-reply-del { opacity: 0.6; }
+[data-theme="dark"] .bbs-reply-del:hover { opacity: 1; }
 
 /* ── 回复输入区 ── */
 .bbs-reply-input-area {

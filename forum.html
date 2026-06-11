@@ -32,7 +32,7 @@
             <input type="file" id="bbs-import-input" accept=".zip" style="display:none">
           </div>
           <div id="bbs-user-badge" class="bbs-user-badge" style="display:none;">
-            <span id="bbs-username"></span>
+            <span id="bbs-username" style="cursor:pointer" onclick="bbsOpenUser(USER_ID)" title="个人主页"></span>
             <button class="bbs-logout-btn" onclick="bbsLogout()">退出</button>
           </div>
           <button class="bbs-login-btn" id="bbs-login-btn" onclick="bbsShowLogin()">登录</button>
@@ -364,8 +364,9 @@
       var delBtn = canDelReply ? '<span class="bbs-reply-del" onclick="bbsDeleteReply(\'' + topic.id + '\',\'' + (r.id || '') + '\')" title="删除"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>' : '';
       repliesHtml += '<div class="bbs-reply-item">' +
         '<div class="bbs-reply-author"><span class="bbs-author-link" onclick="bbsOpenUser(\'' + escapeHtml(r.author_id || '') + '\')">' + escapeHtml(rAuthor) + '</span>' + rBadges + '</div>' +
+        delBtn +
         '<div class="bbs-reply-content">' + escapeHtml(r.content) + '</div>' +
-        '<div class="bbs-reply-time">' + rt + delBtn + '</div>' +
+        '<div class="bbs-reply-time">' + rt + '</div>' +
         '</div>';
     }
 
@@ -427,6 +428,7 @@
 
   window.bbsOpenUser = function(uid) {
     if (!uid) { showToast('用户不存在'); return; }
+    history.pushState({ user: uid }, '', '?user=' + uid);
     var listEl = document.getElementById('bbs-topic-list');
     var detailEl = document.getElementById('bbs-detail');
     listEl.style.display = 'none';
@@ -664,6 +666,8 @@
   window.addEventListener('popstate', function(e) {
     if (e.state && e.state.topic) {
       bbsOpenTopic(e.state.topic);
+    } else if (e.state && e.state.user) {
+      bbsOpenUser(e.state.user);
     } else if (document.getElementById('bbs-detail').style.display !== 'none') {
       document.getElementById('bbs-detail').style.display = 'none';
       document.getElementById('bbs-topic-list').style.display = '';
@@ -675,12 +679,15 @@
   (function() {
     var p = new URLSearchParams(window.location.search);
     var tid = p.get('topic');
-    if (tid) {
+    var uid = p.get('user');
+    var target = tid || uid;
+    if (target) {
       var checkLoaded = setInterval(function() {
         var el = document.getElementById('bbs-topic-list');
         if (el && el.innerHTML.indexOf('bbs-topic-item') !== -1) {
           clearInterval(checkLoaded);
-          bbsOpenTopic(tid);
+          if (tid) bbsOpenTopic(tid);
+          else bbsOpenUser(uid);
         }
       }, 100);
       setTimeout(function() { clearInterval(checkLoaded); }, 10000);
