@@ -214,6 +214,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 if target:
                     safe_target_html = target.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
                     safe_target_js = target.replace('\\', '\\\\').replace("'", "\\'")
+                    END = '</s' + 'cript>'
                     redirect_html = (
                         '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">'
                         '<meta name="viewport" content="width=device-width,initial-scale=1.0">'
@@ -230,7 +231,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                         '.bar{width:240px;height:4px;background:rgba(0,0,0,0.06);border-radius:2px;margin:24px auto 0;overflow:hidden}'
                         '[data-theme="dark"] .bar{background:rgba(255,255,255,0.06)}'
                         '.fill{height:100%;width:0%;background:var(--theme-color,#399FFF);border-radius:2px;transition:width .3s}'
-                        '</style></head><body><div class="wrap">'
+                        '</style></head><body onload="setTimeout(function(){window.location.replace(\'' + safe_target_js + '\')},600)"><div class="wrap">'
                         '<div class="logo"></div><h2>正在跳转</h2>'
                         '<p>' + safe_target_html + '</p>'
                         '<div class="bar"><div class="fill" id="f"></div></div></div>'
@@ -239,11 +240,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                         'var f=document.getElementById("f");if(!f)return;'
                         't+=Math.random()*15+5;if(t>90){t=90;clearInterval(i)}'
                         'f.style.width=t+"%"},200);'
-                        'setTimeout(function(){'
-                        'window.location.replace("' + safe_target_js + '");'
-                        'var f=document.getElementById("f");if(f)f.style.width="100%"'
-                        '},600);'
-                        '<\/script></body></html>'
+                        END + '</body></html>'
                     )
                     resp = redirect_html.encode('utf-8')
                     self.send_response(200)
