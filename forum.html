@@ -23,7 +23,7 @@
       <!-- 顶部栏 -->
       <div class="bbs-header">
         <div class="bbs-header-title">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px;"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg> Origin BBS
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Origin BBS
         </div>
         <div class="bbs-user-area">
           <div id="bbs-admin-actions" style="display:none;font-size:12px;">
@@ -241,14 +241,9 @@
           USER_ID = res.user_id || '';
           ROLE = res.role || 'user';
           localStorage.setItem('bbs_token', TOKEN);
-          localStorage.setItem('bbs_user', USER);
-          localStorage.setItem('bbs_user_id', USER_ID);
-          document.getElementById('bbs-login-modal').style.display = 'none';
-          document.getElementById('bbs-login-btn').style.display = 'none';
-          var badge = document.getElementById('bbs-user-badge');
-          badge.style.display = '';
-          document.getElementById('bbs-username').textContent = USER;
-          showToast('登录成功，欢迎 ' + USER);
+          localStorage.setItem('bbs_user', res.user);
+          localStorage.setItem('bbs_user_id', res.user_id || '');
+          location.reload();
         } else if (res.error === 'auth_failed') {
           showLoginError('用户名或密码错误');
         } else {
@@ -268,10 +263,7 @@
     localStorage.removeItem('bbs_token');
     localStorage.removeItem('bbs_user');
     localStorage.removeItem('bbs_user_id');
-    document.getElementById('bbs-user-badge').style.display = 'none';
-    document.getElementById('bbs-login-btn').style.display = '';
-    showToast('已退出登录');
-    loadTopics();
+    location.reload();
   };
 
   document.getElementById('bbs-login-modal').addEventListener('click', function(e) {
