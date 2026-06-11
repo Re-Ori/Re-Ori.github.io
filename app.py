@@ -314,6 +314,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if len(parts) == 2 and parts[1] == 'reply':
                 self._handle_bbs_topic_reply(parts[0])
                 return
+            if len(parts) == 2 and parts[1] == 'reply-delete':
+                self._handle_bbs_topic_reply_delete(parts[0])
+                return
             if len(parts) == 2 and parts[1] == 'delete':
                 self._handle_bbs_topic_delete(parts[0])
                 return
@@ -1217,7 +1220,10 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({'ok': False, 'error': 'not_found'})
                 return
             topic = json.loads(topic_path.read_text(encoding='utf-8'))
+            import random, string as _s
+            reply_id = ''.join(random.choice(_s.ascii_lowercase + _s.digits) for _ in range(8))
             reply = {
+                'id': reply_id,
                 'author_id': user.get('user_id', ''),
                 'content': content,
                 'created_at': time.time(),
@@ -1233,6 +1239,54 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                     break
             BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False), encoding='utf-8')
             log(f'BBS 回复: {tid} by {user.get("user_id", "?")}')
+            self._send_json({'ok': True, 'reply_id': reply_id})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_topic_reply_delete(self, tid):
+        """POST /api/bbs/topics/<id>/reply-delete — 删除回复"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'})
+            return
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            reply_id = body.get('reply_id', '').strip()
+            if not reply_id:
+                self._send_json({'ok': False, 'error': 'reply_id_required'})
+                return
+            topic_path = BBS_TOPICS_DIR / f'{tid}.json'
+            if not topic_path.exists():
+                self._send_json({'ok': False, 'error': 'not_found'})
+                return
+            topic = json.loads(topic_path.read_text(encoding='utf-8'))
+            user_id = user.get('user_id', '')
+            role = user.get('role', 'user')
+            # 找到回复并检查权限
+            idx = None
+            for i, r in enumerate(topic.get('replies', [])):
+                if r.get('id') == reply_id:
+                    if r.get('author_id') != user_id and role != 'admin':
+                        self._send_json({'ok': False, 'error': 'forbidden'})
+                        return
+                    idx = i
+                    break
+            if idx is None:
+                self._send_json({'ok': False, 'error': 'reply_not_found'})
+                return
+            # 删除回复
+            topic['replies'].pop(idx)
+            topic['updated_at'] = time.time()
+            topic_path.write_text(json.dumps(topic, ensure_ascii=False), encoding='utf-8')
+            # 更新索引
+            topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8')) if BBS_TOPICS_FILE.exists() else []
+            for t in topics:
+                if t['id'] == tid:
+                    t['reply_count'] = len(topic['replies'])
+                    t['updated_at'] = time.time()
+                    break
+            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False), encoding='utf-8')
+            log(f'BBS 删除回复: {tid} reply={reply_id} by {user_id}')
             self._send_json({'ok': True})
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})

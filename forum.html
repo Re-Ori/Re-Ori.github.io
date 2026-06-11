@@ -93,6 +93,7 @@
 <script src="/js/main.js"></script>
 <script>
 (function() {
+  window.__navActive = ["BBS"];
   var TOKEN = localStorage.getItem('bbs_token') || '';
   var USER = localStorage.getItem('bbs_user') || '';
   var USER_ID = localStorage.getItem('bbs_user_id') || '';
@@ -174,6 +175,8 @@
   // ── 初始化 ──
 
   function initBBS() {
+    // 应用导航高亮
+    if (typeof window.updateNavHighlight === 'function') window.updateNavHighlight();
     // 恢复登录状态（先验证 token 是否有效）
     if (TOKEN) {
       api('POST', '/api/bbs/auth', { verify: true }).then(function(res) {
@@ -356,10 +359,12 @@
       if (topic.author_id && r.author_id && r.author_id === topic.author_id) {
         rBadges += '<span class="bbs-role-badge author">贴主</span>';
       }
+      var canDelReply = TOKEN && (ROLE === 'admin' || r.author_id === USER_ID);
+      var delBtn = canDelReply ? '<span class="bbs-reply-del" onclick="bbsDeleteReply(\'' + topic.id + '\',\'' + (r.id || '') + '\')" title="删除">🗑</span>' : '';
       repliesHtml += '<div class="bbs-reply-item">' +
         '<div class="bbs-reply-author"><span class="bbs-author-link" onclick="bbsOpenUser(\'' + escapeHtml(r.author_id || '') + '\')">' + escapeHtml(rAuthor) + '</span>' + rBadges + '</div>' +
         '<div class="bbs-reply-content">' + escapeHtml(r.content) + '</div>' +
-        '<div class="bbs-reply-time">' + rt + '</div>' +
+        '<div class="bbs-reply-time">' + rt + delBtn + '</div>' +
         '</div>';
     }
 
@@ -523,6 +528,23 @@
   };
 
   // ── 删除帖子 ──
+
+  window.bbsDeleteReply = function(topicId, replyId) {
+    if (!replyId || !confirm('确定删除这条回复吗？')) return;
+    api('POST', '/api/bbs/topics/' + topicId + '/reply-delete', { reply_id: replyId })
+      .then(function(res) {
+        if (res.ok) {
+          showToast('回复已删除');
+          bbsOpenTopic(topicId);
+        } else if (res.error === 'unauthorized') {
+          handleUnauthorized();
+        } else if (res.error === 'forbidden') {
+          showToast('无权删除');
+        } else {
+          showToast('删除失败');
+        }
+      });
+  };
 
   window.bbsDeleteTopic = function(id) {
     if (!confirm('确定删除这个帖子吗？')) return;

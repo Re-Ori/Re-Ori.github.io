@@ -269,8 +269,14 @@
 [data-theme="dark"] .bbs-reply-content { color: #bbb; }
 .bbs-reply-time {
   font-size: 11px; color: #bbb; margin-top: 4px;
+  display: flex; align-items: center; gap: 6px;
 }
 [data-theme="dark"] .bbs-reply-time { color: #555; }
+.bbs-reply-del {
+  cursor: pointer; font-size: 12px; opacity: 0.3; transition: opacity 0.15s;
+  margin-left: auto; user-select: none;
+}
+.bbs-reply-del:hover { opacity: 1; }
 
 /* ── 回复输入区 ── */
 .bbs-reply-input-area {

@@ -136,12 +136,16 @@ class BlogCardRenderer {
         this.listName = data.name || 'Origin Base';
         this.listDescription = data.description || '';
         this.currentBlogList = Array.isArray(data.items) ? data.items : [];
-        // 博客 JSON 可以指定导航栏高亮项
+        // 博客 JSON 可以指定导航栏高亮项（页面未主动设置时才生效）
         if (data.navActive) {
-          window.__navActive = data.navActive;
-          if (typeof window.updateNavHighlight === 'function') {
-            setTimeout(window.updateNavHighlight, 0);
-          }
+          setTimeout(function() {
+            if (typeof window.__navActive === 'undefined' || window.__navActive === null) {
+              window.__navActive = data.navActive;
+              if (typeof window.updateNavHighlight === 'function') {
+                window.updateNavHighlight();
+              }
+            }
+          }, 0);
         }
       } else {
         this.currentBlogList = [];
@@ -1011,15 +1015,15 @@ document.addEventListener('DOMContentLoaded', () => {
   );
   console.log(
     '  本地文件版本: %s',
-    '2026.06.11 23:24:54 [UTC+8]'
+    '2026.06.11 23:37:34 [UTC+8]'
   );
   console.log(
     '  GitHub 远程版本: %s',
-    '2026.06.11 21:04:06 [UTC+8] [c49aaf6]'
+    '2026.06.11 23:27:23 [UTC+8] [2068764]'
   );
   console.log(
     '  最新检查时间: %s',
-    '2026.06.11 23:24:57 [UTC+8]'
+    '2026.06.11 23:39:59 [UTC+8]'
   );
 })();
 // ===== End AutoUpdate Timestamp =====

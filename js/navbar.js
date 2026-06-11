@@ -664,16 +664,10 @@
     ul.className = 'navbar-nav';
     function applyNavHighlight() {
       var activeNames = Array.isArray(window.__navActive) ? window.__navActive : [];
-      var currentUrl = window.location.pathname + window.location.search;
       Array.from(ul.children).forEach(function(li) {
         var a = li.querySelector('a');
         if (!a) return;
-        var isActive = false;
-        if (activeNames.length > 0) {
-          isActive = activeNames.indexOf(a.textContent) !== -1;
-        } else {
-          isActive = currentUrl === a.getAttribute('href');
-        }
+        var isActive = activeNames.length > 0 && activeNames.indexOf(a.textContent) !== -1;
         li.className = isActive ? 'active' : '';
       });
       document.querySelectorAll('.navbar-mobile-menu a').forEach(function(link) {
