@@ -13,13 +13,13 @@
     "role": "admin"
   },
   {
-    "id": "AerMini",
-    "username": "梧桐",
+    "id": "user001",
+    "username": "AerMini",
     "password": "a123456",
     "role": "user"
   },
   {
-    "id": "user001",
+    "id": "user002",
     "username": "梧桐",
     "password": "wantong20100305",
     "role": "user"
