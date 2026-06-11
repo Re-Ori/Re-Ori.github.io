@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>短链生成器 — Origin Base</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/tools.css">
+    <style>
+      .sl-wrap { max-width: 560px; margin: 0 auto; padding: 12px 0; }
+      .sl-card { background: #fff; border: 1px solid #e5e5ea; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+      [data-theme="dark"] .sl-card { background: #1c1c1e; border-color: #2c2c2e; }
+      .sl-label { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 8px; }
+      [data-theme="dark"] .sl-label { color: #888; }
+      .sl-input-row { display: flex; gap: 8px; }
+      .sl-input-row input {
+        flex: 1; padding: 10px 12px; border: 1px solid rgba(0,0,0,0.12); border-radius: 8px;
+        font-size: 14px; background: rgba(255,255,255,0.8); color: #333; outline: none;
+        box-sizing: border-box; transition: border-color 0.2s;
+      }
+      [data-theme="dark"] .sl-input-row input { background: rgba(40,42,65,0.8); border-color: rgba(255,255,255,0.1); color: #ddd; }
+      .sl-input-row input:focus { border-color: var(--theme-color, #399FFF); }
+      .sl-btn {
+        padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+        cursor: pointer; background: var(--theme-color, #399FFF); color: #fff;
+        white-space: nowrap; transition: opacity 0.2s; flex-shrink: 0;
+      }
+      .sl-btn:hover { opacity: 0.85; }
+      .sl-result {
+        margin-top: 12px; padding: 12px 14px; background: rgba(57,159,255,0.06);
+        border: 1px solid rgba(57,159,255,0.15); border-radius: 8px; display: none; word-break: break-all;
+      }
+      .sl-result.show { display: block; }
+      .sl-result .sl-result-label { font-size: 12px; color: #8e8e93; margin-bottom: 4px; }
+      .sl-result .sl-result-url { font-size: 14px; color: var(--theme-color, #399FFF); font-weight: 600; }
+      .sl-list { margin-top: 0; }
+      .sl-list-item {
+        display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+        border-bottom: 1px solid rgba(0,0,0,0.04); font-size: 13px;
+      }
+      [data-theme="dark"] .sl-list-item { border-bottom-color: rgba(255,255,255,0.04); }
+      .sl-list-item:last-child { border-bottom: none; }
+      .sl-list-code {
+        font-family: 'SF Mono', 'Consolas', monospace; font-weight: 600;
+        color: var(--theme-color, #399FFF); flex-shrink: 0; min-width: 80px;
+      }
+      .sl-list-url { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8e8e93; }
+      .sl-list-actions { display: flex; gap: 4px; flex-shrink: 0; }
+      .sl-list-actions button {
+        width: 28px; height: 28px; border: none; border-radius: 6px; background: transparent;
+        cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;
+        transition: background 0.15s; color: #999;
+      }
+      .sl-list-actions button:hover { background: rgba(0,0,0,0.06); color: #333; }
+      [data-theme="dark"] .sl-list-actions button:hover { background: rgba(255,255,255,0.08); color: #ccc; }
+      .sl-empty { text-align: center; padding: 32px 16px; color: #bbb; font-size: 14px; }
+      [data-theme="dark"] .sl-empty { color: #555; }
+      .sl-error { color: #ff3b30; font-size: 12px; margin-top: 6px; display: none; }
+      .sl-error.show { display: block; }
+
+      /* 登录遮罩 */
+      .sl-login-overlay {
+        position: fixed; inset: 0; background: rgba(255,255,255,0.92);
+        backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center;
+        z-index: 100;
+      }
+      [data-theme="dark"] .sl-login-overlay { background: rgba(26,27,46,0.92); }
+      .sl-login-box {
+        text-align: center; padding: 40px; max-width: 360px;
+      }
+      .sl-login-box h2 { font-size: 20px; color: #1a1a1a; margin-bottom: 8px; }
+      [data-theme="dark"] .sl-login-box h2 { color: #e0e0e0; }
+      .sl-login-box p { font-size: 14px; color: #8e8e93; margin-bottom: 24px; line-height: 1.6; }
+      .sl-login-btn {
+        display: inline-flex; align-items: center; gap: 8px; padding: 12px 28px;
+        border: none; border-radius: 8px; font-size: 15px; font-weight: 600;
+        cursor: pointer; background: #24292e; color: #fff; transition: opacity 0.2s;
+      }
+      .sl-login-btn:hover { opacity: 0.85; }
+      .sl-login-btn svg { width: 20px; height: 20px; }
+
+      @media (max-width: 480px) { .sl-card { padding: 16px; } .sl-input-row { flex-direction: column; } .sl-btn { width: 100%; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="page-title">短链生成器</h1>
+
+        <div id="sl-login-overlay" class="sl-login-overlay">
+            <div class="sl-login-box">
+                <h2>需要登录</h2>
+                <p>使用短链生成器需要先通过 GitHub 登录。</p>
+                <div class="blog-content" style="max-width:340px;margin:0 auto;"></div>
+                <p style="font-size:12px;color:#bbb;margin-top:12px;">点击评论区的 "Sign in with GitHub" 登录，登录后自动解锁</p>
+            </div>
+        </div>
+
+        <div id="sl-app" style="display:none;">
+          <div class="sl-wrap">
+              <div class="sl-card">
+                  <div class="sl-label">输入长链接</div>
+                  <div class="sl-input-row">
+                      <input type="url" id="sl-input" placeholder="https://example.com/very/long/url" autocomplete="off">
+                      <button class="sl-btn" id="sl-generate">生成</button>
+                  </div>
+                  <div class="sl-error" id="sl-error"></div>
+                  <div class="sl-result" id="sl-result">
+                      <div class="sl-result-label">短链接</div>
+                      <div class="sl-result-url" id="sl-result-url"></div>
+                  </div>
+              </div>
+              <div class="sl-card sl-list">
+                  <div class="sl-label">短链列表</div>
+                  <div id="sl-list-content"><div class="sl-empty">加载中…</div></div>
+              </div>
+          </div>
+        </div>
+    </div>
+
+    <script src="/js/navbar.js"></script>
+    <script src="/js/giscus/giscus.js"></script>
+    <script>window.showFooter = false;</script>
+    <script src="/js/main.js"></script>
+    
+    <script>
+    (function() {
+      var AUTH_TOKEN = null;
+      var CURRENT_USER = null;
+
+      function api(method, path, body) {
+        var opts = {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+        };
+        if (AUTH_TOKEN) opts.headers['X-Auth-Token'] = AUTH_TOKEN;
+        if (body) opts.body = JSON.stringify(body);
+        return fetch(path, opts).then(function(r) { return r.json(); });
+      }
+
+      function showError(msg) {
+        var el = document.getElementById('sl-error');
+        el.textContent = msg; el.classList.add('show');
+      }
+      function hideError() { document.getElementById('sl-error').classList.remove('show'); }
+
+      function showResult(url) {
+        var el = document.getElementById('sl-result');
+        document.getElementById('sl-result-url').textContent = url;
+        el.classList.add('show');
+        navigator.clipboard.writeText(url).then(function() {
+          window.showToast && window.showToast('短链已复制: ' + url, 2000);
+        });
+      }
+
+      function canDelete(item) {
+        return CURRENT_USER === 'Re-Ori' || item.user === CURRENT_USER;
+      }
+
+      function renderList() {
+        api('GET', '/api/short-links').then(function(items) {
+          if (items && items.error) return;
+          var container = document.getElementById('sl-list-content');
+          if (!items || items.length === 0) {
+            container.innerHTML = '<div class="sl-empty">还没有短链</div>';
+            return;
+          }
+          var html = '';
+          for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            html += '<div class="sl-list-item">' +
+              '<span class="sl-list-code">' + escapeHtml(item.code) + '</span>' +
+              '<span class="sl-list-url" title="' + escapeHtml(item.url) + '">' + escapeHtml(item.url) + '</span>' +
+              '<div class="sl-list-actions">' +
+                '<button onclick="copyShortLink(\'' + item.code + '\')" title="复制短链">📋</button>';
+            if (canDelete(item)) {
+              html += '<button onclick="deleteShortLink(\'' + item.code + '\')" title="删除">🗑</button>';
+            }
+            html += '</div></div>';
+          }
+          container.innerHTML = html;
+        });
+      }
+
+      window.copyShortLink = function(code) {
+        var url = window.location.origin + '/s/' + code;
+        navigator.clipboard.writeText(url).then(function() {
+          window.showToast && window.showToast('短链已复制: ' + url, 2000);
+        });
+      };
+
+      window.deleteShortLink = function(code) {
+        api('POST', '/api/short-link/delete', { code: code }).then(function(res) {
+          if (res.ok) {
+            window.showToast && window.showToast('已删除', 1500);
+            renderList();
+          } else {
+            window.showToast && window.showToast(res.message || '删除失败', 2000);
+          }
+        });
+      };
+
+      document.getElementById('sl-generate').addEventListener('click', function() {
+        hideError();
+        var input = document.getElementById('sl-input');
+        var url = input.value.trim();
+        if (!url) { showError('请输入链接'); return; }
+        if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+        try { new URL(url); } catch(e) { showError('链接格式不正确'); return; }
+
+        api('POST', '/api/short-link', { url: url }).then(function(res) {
+          if (res.ok) {
+            showResult(window.location.origin + res.url);
+            input.value = '';
+            renderList();
+          } else if (res.error === 'unauthorized') {
+            location.reload();
+          } else if (res.error === 'limit_reached') {
+            showError(res.message || '已达到数量上限');
+          } else {
+            showError(res.message || '生成失败');
+          }
+        });
+      });
+
+      document.getElementById('sl-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') document.getElementById('sl-generate').click();
+      });
+
+      function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = str; return div.innerHTML;
+      }
+
+      // 尝试用 giscus session 登录
+      // 检测 URL 中的 giscus session 参数并存储
+      (function() {
+        var p = new URLSearchParams(window.location.search);
+        var gs = p.get('giscus');
+        if (gs) {
+          localStorage.setItem('giscus-session', gs);
+          // 清除 URL 中的 giscus 参数
+          var url = new URL(window.location);
+          url.searchParams.delete('giscus');
+          history.replaceState(null, '', url);
+        }
+      })();
+
+      function tryAuth() {
+        try {
+          var gs = localStorage.getItem("giscus-session");
+          if (!gs) { setTimeout(tryAuth, 2000); return; }
+          try { gs = JSON.parse(gs); } catch(e) {}
+          if (typeof gs !== "string" || !gs) { setTimeout(tryAuth, 2000); return; }
+          api("POST", "/api/short-link/auth", { token: gs }).then(function(res) {
+            if (res.ok) {
+              AUTH_TOKEN = res.token;
+              CURRENT_USER = res.user;
+              document.getElementById("sl-login-overlay").style.display = "none";
+              document.getElementById("sl-app").style.display = "";
+              renderList();
+            } else {
+              setTimeout(tryAuth, 2000);
+            }
+          });
+        } catch(e) {
+          setTimeout(tryAuth, 2000);
+        }
+      }
+        try {
+          var gs = localStorage.getItem('giscus-session');
+          if (!gs) { setTimeout(tryAuth, 2000); return; }
+          // giscus 存的是 JSON.stringify 后的字符串，需要解析
+          try { gs = JSON.parse(gs); } catch(e) {}
+          if (typeof gs !== 'string' || !gs) { setTimeout(tryAuth, 2000); return; }
+          api('POST', '/api/short-link/auth', { token: gs }).then(function(res) {
+            if (res.ok) {
+              AUTH_TOKEN = res.token;
+              CURRENT_USER = res.user;
+              document.getElementById('sl-login-overlay').style.display = 'none';
+              document.getElementById('sl-app').style.display = '';
+              renderList();
+            } else {
+              setTimeout(tryAuth, 2000);
+            }
+          });
+        } catch(e) {
+          setTimeout(tryAuth, 2000);
+        }
+      }
+
+      tryAuth();
+    })();
+    </script>
+</body>
+</html>

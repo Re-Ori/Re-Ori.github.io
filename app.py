@@ -22,6 +22,31 @@ _p2p_relay_usage: dict[str, list[float]] = {}
 RELAY_RATE_LIMIT = 5 * 1024 * 1024
 RELAY_RATE_WINDOW = 300
 RELAY_MAX_BUFFER = 200
+SHORT_LINKS_FILE = PROJECT_ROOT / "short_links.json"
+SL_TOKENS: dict[str, dict] = {}
+SL_TOKEN_TTL = 86400  # 24h
+
+def _sl_token():
+    import hashlib, os
+    return hashlib.sha256(os.urandom(32)).hexdigest()[:32]
+
+def _sl_check(headers):
+    t = headers.get('X-Auth-Token', '')
+    e = SL_TOKENS.get(t)
+    if e and time.time() - e['at'] < SL_TOKEN_TTL:
+        return e.get('user', '')
+    SL_TOKENS.pop(t, None)
+    return None
+
+def _sl_load():
+    try:
+        if SHORT_LINKS_FILE.exists():
+            return json.loads(SHORT_LINKS_FILE.read_text(encoding="utf-8"))
+    except: pass
+    return {}
+
+def _sl_save(d):
+    SHORT_LINKS_FILE.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
 
 _on_access_check = lambda: None  # server.py \u5c06\u66ff\u6362\u6b64\u56de\u8c03
 
@@ -116,6 +141,28 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if req_path == '/api/p2p/keepalive':
             self._handle_p2p_keepalive()
             return
+        if req_path == '/api/short-links':
+            self._handle_sl_list()
+            return
+
+        # 短链跳转 /s/<code>
+        if req_path.startswith('/s/') and len(req_path) > 3:
+            code = req_path[3:]
+            links = _sl_load()
+            if code in links:
+                target = links[code]
+                if isinstance(target, dict):
+                    target = target.get('url', '')
+                if target:
+                    self.send_response(302)
+                    self.send_header('Location', target)
+                    self.end_headers()
+                    return
+            self.send_response(404)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.end_headers()
+            self.wfile.write('短链不存在\n'.encode('utf-8'))
+            return
 
         # GitHub API 代理（处理 giscus URL 重写后的请求）
         if req_path.startswith('/api/github-proxy/'):
@@ -181,6 +228,23 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             return
         if req_path == '/api/ping':
             self._send_json({'ok': True, 'server': 'autoupdate'})
+            return
+        if req_path == '/api/short-link/auth':
+            self._handle_sl_auth()
+            return
+        if req_path == '/api/short-link':
+            user = _sl_check(self.headers)
+            if not user:
+                self._send_json({'ok': False, 'error': 'unauthorized'})
+                return
+            self._handle_sl_create(user)
+            return
+        if req_path == '/api/short-link/delete':
+            user = _sl_check(self.headers)
+            if not user:
+                self._send_json({'ok': False, 'error': 'unauthorized'})
+                return
+            self._handle_sl_delete(user)
             return
 
         # OAuth 路径（如 /api/oauth/token）— 服务端代理到 giscus.app（避免 CORS 问题）
@@ -774,13 +838,113 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         if len(args) == 3:
-            # 正常请求: ("GET /path HTTP/1.1", "200", "size")
             log(f"→ {args[0]}  {args[1]} ({args[2]})")
         elif len(args) == 2:
-            # 错误响应: (code, message) — 被 send_error 调用
             log(f"→ ❌ {args[0]} {args[1]}")
         else:
             log(f"→ HTTP {' '.join(str(a) for a in args)}")
+
+    # ── 短链服务 ──
+
+    def _handle_sl_list(self):
+        links = _sl_load()
+        items = sorted(
+            ({'code': k, 'url': v.get('url', v) if isinstance(v, dict) else v,
+              'created': v.get('created', 0) if isinstance(v, dict) else 0,
+              'user': v.get('user', '') if isinstance(v, dict) else ''}
+             for k, v in links.items()),
+            key=lambda x: x['created'], reverse=True
+        )
+        self._send_json(items)
+
+    def _handle_sl_auth(self):
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            gs = body.get('token', '').strip()
+            if not gs:
+                self._send_json({'ok': False, 'error': 'token_required'})
+                return
+            import json as _json
+            login = ''
+            try:
+                req = urllib.request.Request(
+                    'https://api.github.com/user',
+                    headers={'Authorization': f'Bearer {gs}', 'User-Agent': 'AutoUpdate/2.0'}
+                )
+                resp = urllib.request.urlopen(req, timeout=10)
+                user_data = _json.loads(resp.read())
+                login = user_data.get('login', '')
+            except Exception:
+                pass
+            if not login:
+                login = gs[:8]
+            token = _sl_token()
+            SL_TOKENS[token] = {'user': login, 'at': time.time()}
+            log(f'短链登录: {login}')
+            self._send_json({'ok': True, 'token': token, 'user': login})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_sl_create(self, user):
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            url = body.get('url', '').strip()
+            if not url:
+                self._send_json({'ok': False, 'error': 'url_required'})
+                return
+            if not url.startswith('http://') and not url.startswith('https://'):
+                url = 'https://' + url
+            links = _sl_load()
+            # 查重
+            for code, v in links.items():
+                existing = v.get('url', v) if isinstance(v, dict) else v
+                if existing == url:
+                    self._send_json({'ok': True, 'code': code, 'url': f'/s/{code}'})
+                    return
+            # 数量限制（管理员 Re-Ori 不受限）
+            if user != 'Re-Ori':
+                user_count = sum(1 for v in links.values()
+                                 if isinstance(v, dict) and v.get('user') == user)
+                if user_count >= 5:
+                    self._send_json({'ok': False, 'error': 'limit_reached',
+                                     'message': '每个用户最多 5 个短链'})
+                    return
+            import random, string
+            chars = string.ascii_letters + string.digits
+            while True:
+                code = ''.join(random.choice(chars) for _ in range(6))
+                if code not in links:
+                    break
+            links[code] = {'url': url, 'created': time.time(), 'user': user}
+            _sl_save(links)
+            log(f"短链创建: {code} → {url} (by {user})")
+            self._send_json({'ok': True, 'code': code, 'url': f'/s/{code}'})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_sl_delete(self, user):
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            code = body.get('code', '').strip()
+            if not code:
+                self._send_json({'ok': False, 'error': 'code_required'})
+                return
+            links = _sl_load()
+            if code not in links:
+                self._send_json({'ok': False, 'error': 'not_found'})
+                return
+            entry = links[code]
+            owner = entry.get('user', '') if isinstance(entry, dict) else ''
+            # 只能删除自己的链接，管理员可以删除所有
+            if user != 'Re-Ori' and owner != user:
+                self._send_json({'ok': False, 'error': 'forbidden'})
+                return
+            del links[code]
+            _sl_save(links)
+            log(f"短链删除: {code} (by {user})")
+            self._send_json({'ok': True})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
 
 
 # ── 启动入口 ─────────────────────────────────────────────

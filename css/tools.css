@@ -1,0 +1,89 @@
+/* ── 工具页面样式 ── */
+
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.tool-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: #fff;
+  border: 1px solid #e5e5ea;
+  border-radius: 12px;
+  text-decoration: none;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+[data-theme="dark"] .tool-card {
+  background: #1c1c1e;
+  border-color: #2c2c2e;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.tool-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+  border-color: var(--theme-color, #399FFF);
+}
+[data-theme="dark"] .tool-card:hover {
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  border-color: var(--theme-color, #399FFF);
+}
+
+.tool-card-icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: rgba(57,159,255,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.tool-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tool-card-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+}
+[data-theme="dark"] .tool-card-name {
+  color: #e0e0e0;
+}
+
+.tool-card-desc {
+  font-size: 13px;
+  color: #8e8e93;
+  line-height: 1.4;
+}
+
+@media (max-width: 480px) {
+  .tools-grid {
+    grid-template-columns: 1fr;
+  }
+  .tool-card {
+    padding: 16px;
+  }
+  .tool-card-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+  .tool-card-name {
+    font-size: 15px;
+  }
+  .tool-card-desc {
+    font-size: 12px;
+  }
+}

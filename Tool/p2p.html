@@ -1664,7 +1664,7 @@
   };
 
   window.copyRoomLink = function() {
-    var url = window.location.origin + '/p2p.html?room=' + encodeURIComponent(p2p.room);
+    var url = window.location.origin + '/Tool/p2p.html?room=' + encodeURIComponent(p2p.room);
     navigator.clipboard.writeText(url).then(function() {
       window.showToast && window.showToast('房间链接已复制', 2000);
     });

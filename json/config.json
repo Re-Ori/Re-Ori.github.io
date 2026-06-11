@@ -18,8 +18,8 @@
         "url": "/index.html?blog_list=/blogs/update/update.json"
       },
       {
-        "name": "P2P",
-        "url": "/p2p.html"
+        "name": "工具",
+        "url": "/index.html?blog_list=/blogs/tools/tools.json"
       },
       {
         "name": "关于",
@@ -54,5 +54,8 @@
     "emitMetadata": "0",
     "inputPosition": "bottom",
     "lang": "zh-CN"
+  },
+  "toolAuth": {
+    "password": "reori"
   }
 }

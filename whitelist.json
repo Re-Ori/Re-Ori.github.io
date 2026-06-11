@@ -10,5 +10,8 @@
   "/favicon.ico",
   "/.well-known/",
   "/p2p.html",
-  "/css/p2p.css"
+  "/css/p2p.css",
+  "/Tool/",
+  "/css/tools.css",
+  "/s/"
 ]

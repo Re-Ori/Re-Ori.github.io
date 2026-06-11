@@ -1,0 +1,24 @@
+{
+  "name": "工具",
+  "description": "实用在线工具",
+  "items": [
+    {
+      "id": "p2p",
+      "priority": 10,
+      "title": "P2P 直连空间",
+      "description": "文字聊天、文件传输、屏幕共享，不走服务器流量",
+      "themeColor": "#4CAF50",
+      "date": "2026-06-02",
+      "url": "/Tool/p2p.html"
+    },
+    {
+      "id": "short-link",
+      "priority": 10,
+      "title": "短链生成器",
+      "description": "将长链接转为短链接，方便分享",
+      "themeColor": "#399FFF",
+      "date": "2026-06-07",
+      "url": "/Tool/short-link.html"
+    }
+  ]
+}

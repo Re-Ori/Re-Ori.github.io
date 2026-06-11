@@ -26,13 +26,13 @@
       "url": "/blogs/about.html"
     },
     {
-      "id": "p2p",
+      "id": "tools",
       "priority": 10,
-      "title": "🌐 P2P 直连空间",
-      "description": "文字聊天、文件传输、屏幕共享，不走服务器流量",
-      "themeColor": "#4CAF50",
-      "date": "2026-06-02",
-      "url": "/p2p.html"
+      "title": "工具",
+      "description": "P2P 直连空间、短链生成器等实用工具",
+      "themeColor": "#7C5CFC",
+      "date": "2026-06-07",
+      "url": "/index.html?blog_list=/blogs/tools/tools.json"
     },
     {
       "id": "math",
