@@ -67,10 +67,10 @@ def _bbs_find_topic_file(tid):
             return f
     return None
 
-def _bbs_all_topics(force=False):
-    """读取 topics 目录下所有帖子，按时间倒序（带缓存）"""
+def _bbs_all_topics():
+    """读取并处理所有帖子（含作者解析、生成预览），结果缓存到内存"""
     global _bbs_list_cache
-    if not force and _bbs_list_cache is not None:
+    if _bbs_list_cache is not None:
         return _bbs_list_cache
     if not BBS_TOPICS_DIR.exists():
         _bbs_list_cache = []
@@ -83,6 +83,24 @@ def _bbs_all_topics(force=False):
             except Exception:
                 pass
     topics.sort(key=lambda t: t.get('created_at', 0), reverse=True)
+    # 一次处理完所有计算字段，后续请求直接走缓存
+    for t in topics:
+        aid = t.get('author_id', '')
+        info = _bbs_resolve_author(aid)
+        t['author_name'] = info['username'] if info else '账号不存在'
+        t['author_role'] = info['role'] if info else ''
+        t['author_tags'] = info['tags'] if info else []
+        t['reply_count'] = len(t.get('replies', []))
+        raw = t.get('content', '')
+        plain = raw
+        plain = __import__('re').sub(r'```[\s\S]*?```|`([^`]+)`', r'\1', plain)
+        plain = __import__('re').sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', plain)
+        plain = __import__('re').sub(r'\*\*([^*]+)\*\*', r'\1', plain)
+        plain = __import__('re').sub(r'^#{1,6}\s+', '', plain, flags=__import__('re').MULTILINE)
+        plain = plain.replace('\n', ' ').strip()
+        t['content_preview'] = plain[:120] + ('...' if len(plain) > 120 else '')
+        t.pop('content', None)
+        t.pop('replies', None)
     _bbs_list_cache = topics
     return topics
 
@@ -1196,30 +1214,11 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({'ok': False, 'error': str(e)})
 
     def _handle_bbs_topics(self):
-        """GET /api/bbs/topics — 帖子列表（含作者名解析）"""
+        """GET /api/bbs/topics — 帖子列表（数据已由 _bbs_all_topics 预处理并缓存）"""
         try:
             _bbs_migrate_old_format()
             topics = _bbs_all_topics()
-            # 解析作者名、补充计算字段
-            for t in topics:
-                aid = t.get('author_id', '')
-                info = _bbs_resolve_author(aid)
-                t['author_name'] = info['username'] if info else '账号不存在'
-                t['author_role'] = info['role'] if info else ''
-                t['author_tags'] = info['tags'] if info else []
-                t['reply_count'] = len(t.get('replies', []))
-                # 从正文生成预览
-                raw = t.get('content', '')
-                plain = raw
-                plain = __import__('re').sub(r'```[\s\S]*?```|`([^`]+)`', r'\1', plain)
-                plain = __import__('re').sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', plain)
-                plain = __import__('re').sub(r'\*\*([^*]+)\*\*', r'\1', plain)
-                plain = __import__('re').sub(r'^#{1,6}\s+', '', plain, flags=__import__('re').MULTILINE)
-                plain = plain.replace('\n', ' ').strip()
-                t['content_preview'] = plain[:120] + ('...' if len(plain) > 120 else '')
-                t.pop('replies', None)
             params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            # 搜索过滤
             q = params.get('q', [None])[0]
             if q:
                 q = q.strip().lower()
@@ -1485,19 +1484,12 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             user_topics = []
             for t in all_topics:
                 if t.get('author_id') == uid:
-                    raw = t.get('content', '')
-                    plain = raw
-                    plain = __import__('re').sub(r'```[\s\S]*?```|`([^`]+)`', r'\1', plain)
-                    plain = __import__('re').sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', plain)
-                    plain = __import__('re').sub(r'\*\*([^*]+)\*\*', r'\1', plain)
-                    plain = __import__('re').sub(r'^#{1,6}\s+', '', plain, flags=__import__('re').MULTILINE)
-                    plain = plain.replace('\n', ' ').strip()
                     user_topics.append({
                         'id': t['id'],
                         'title': t['title'],
-                        'reply_count': len(t.get('replies', [])),
+                        'reply_count': t.get('reply_count', 0),
                         'created_at': t.get('created_at', 0),
-                        'content_preview': plain[:120] + ('...' if len(plain) > 120 else ''),
+                        'content_preview': t.get('content_preview', ''),
                     })
             user_topics.sort(key=lambda x: x.get('created_at', 0), reverse=True)
             self._send_json({
