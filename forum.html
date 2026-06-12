@@ -452,13 +452,21 @@
 
   window.bbsOpenTopic = function(id) {
     history.pushState({ topic: id }, '', '?topic=' + id);
+    // 立即显示加载动画，不用等 API
+    var listEl = document.getElementById('bbs-topic-list');
+    var detailEl = document.getElementById('bbs-detail');
+    listEl.style.display = 'none';
+    detailEl.style.display = '';
+    detailEl.innerHTML = '<div class="bbs-loading" style="padding:80px 16px;"><div class="bbs-loading-spinner"></div>加载中…</div>';
+    document.getElementById('bbs-fab').classList.add('hidden');
     api('GET', '/api/bbs/topics/' + id).then(function(topic) {
       if (topic && topic.id) {
         renderDetail(topic);
       } else {
-        showToast('帖子不存在或已被删除');
-        loadTopics();
+        detailEl.innerHTML = '<div class="bbs-detail"><button class="bbs-detail-back" onclick="bbsCloseDetail()">← 返回列表</button><div style="text-align:center;padding:48px;color:#bbb;">帖子不存在或已被删除</div></div>';
       }
+    }).catch(function() {
+      detailEl.innerHTML = '<div class="bbs-detail"><button class="bbs-detail-back" onclick="bbsCloseDetail()">← 返回列表</button><div style="text-align:center;padding:48px;color:#bbb;">加载失败</div></div>';
     });
   };
 
