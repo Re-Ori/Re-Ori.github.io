@@ -34,6 +34,9 @@ BBS_TOPICS_DIR = BBS_DIR / "topics"
 BBS_TOKENS: dict[str, dict] = {}
 BBS_TOKEN_TTL = 86400  # 24h
 
+# 帖子列表缓存，增删改时清空
+_bbs_list_cache: list | None = None
+
 def _bbs_token():
     import hashlib, os
     return hashlib.sha256(os.urandom(32)).hexdigest()[:32]
@@ -64,9 +67,13 @@ def _bbs_find_topic_file(tid):
             return f
     return None
 
-def _bbs_all_topics():
-    """读取 topics 目录下所有帖子，按时间倒序"""
+def _bbs_all_topics(force=False):
+    """读取 topics 目录下所有帖子，按时间倒序（带缓存）"""
+    global _bbs_list_cache
+    if not force and _bbs_list_cache is not None:
+        return _bbs_list_cache
     if not BBS_TOPICS_DIR.exists():
+        _bbs_list_cache = []
         return []
     topics = []
     for f in BBS_TOPICS_DIR.iterdir():
@@ -76,7 +83,13 @@ def _bbs_all_topics():
             except Exception:
                 pass
     topics.sort(key=lambda t: t.get('created_at', 0), reverse=True)
+    _bbs_list_cache = topics
     return topics
+
+def _bbs_clear_cache():
+    """帖子有变更时清空列表缓存"""
+    global _bbs_list_cache
+    _bbs_list_cache = None
 
 def _bbs_migrate_old_format():
     """迁移旧 {id}.json → {id}_{title}.json，清理 topics.json"""
@@ -1254,6 +1267,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             }
             BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
             topic_path.write_text(json.dumps(topic_data, ensure_ascii=False, indent=2), encoding='utf-8')
+            _bbs_clear_cache()
             log(f'BBS 新帖: {tid} "{title}" by {author_id}')
             self._send_json({'ok': True, 'id': tid})
         except Exception as e:
@@ -1313,6 +1327,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             topic.setdefault('replies', []).append(reply)
             topic['updated_at'] = time.time()
             topic_path.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
+            _bbs_clear_cache()
             log(f'BBS 回复: {tid} by {user.get("user_id", "?")}')
             self._send_json({'ok': True, 'reply_id': reply_id})
         except Exception as e:
@@ -1353,6 +1368,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             topic['replies'].pop(idx)
             topic['updated_at'] = time.time()
             topic_path.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
+            _bbs_clear_cache()
             log(f'BBS 删除回复: {tid} reply={reply_id} by {user_id}')
             self._send_json({'ok': True})
         except Exception as e:
@@ -1376,6 +1392,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({'ok': False, 'error': 'forbidden'})
                 return
             topic_path.unlink()
+            _bbs_clear_cache()
             log(f'BBS 删帖: {tid} by {user_id}')
             self._send_json({'ok': True})
         except Exception as e:
@@ -1447,6 +1464,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                     data = zf.read(name)
                     (BBS_TOPICS_DIR / rel).write_text(data.decode('utf-8', errors='replace'), encoding='utf-8')
 
+            _bbs_clear_cache()
             zf.close()
             log(f'BBS 导入 ZIP by {user.get("user_id", "?")}')
             self._send_json({'ok': True})
