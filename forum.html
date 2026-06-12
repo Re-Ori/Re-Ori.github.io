@@ -234,6 +234,7 @@
   function initBBS() {
     // 应用导航高亮
     if (typeof window.updateNavHighlight === 'function') window.updateNavHighlight();
+    window._bbsInited = true;
     // 恢复登录状态（先验证 token 是否有效）
     if (TOKEN) {
       api('POST', '/api/bbs/auth', { verify: true }).then(function(res) {
@@ -543,7 +544,11 @@
         var c = document.getElementById('bbs-reply-char');
         if (c) c.textContent = this.value.length;
       });
-      setTimeout(function() { replyInput.focus(); }, 200);
+      // 自动聚焦但不要滚动到底部
+      var focusScroll = function() {
+        replyInput.focus({preventScroll: true});
+      };
+      setTimeout(focusScroll, 200);
     }
   }
 
@@ -627,6 +632,8 @@
     }
     function _inline(s) {
       var h = escapeHtml(s);
+      // 下划线 <u> →  还原不被 escapeHtml 转义
+      h = h.replace(/&lt;u&gt;/g, '<u>').replace(/&lt;\/u&gt;/g, '</u>');
       h = h.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">');
       h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
       h = h.replace(/~~(.+?)~~/g, '<del>$1</del>');
@@ -690,6 +697,7 @@
     var pos = start + before.length;
     ta.selectionStart = pos; ta.selectionEnd = pos + sel.length;
     ta.focus();
+    if (ta._mdUpdater) ta._mdUpdater();
   }
 
   window.mdBold = function(id) { mdInsert(id, '**', '**', '加粗文字'); };
@@ -1004,22 +1012,26 @@
     }
   });
 
-  // ── 从 URL 参数打开帖子 ──
+  // ── 从 URL 参数打开帖子（直接显示加载，不用等列表）──
   (function() {
     var p = new URLSearchParams(window.location.search);
     var tid = p.get('topic');
     var uid = p.get('user');
     var target = tid || uid;
     if (target) {
-      var checkLoaded = setInterval(function() {
-        var el = document.getElementById('bbs-topic-list');
-        if (el && el.innerHTML.indexOf('bbs-topic-item') !== -1) {
-          clearInterval(checkLoaded);
+      // 直接显示加载状态
+      document.getElementById('bbs-detect').style.display = 'none';
+      document.getElementById('bbs-app').style.display = '';
+      document.getElementById('bbs-topic-list').innerHTML = '<div class="bbs-loading"><div class="bbs-loading-spinner"></div>加载中…</div>';
+      // 等 init 完成后再打开
+      var waitInit = setInterval(function() {
+        if (window._bbsInited) {
+          clearInterval(waitInit);
           if (tid) bbsOpenTopic(tid);
           else bbsOpenUser(uid);
         }
-      }, 100);
-      setTimeout(function() { clearInterval(checkLoaded); }, 10000);
+      }, 50);
+      setTimeout(function() { clearInterval(waitInit); if (tid) bbsOpenTopic(tid); else bbsOpenUser(uid); }, 5000);
     }
   })();
 
