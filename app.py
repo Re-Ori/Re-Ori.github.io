@@ -38,6 +38,63 @@ def _bbs_token():
     import hashlib, os
     return hashlib.sha256(os.urandom(32)).hexdigest()[:32]
 
+def _bbs_id():
+    """36进制时间戳+6位随机段，不用检查碰撞"""
+    n = int(time.time() * 1000)
+    chars = '0123456789abcdefghijklmnopqrstuvwxyz'
+    ts = ''
+    while n:
+        ts = chars[n % 36] + ts
+        n //= 36
+    import random, string as _s
+    return ts + ''.join(random.choice(_s.ascii_lowercase + _s.digits) for _ in range(6))
+
+def _bbs_topic_filename(tid, title):
+    """生成可读的帖子文件名: {id}_{标题前16位}.json"""
+    safe = ''.join(c if c.isalnum() or c in ' -_.,;!?@#' else '_' for c in str(title))
+    safe = safe.strip('._ ')[:16] or 'untitled'
+    return f'{tid}_{safe}.json'
+
+def _bbs_find_topic_file(tid):
+    """遍历 topics 目录查找指定 ID 的帖子文件"""
+    if not BBS_TOPICS_DIR.exists():
+        return None
+    for f in BBS_TOPICS_DIR.iterdir():
+        if f.name.startswith(tid + '_') and f.suffix == '.json':
+            return f
+    return None
+
+def _bbs_all_topics():
+    """读取 topics 目录下所有帖子，按时间倒序"""
+    if not BBS_TOPICS_DIR.exists():
+        return []
+    topics = []
+    for f in BBS_TOPICS_DIR.iterdir():
+        if f.suffix == '.json':
+            try:
+                topics.append(json.loads(f.read_text(encoding='utf-8')))
+            except Exception:
+                pass
+    topics.sort(key=lambda t: t.get('created_at', 0), reverse=True)
+    return topics
+
+def _bbs_migrate_old_format():
+    """迁移旧 {id}.json → {id}_{title}.json，清理 topics.json"""
+    if BBS_TOPICS_DIR.exists():
+        for f in list(BBS_TOPICS_DIR.iterdir()):
+            if f.suffix == '.json' and '_' not in f.name:
+                try:
+                    data = json.loads(f.read_text(encoding='utf-8'))
+                    new = _bbs_topic_filename(data.get('id', f.stem), data.get('title', ''))
+                    f.rename(BBS_TOPICS_DIR / new)
+                except Exception:
+                    pass
+    if BBS_TOPICS_FILE.exists():
+        try:
+            BBS_TOPICS_FILE.unlink()
+        except Exception:
+            pass
+
 def _bbs_check(headers):
     t = headers.get('X-Auth-Token', '')
     e = BBS_TOKENS.get(t)
@@ -1128,31 +1185,21 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     def _handle_bbs_topics(self):
         """GET /api/bbs/topics — 帖子列表（含作者名解析）"""
         try:
-            if not BBS_TOPICS_FILE.exists():
-                self._send_json({'topics': [], 'total': 0, 'page': 1, 'limit': 20})
-                return
-            topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8'))
-            topics.sort(key=lambda t: t.get('created_at', 0), reverse=True)
-            # 解析作者名
+            _bbs_migrate_old_format()
+            topics = _bbs_all_topics()
+            # 解析作者名、补充计算字段
             for t in topics:
                 aid = t.get('author_id', '')
                 info = _bbs_resolve_author(aid)
                 t['author_name'] = info['username'] if info else '账号不存在'
                 t['author_role'] = info['role'] if info else ''
                 t['author_tags'] = info['tags'] if info else []
-                # 旧帖子兼容：从内容文件生成预览
-                if 'content_preview' not in t:
-                    try:
-                        tp = BBS_TOPICS_DIR / f'{t["id"]}.json'
-                        if tp.exists():
-                            td = json.loads(tp.read_text(encoding='utf-8'))
-                            raw = td.get('content', '')
-                            plain = __import__('re').sub(r'[#*`\[\]]+', '', raw).replace('\n', ' ').strip()
-                            t['content_preview'] = plain[:120] + ('...' if len(plain) > 120 else '')
-                        else:
-                            t['content_preview'] = ''
-                    except Exception:
-                        t['content_preview'] = ''
+                t['reply_count'] = len(t.get('replies', []))
+                # 从正文生成预览
+                raw = t.get('content', '')
+                plain = __import__('re').sub(r'[#*`\[\]]+', '', raw).replace('\n', ' ').strip()
+                t['content_preview'] = plain[:120] + ('...' if len(plain) > 120 else '')
+                t.pop('replies', None)
             params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             # 搜索过滤
             q = params.get('q', [None])[0]
@@ -1190,12 +1237,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({'ok': False, 'error': 'title_and_content_required'})
                 return
             import random, string, hashlib
-            chars = string.ascii_lowercase + string.digits
-            while True:
-                tid = ''.join(random.choice(chars) for _ in range(8))
-                topic_path = BBS_TOPICS_DIR / f'{tid}.json'
-                if not topic_path.exists():
-                    break
+            tid = _bbs_id()
+            title = title[:16]
+            topic_path = BBS_TOPICS_DIR / _bbs_topic_filename(tid, title)
             now = time.time()
             author_id = user.get('user_id', '')
             topic_data = {
@@ -1205,19 +1249,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             }
             BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
             topic_path.write_text(json.dumps(topic_data, ensure_ascii=False, indent=2), encoding='utf-8')
-            topics = []
-            if BBS_TOPICS_FILE.exists():
-                topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8'))
-            # 生成内容预览（取纯文本前 120 字）
-            import re as _re
-            plain = _re.sub(r'[#*`\[\]]+', '', content).replace('\n', ' ').strip()
-            preview = plain[:120] + ('...' if len(plain) > 120 else '')
-            topics.append({
-                'id': tid, 'title': title, 'author_id': author_id,
-                'reply_count': 0, 'created_at': now, 'updated_at': now,
-                'content_preview': preview,
-            })
-            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False, indent=2), encoding='utf-8')
             log(f'BBS 新帖: {tid} "{title}" by {author_id}')
             self._send_json({'ok': True, 'id': tid})
         except Exception as e:
@@ -1226,8 +1257,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     def _handle_bbs_topic_detail(self, tid):
         """GET /api/bbs/topics/<id> — 帖子详情（含作者名解析）"""
         try:
-            topic_path = BBS_TOPICS_DIR / f'{tid}.json'
-            if not topic_path.exists():
+            topic_path = _bbs_find_topic_file(tid)
+            if not topic_path or not topic_path.exists():
                 self._send_json({'ok': False, 'error': 'not_found'})
                 return
             topic = json.loads(topic_path.read_text(encoding='utf-8'))
@@ -1261,13 +1292,13 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if not content:
                 self._send_json({'ok': False, 'error': 'content_required'})
                 return
-            topic_path = BBS_TOPICS_DIR / f'{tid}.json'
-            if not topic_path.exists():
+            topic_path = _bbs_find_topic_file(tid)
+            if not topic_path or not topic_path.exists():
                 self._send_json({'ok': False, 'error': 'not_found'})
                 return
             topic = json.loads(topic_path.read_text(encoding='utf-8'))
             import random, string as _s
-            reply_id = ''.join(random.choice(_s.ascii_lowercase + _s.digits) for _ in range(8))
+            reply_id = _bbs_id()
             reply = {
                 'id': reply_id,
                 'author_id': user.get('user_id', ''),
@@ -1277,13 +1308,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             topic.setdefault('replies', []).append(reply)
             topic['updated_at'] = time.time()
             topic_path.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
-            topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8')) if BBS_TOPICS_FILE.exists() else []
-            for t in topics:
-                if t['id'] == tid:
-                    t['reply_count'] = len(topic['replies'])
-                    t['updated_at'] = time.time()
-                    break
-            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False, indent=2), encoding='utf-8')
             log(f'BBS 回复: {tid} by {user.get("user_id", "?")}')
             self._send_json({'ok': True, 'reply_id': reply_id})
         except Exception as e:
@@ -1301,8 +1325,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if not reply_id:
                 self._send_json({'ok': False, 'error': 'reply_id_required'})
                 return
-            topic_path = BBS_TOPICS_DIR / f'{tid}.json'
-            if not topic_path.exists():
+            topic_path = _bbs_find_topic_file(tid)
+            if not topic_path or not topic_path.exists():
                 self._send_json({'ok': False, 'error': 'not_found'})
                 return
             topic = json.loads(topic_path.read_text(encoding='utf-8'))
@@ -1324,14 +1348,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             topic['replies'].pop(idx)
             topic['updated_at'] = time.time()
             topic_path.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
-            # 更新索引
-            topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8')) if BBS_TOPICS_FILE.exists() else []
-            for t in topics:
-                if t['id'] == tid:
-                    t['reply_count'] = len(topic['replies'])
-                    t['updated_at'] = time.time()
-                    break
-            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False, indent=2), encoding='utf-8')
             log(f'BBS 删除回复: {tid} reply={reply_id} by {user_id}')
             self._send_json({'ok': True})
         except Exception as e:
@@ -1344,8 +1360,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({'ok': False, 'error': 'unauthorized'})
             return
         try:
-            topic_path = BBS_TOPICS_DIR / f'{tid}.json'
-            if not topic_path.exists():
+            topic_path = _bbs_find_topic_file(tid)
+            if not topic_path or not topic_path.exists():
                 self._send_json({'ok': False, 'error': 'not_found'})
                 return
             topic = json.loads(topic_path.read_text(encoding='utf-8'))
@@ -1355,9 +1371,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({'ok': False, 'error': 'forbidden'})
                 return
             topic_path.unlink()
-            topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8')) if BBS_TOPICS_FILE.exists() else []
-            topics = [t for t in topics if t['id'] != tid]
-            BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False, indent=2), encoding='utf-8')
             log(f'BBS 删帖: {tid} by {user_id}')
             self._send_json({'ok': True})
         except Exception as e:
@@ -1378,9 +1391,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 # users.json
                 if BBS_USERS_FILE.exists():
                     zf.writestr('users.json', BBS_USERS_FILE.read_text(encoding='utf-8'))
-                # topics.json（索引）
-                if BBS_TOPICS_FILE.exists():
-                    zf.writestr('topics.json', BBS_TOPICS_FILE.read_text(encoding='utf-8'))
                 # 每个帖子的详情
                 if BBS_TOPICS_DIR.exists():
                     for fp in BBS_TOPICS_DIR.iterdir():
@@ -1412,25 +1422,11 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             # 覆盖 users.json
             if 'users.json' in namelist:
                 BBS_USERS_FILE.write_text(zf.read('users.json').decode('utf-8'), encoding='utf-8')
-            # 覆盖 topics.json
-            if 'topics.json' in namelist:
-                BBS_TOPICS_FILE.write_text(zf.read('topics.json').decode('utf-8'), encoding='utf-8')
             # 覆盖 topics/*.json
             BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
             for name in namelist:
                 if name.startswith('topics/') and name.endswith('.json'):
                     (BBS_TOPICS_DIR / name[7:]).write_text(zf.read(name).decode('utf-8'), encoding='utf-8')
-            # 重新计算回复数，确保索引和实际一致
-            try:
-                topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8')) if BBS_TOPICS_FILE.exists() else []
-                for t in topics:
-                    tp = BBS_TOPICS_DIR / f'{t["id"]}.json'
-                    if tp.exists():
-                        td = json.loads(tp.read_text(encoding='utf-8'))
-                        t['reply_count'] = len(td.get('replies', []))
-                BBS_TOPICS_FILE.write_text(json.dumps(topics, ensure_ascii=False, indent=2), encoding='utf-8')
-            except Exception:
-                pass
             zf.close()
             log(f'BBS 导入 ZIP by {user.get("user_id", "?")}')
             self._send_json({'ok': True})
@@ -1447,16 +1443,18 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({'ok': False, 'error': 'user_not_found'})
                 return
             # 收集该用户的所有帖子
-            topics = json.loads(BBS_TOPICS_FILE.read_text(encoding='utf-8')) if BBS_TOPICS_FILE.exists() else []
+            all_topics = _bbs_all_topics()
             user_topics = []
-            for t in topics:
+            for t in all_topics:
                 if t.get('author_id') == uid:
+                    raw = t.get('content', '')
+                    plain = __import__('re').sub(r'[#*`\[\]]+', '', raw).replace('\n', ' ').strip()
                     user_topics.append({
                         'id': t['id'],
                         'title': t['title'],
-                        'reply_count': t.get('reply_count', 0),
+                        'reply_count': len(t.get('replies', [])),
                         'created_at': t.get('created_at', 0),
-                        'content_preview': t.get('content_preview', ''),
+                        'content_preview': plain[:120] + ('...' if len(plain) > 120 else ''),
                     })
             user_topics.sort(key=lambda x: x.get('created_at', 0), reverse=True)
             self._send_json({
@@ -1560,3 +1558,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
