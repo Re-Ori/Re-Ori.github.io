@@ -88,8 +88,38 @@
   </div>
   <div class="bbs-post-body">
     <input type="text" id="bbs-post-title" placeholder="标题" autocomplete="off">
-    <textarea id="bbs-post-content" placeholder="写点什么…（支持 Markdown 格式）"></textarea>
-    <div class="bbs-post-hint">支持 Markdown · 支持标题、粗体、链接、代码块</div>
+    <div id="bbs-post-toolbar"></div>
+    <div class="bbs-md-split" style="flex:1;min-height:200px;">
+      <textarea id="bbs-post-content" placeholder="写点什么…（支持 Markdown 格式）"></textarea>
+      <div class="bbs-md-preview" id="bbs-post-content-preview"></div>
+    </div>
+    <div class="bbs-post-hint">支持 Markdown · 工具栏 B I S U H Code Link Img List · 预览</div>
+  </div>
+</div>
+
+<!-- 图片插入对话框 -->
+<div id="bbs-img-dialog" class="bbs-img-dialog" style="display:none;">
+  <div class="bbs-img-dialog-inner">
+    <div class="bbs-img-dialog-header">插入图片</div>
+    <div class="bbs-img-tabs">
+      <span class="bbs-img-tab active" data-tab="upload">上传</span>
+      <span class="bbs-img-tab" data-tab="url">链接</span>
+    </div>
+    <div class="bbs-img-panel" id="bbs-img-panel-upload">
+      <div class="bbs-img-dropzone" id="bbs-img-dropzone">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <span id="bbs-img-hint">点击选择图片，≤1MB</span>
+        <span id="bbs-img-name" style="display:none;"></span>
+        <input type="file" id="bbs-img-file" accept="image/*">
+      </div>
+    </div>
+    <div class="bbs-img-panel" id="bbs-img-panel-url" style="display:none;">
+      <input type="text" class="bbs-img-url-input" id="bbs-img-url-input" placeholder="输入图片链接…">
+    </div>
+    <div class="bbs-img-dialog-actions">
+      <button class="bbs-img-btn bbs-img-ok">插入</button>
+      <button class="bbs-img-btn bbs-img-cancel">取消</button>
+    </div>
   </div>
 </div>
 
@@ -165,7 +195,11 @@
     var t = document.createElement('div');
     t.className = 'bbs-toast'; t.textContent = msg;
     document.body.appendChild(t);
-    setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, duration);
+    setTimeout(function() { t.classList.add('show'); }, 10);
+    setTimeout(function() {
+      t.classList.remove('show');
+      setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
+    }, duration);
   }
 
   function showLoginError(msg) {
@@ -391,6 +425,9 @@
       });
       if (SEARCH_QUERY) si.focus();
     }
+
+    // 在列表页显示 FAB
+    document.getElementById('bbs-fab').classList.remove('hidden');
   }
 
   function canDeleteTopic(authorId) {
@@ -429,6 +466,7 @@
     var detailEl = document.getElementById('bbs-detail');
     listEl.style.display = 'none';
     detailEl.style.display = '';
+    document.getElementById('bbs-fab').classList.add('hidden');
 
     var time = new Date(topic.created_at * 1000).toLocaleString();
     var authorName = topic.author_name || '账号不存在';
@@ -448,7 +486,7 @@
       repliesHtml += '<div class="bbs-reply-item">' +
         '<div class="bbs-reply-author"><span class="bbs-author-link" onclick="bbsOpenUser(\'' + escapeHtml(r.author_id || '') + '\')">' + escapeHtml(rAuthor) + '</span>' + rBadges + '</div>' +
         delBtn +
-        '<div class="bbs-reply-content">' + escapeHtml(r.content) + '</div>' +
+        '<div class="bbs-reply-content">' + renderMarkdown(r.content) + '</div>' +
         '<div class="bbs-reply-time">' + rt + '</div>' +
         '</div>';
     }
@@ -458,9 +496,14 @@
     if (TOKEN) {
       replyInputHtml =
         '<div class="bbs-reply-input-area">' +
-        '<textarea id="bbs-reply-content" placeholder="输入回复…"></textarea>' +
+        mdRenderToolbar('bbs-reply-content') +
+        '<div class="bbs-md-split">' +
+        '<textarea id="bbs-reply-content" placeholder="输入回复…（支持 Markdown）" maxlength="1024"></textarea>' +
+        '<div class="bbs-md-preview" id="bbs-reply-content-preview"></div>' +
+        '</div>' +
         '<div class="bbs-reply-submit-wrap">' +
-        '<button class="bbs-reply-submit" onclick="bbsDoReply(\'' + topic.id + '\')">回复</button>' +
+        '<span class="bbs-reply-count"><span id="bbs-reply-char">0</span>/1024</span>' +
+        '<button class="bbs-reply-submit" onclick="bbsDoReply(\'' + topic.id + '\')">回复 <span style="font-size:11px;opacity:0.6;">Ctrl+Enter</span></button>' +
         '</div></div>';
     } else {
       replyInputHtml =
@@ -487,14 +530,18 @@
       replyInputHtml +
       '</div>';
 
-    // 键盘快捷键：回车回复
+    // 键盘：Ctrl+Enter 发送，Enter 换行；字数统计
     var replyInput = document.getElementById('bbs-reply-content');
     if (replyInput) {
       replyInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
           e.preventDefault();
           document.querySelector('.bbs-reply-submit').click();
         }
+      });
+      replyInput.addEventListener('input', function() {
+        var c = document.getElementById('bbs-reply-char');
+        if (c) c.textContent = this.value.length;
       });
       setTimeout(function() { replyInput.focus(); }, 200);
     }
@@ -504,6 +551,7 @@
     history.pushState({ list: true }, '', window.location.pathname);
     document.getElementById('bbs-detail').style.display = 'none';
     document.getElementById('bbs-topic-list').style.display = '';
+    document.getElementById('bbs-fab').classList.remove('hidden');
     loadTopics(CURRENT_PAGE);
   };
 
@@ -516,6 +564,7 @@
     var detailEl = document.getElementById('bbs-detail');
     listEl.style.display = 'none';
     detailEl.style.display = '';
+    document.getElementById('bbs-fab').classList.add('hidden');
     detailEl.innerHTML = '<div class="bbs-loading">加载中…</div>';
     api('GET', '/api/bbs/user/' + uid).then(function(res) {
       if (res && res.ok) {
@@ -564,29 +613,219 @@
     });
   };
 
-  // ── Markdown 简单渲染 ──
+  // ── Markdown 渲染 ──
 
   function renderMarkdown(text) {
     if (!text) return '';
-    var html = escapeHtml(text);
-    // 代码块
-    html = html.replace(/```([\s\S]*?)```/g, function(m, c) {
-      return '<pre><code>' + c.trim() + '</code></pre>';
-    });
-    // 行内代码
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-    // 标题
-    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-    // 加粗
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    // 斜体
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    // 链接
-    html = html.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank">$1</a>');
-    // 换行
-    html = html.replace(/\n/g, '<br>');
+    var lines = text.split('\n');
+    var html = '';
+    var inCode = false, codeBuf = [];
+    var inList = false, listTag = '';
+
+    function _flushList() {
+      if (inList) { html += '</' + listTag + '>'; inList = false; }
+    }
+    function _inline(s) {
+      var h = escapeHtml(s);
+      h = h.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">');
+      h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+      h = h.replace(/~~(.+?)~~/g, '<del>$1</del>');
+      h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+      h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      return h;
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      var L = lines[i], T = L.trim();
+
+      // 代码块
+      if (T.indexOf('```') === 0) {
+        if (inCode) { html += '<pre><code>' + escapeHtml(codeBuf.join('\n').replace(/\n$/, '')) + '</code></pre>'; codeBuf = []; inCode = false; continue; }
+        _flushList(); inCode = true; continue;
+      }
+      if (inCode) { codeBuf.push(L); continue; }
+
+      if (T === '') { _flushList(); continue; }
+
+      // 标题
+      var hm = L.match(/^(#{1,3})\s+(.+)$/);
+      if (hm) { _flushList(); html += '<h' + hm[1].length + '>' + _inline(hm[2]) + '</h' + hm[1].length + '>'; continue; }
+
+      // 引用
+      var bqm = L.match(/^>\s+(.+)$/);
+      if (bqm) { _flushList(); html += '<blockquote>' + _inline(bqm[1]) + '</blockquote>'; continue; }
+
+      // 无序列表
+      var uls = L.match(/^[-*+]\s+(.+)$/);
+      if (uls) {
+        if (!inList || listTag !== 'ul') { _flushList(); html += '<ul>'; inList = true; listTag = 'ul'; }
+        html += '<li>' + _inline(uls[1]) + '</li>'; continue;
+      }
+
+      // 有序列表
+      var ols = L.match(/^\d+\.\s+(.+)$/);
+      if (ols) {
+        if (!inList || listTag !== 'ol') { _flushList(); html += '<ol>'; inList = true; listTag = 'ol'; }
+        html += '<li>' + _inline(ols[1]) + '</li>'; continue;
+      }
+
+      // 普通行
+      _flushList();
+      html += _inline(L) + '<br>';
+    }
+    _flushList();
+    if (inCode && codeBuf.length) html += '<pre><code>' + escapeHtml(codeBuf.join('\n')) + '</code></pre>';
+    return html;
+  }
+
+  // ── Markdown 编辑器工具栏 ──
+
+  function mdInsert(textareaId, before, after, placeholder) {
+    var ta = document.getElementById(textareaId);
+    if (!ta) return;
+    var start = ta.selectionStart, end = ta.selectionEnd;
+    var sel = ta.value.substring(start, end) || placeholder || '';
+    ta.value = ta.value.substring(0, start) + before + sel + after + ta.value.substring(end);
+    var pos = start + before.length;
+    ta.selectionStart = pos; ta.selectionEnd = pos + sel.length;
+    ta.focus();
+  }
+
+  window.mdBold = function(id) { mdInsert(id, '**', '**', '加粗文字'); };
+  window.mdItalic = function(id) { mdInsert(id, '*', '*', '斜体文字'); };
+  window.mdStrike = function(id) { mdInsert(id, '~~', '~~', '删除线'); };
+  window.mdUnderline = function(id) { mdInsert(id, '<u>', '</u>', '下划线'); };
+  window.mdCode = function(id) { mdInsert(id, '`', '`', 'code'); };
+  window.mdHeading = function(id) { mdInsert(id, '### ', '', '标题'); };
+  window.mdLink = function(id) { mdInsert(id, '[', '](url)', '链接文字'); };
+  window.mdList = function(id) { mdInsert(id, '- ', '', '列表项'); };
+
+  var _mdImgTarget = '';
+
+  window.mdImage = function(id) {
+    _mdImgTarget = id;
+    var dlg = document.getElementById('bbs-img-dialog');
+    if (!dlg) return;
+    // 重置状态
+    document.getElementById('bbs-img-file').value = '';
+    document.getElementById('bbs-img-name').style.display = 'none';
+    document.getElementById('bbs-img-hint').style.display = '';
+    document.getElementById('bbs-img-url-input').value = '';
+    document.querySelector('#bbs-img-panel-upload .bbs-img-dropzone').classList.remove('has-file');
+    // 默认选中上传 tab
+    document.querySelectorAll('.bbs-img-tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelector('.bbs-img-tab[data-tab="upload"]').classList.add('active');
+    document.getElementById('bbs-img-panel-upload').style.display = '';
+    document.getElementById('bbs-img-panel-url').style.display = 'none';
+    dlg.style.display = '';
+  };
+
+  // 图片对话框的 tab 切换（事件委托）
+  document.addEventListener('click', function(e) {
+    var tab = e.target.closest('.bbs-img-tab');
+    if (tab) {
+      document.querySelectorAll('.bbs-img-tab').forEach(function(t) { t.classList.remove('active'); });
+      tab.classList.add('active');
+      var panel = tab.dataset.tab;
+      document.getElementById('bbs-img-panel-upload').style.display = panel === 'upload' ? '' : 'none';
+      document.getElementById('bbs-img-panel-url').style.display = panel === 'url' ? '' : 'none';
+    }
+  });
+
+  // 点击上传区域 → 触发文件选择
+  document.addEventListener('click', function(e) {
+    var dz = e.target.closest('.bbs-img-dropzone');
+    if (dz) document.getElementById('bbs-img-file').click();
+  });
+
+  // 文件选择
+  document.addEventListener('change', function(e) {
+    if (e.target.id === 'bbs-img-file') {
+      var file = e.target.files[0];
+      if (!file) return;
+      if (file.size > 1048576) { showToast('图片不能超过 1MB'); return; }
+      document.getElementById('bbs-img-hint').style.display = 'none';
+      var nameEl = document.getElementById('bbs-img-name');
+      nameEl.textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + 'KB)';
+      nameEl.style.display = '';
+      e.target.closest('.bbs-img-dropzone').classList.add('has-file');
+    }
+  });
+
+  // 确定插入
+  document.addEventListener('click', function(e) {
+    var okBtn = e.target.closest('.bbs-img-ok');
+    if (!okBtn || !_mdImgTarget) return;
+    var activeTab = document.querySelector('.bbs-img-tab.active');
+    if (activeTab && activeTab.dataset.tab === 'upload') {
+      var file = document.getElementById('bbs-img-file').files[0];
+      if (!file) { showToast('请选择图片'); return; }
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        mdInsert(_mdImgTarget, '![image](' + ev.target.result + ')', '', '');
+        document.getElementById('bbs-img-dialog').style.display = 'none';
+      };
+      reader.readAsDataURL(file);
+    } else {
+      var url = document.getElementById('bbs-img-url-input').value.trim();
+      if (!url) { showToast('请输入图片链接'); return; }
+      mdInsert(_mdImgTarget, '![image](', ')', url);
+      document.getElementById('bbs-img-dialog').style.display = 'none';
+    }
+  });
+
+  // 取消
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('.bbs-img-cancel') || e.target.id === 'bbs-img-dialog') {
+      document.getElementById('bbs-img-dialog').style.display = 'none';
+    }
+  });
+
+  window.mdPreview = function(id) {
+    var ta = document.getElementById(id);
+    if (!ta) return;
+    var split = ta.parentNode;
+    var preview = split && split.querySelector('.bbs-md-preview');
+    if (!preview) return;
+    if (split.classList.contains('bbs-md-split-active')) {
+      split.classList.remove('bbs-md-split-active');
+      preview.style.display = 'none';
+      if (ta._mdUpdater) { ta.removeEventListener('input', ta._mdUpdater); ta._mdUpdater = null; }
+    } else {
+      _mdRenderPreview(ta, preview, split);
+      ta._mdUpdater = function() { _mdRenderPreview(ta, preview, split); };
+      ta.addEventListener('input', ta._mdUpdater);
+    }
+  };
+
+  function _mdRenderPreview(ta, preview, split) {
+    try {
+      var rendered = renderMarkdown(ta.value || '');
+      preview.innerHTML = rendered || '';
+      preview.style.display = '';
+      split.classList.add('bbs-md-split-active');
+    } catch (e) {
+      showToast('预览渲染出错: ' + e.message);
+    }
+  }
+
+  function mdRenderToolbar(textareaId) {
+    var html =
+      '<div class="bbs-md-bar">' +
+      '<button type="button" class="bbs-md-btn" onclick="mdBold(\'' + textareaId + '\')" title="加粗"><b>B</b></button>' +
+      '<button type="button" class="bbs-md-btn" onclick="mdItalic(\'' + textareaId + '\')" title="斜体"><i>I</i></button>' +
+      '<button type="button" class="bbs-md-btn" onclick="mdStrike(\'' + textareaId + '\')" title="删除线"><s>S</s></button>' +
+      '<button type="button" class="bbs-md-btn" onclick="mdUnderline(\'' + textareaId + '\')" title="下划线"><u>U</u></button>' +
+      '<span class="bbs-md-divider"></span>' +
+      '<button type="button" class="bbs-md-btn" onclick="mdHeading(\'' + textareaId + '\')" title="标题">H</button>' +
+      '<button type="button" class="bbs-md-btn" onclick="mdCode(\'' + textareaId + '\')" title="行内代码">&lt;/&gt;</button>' +
+      '<button type="button" class="bbs-md-btn" onclick="mdLink(\'' + textareaId + '\')" title="链接">🔗</button>' +
+      '<button type="button" class="bbs-md-btn" onclick="mdImage(\'' + textareaId + '\')" title="图片">🖼</button>' +
+      '<button type="button" class="bbs-md-btn" onclick="mdList(\'' + textareaId + '\')" title="列表">≡</button>' +
+      '<span class="bbs-md-divider"></span>' +
+      '<button type="button" class="bbs-md-btn bbs-md-preview-btn" onclick="mdPreview(\'' + textareaId + '\')" title="分栏预览">👁 预览</button>' +
+      '</div>';
     return html;
   }
 
@@ -596,6 +835,7 @@
     var input = document.getElementById('bbs-reply-content');
     var content = input.value.trim();
     if (!content) { showToast('请输入回复内容'); return; }
+    if (content.length > 1024) { showToast('回复不能超过 1024 字'); return; }
     var btn = document.querySelector('.bbs-reply-submit');
     btn.disabled = true; btn.textContent = '提交中…';
     api('POST', '/api/bbs/topics/' + topicId + '/reply', { content: content })
@@ -707,11 +947,15 @@
     if (!TOKEN) { bbsShowLogin(); return; }
     document.getElementById('bbs-post-title').value = '';
     document.getElementById('bbs-post-content').value = '';
+    var tb = document.getElementById('bbs-post-toolbar');
+    if (tb && !tb.hasChildNodes()) tb.innerHTML = mdRenderToolbar('bbs-post-content');
     document.getElementById('bbs-post-modal').style.display = '';
     setTimeout(function() { document.getElementById('bbs-post-title').focus(); }, 100);
   };
 
   window.bbsClosePost = function() {
+    var split = document.querySelector('#bbs-post-modal .bbs-md-split');
+    if (split) split.classList.remove('bbs-md-split-active');
     document.getElementById('bbs-post-modal').style.display = 'none';
   };
 

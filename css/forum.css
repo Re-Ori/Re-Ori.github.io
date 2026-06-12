@@ -165,13 +165,15 @@
 
 /* ── 悬浮发帖按钮 ── */
 .bbs-fab {
-  position: fixed; bottom: 32px; right: 32px; width: 52px; height: 52px;
+  position: fixed; bottom: 80px; right: 24px; width: 48px; height: 48px;
   border-radius: 50%; border: none; background: var(--theme-color,#399FFF);
-  color: #fff; font-size: 26px; cursor: pointer; box-shadow: 0 4px 16px rgba(57,159,255,0.35);
+  color: #fff; font-size: 24px; cursor: pointer; box-shadow: 0 4px 16px rgba(57,159,255,0.35);
   display: flex; align-items: center; justify-content: center;
-  transition: transform 0.2s, box-shadow 0.2s; z-index: 10001;
+  transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s; z-index: 10001;
+  opacity: 1;
 }
 .bbs-fab:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(57,159,255,0.45); }
+.bbs-fab.hidden { opacity: 0; pointer-events: none; }
 
 /* ── 发帖弹窗（全屏）── */
 .bbs-post-overlay {
@@ -311,20 +313,22 @@
 }
 .bbs-reply-submit:hover { opacity: 0.85; }
 .bbs-reply-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+.bbs-reply-count {
+  font-size: 11px; color: #bbb; margin-right: auto; padding-left: 4px;
+}
+[data-theme="dark"] .bbs-reply-count { color: #555; }
 
-/* ── Toast 通知 ── */
+/* ── Toast 通知（与站点主样式一致）── */
 .bbs-toast {
-  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-  padding: 10px 20px; background: rgba(0,0,0,0.8); color: #fff;
-  border-radius: 8px; font-size: 13px; z-index: 999;
-  animation: bbs-fade 2.5s ease forwards;
+  position: fixed; bottom: 20px; right: 20px; left: auto;
+  padding: 10px 20px; background: rgba(57,159,255,0.9); color: #fff;
+  border-radius: 8px; font-size: 13px; z-index: 99999;
+  max-width: 320px; pointer-events: none;
+  opacity: 0; transform: translateX(20px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
-@keyframes bbs-fade {
-  0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
-  10% { opacity: 1; transform: translateX(-50%) translateY(0); }
-  80% { opacity: 1; }
-  100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
-}
+.bbs-toast.show { opacity: 1; transform: translateX(0); }
+[data-theme="dark"] .bbs-toast { background: rgba(57,159,255,0.85); }
 
 /* ── 搜索栏 ── */
 .bbs-search-bar {
@@ -387,12 +391,149 @@
   margin-left: 8px; font-size: 12px; color: #8e8e93;
 }
 
+/* ── Markdown 工具栏 ── */
+.bbs-md-bar {
+  display: flex; align-items: center; gap: 2px; padding: 6px 0;
+  flex-wrap: wrap; border-bottom: 1px solid rgba(0,0,0,0.06);
+  margin-bottom: 6px;
+}
+[data-theme="dark"] .bbs-md-bar { border-color: rgba(255,255,255,0.06); }
+.bbs-md-btn {
+  width: 32px; height: 30px; border: none; border-radius: 4px;
+  background: transparent; color: #555; cursor: pointer; font-size: 13px;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background 0.12s;
+}
+.bbs-md-btn:hover { background: rgba(0,0,0,0.06); }
+.bbs-md-btn:active { background: rgba(0,0,0,0.1); }
+[data-theme="dark"] .bbs-md-btn { color: #aaa; }
+[data-theme="dark"] .bbs-md-btn:hover { background: rgba(255,255,255,0.08); }
+.bbs-md-btn b { font-weight: 700; }
+.bbs-md-btn i { font-style: italic; }
+.bbs-md-btn s { text-decoration: line-through; }
+.bbs-md-btn u { text-decoration: underline; }
+.bbs-md-divider {
+  width: 1px; height: 18px; background: rgba(0,0,0,0.1); margin: 0 4px;
+  flex-shrink: 0;
+}
+[data-theme="dark"] .bbs-md-divider { background: rgba(255,255,255,0.1); }
+.bbs-md-preview-btn { width: auto; padding: 0 8px; font-size: 12px; min-width: 60px; }
+
+/* 分栏编辑器 */
+.bbs-md-split { display: flex; gap: 12px; flex: 1; min-height: 0; }
+.bbs-md-split textarea { flex: 1; resize: vertical; }
+.bbs-md-split .bbs-md-preview {
+  display: none; flex: 1; min-height: 80px;
+  background: rgba(0,0,0,0.02); border-radius: 8px; padding: 12px;
+  font-size: 14px; line-height: 1.7; color: #333; overflow-y: auto;
+}
+[data-theme="dark"] .bbs-md-split .bbs-md-preview {
+  background: rgba(255,255,255,0.03); color: #ccc;
+}
+.bbs-md-split-active .bbs-md-preview { display: block; }
+.bbs-md-preview img, .bbs-detail-content img {
+  max-width: 100%; border-radius: 6px; margin: 8px 0;
+}
+.bbs-md-preview pre, .bbs-detail-content pre {
+  background: rgba(0,0,0,0.04); border-radius: 6px; padding: 12px;
+  overflow-x: auto; font-size: 13px;
+}
+[data-theme="dark"] .bbs-md-preview pre, [data-theme="dark"] .bbs-detail-content pre {
+  background: rgba(255,255,255,0.04);
+}
+.bbs-md-preview code, .bbs-detail-content code {
+  font-size: 13px; background: rgba(0,0,0,0.04); padding: 1px 4px;
+  border-radius: 3px;
+}
+[data-theme="dark"] .bbs-md-preview code, [data-theme="dark"] .bbs-detail-content code {
+  background: rgba(255,255,255,0.06);
+}
+.bbs-md-preview blockquote, .bbs-reply-content blockquote {
+  border-left: 3px solid var(--theme-color,#399FFF); padding: 4px 12px;
+  margin: 8px 0; color: #666; background: rgba(57,159,255,0.04);
+  border-radius: 0 6px 6px 0;
+}
+[data-theme="dark"] .bbs-md-preview blockquote, [data-theme="dark"] .bbs-reply-content blockquote {
+  color: #999; background: rgba(57,159,255,0.06);
+}
+.bbs-md-preview ul, .bbs-md-preview ol,
+.bbs-reply-content ul, .bbs-reply-content ol {
+  padding-left: 24px; margin: 4px 0;
+}
+.bbs-md-preview li, .bbs-reply-content li { margin: 2px 0; }
+.bbs-md-preview h1, .bbs-md-preview h2, .bbs-md-preview h3,
+.bbs-reply-content h1, .bbs-reply-content h2, .bbs-reply-content h3 {
+  margin: 12px 0 6px; font-weight: 700;
+}
+.bbs-md-preview h1, .bbs-reply-content h1 { font-size: 18px; }
+.bbs-md-preview h2, .bbs-reply-content h2 { font-size: 16px; }
+.bbs-md-preview h3, .bbs-reply-content h3 { font-size: 15px; }
+.bbs-md-preview del, .bbs-reply-content del { text-decoration: line-through; color: #999; }
+.bbs-md-preview a, .bbs-reply-content a { color: var(--theme-color,#399FFF); text-decoration: underline; }
+.bbs-md-preview img, .bbs-reply-content img { max-width: 100%; border-radius: 6px; margin: 8px 0; }
+
+/* ── 图片插入对话框 ── */
+.bbs-img-dialog {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(4px); display: flex; align-items: center;
+  justify-content: center; z-index: 10003;
+}
+.bbs-img-dialog-inner {
+  background: #fff; border-radius: 14px; padding: 24px; width: 380px;
+  max-width: 90vw; box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+}
+[data-theme="dark"] .bbs-img-dialog-inner { background: #1c1c1e; box-shadow: 0 8px 40px rgba(0,0,0,0.4); }
+.bbs-img-dialog-header {
+  font-size: 17px; font-weight: 700; color: #1a1a1a; margin-bottom: 16px;
+  text-align: center;
+}
+[data-theme="dark"] .bbs-img-dialog-header { color: #e0e0e0; }
+.bbs-img-tabs {
+  display: flex; gap: 0; margin-bottom: 16px; border-radius: 8px;
+  overflow: hidden; border: 1px solid rgba(0,0,0,0.1);
+}
+[data-theme="dark"] .bbs-img-tabs { border-color: rgba(255,255,255,0.1); }
+.bbs-img-tab {
+  flex: 1; text-align: center; padding: 8px 0; font-size: 13px;
+  cursor: pointer; background: rgba(0,0,0,0.03); color: #888;
+  transition: all 0.15s; user-select: none;
+}
+.bbs-img-tab.active { background: var(--theme-color,#399FFF); color: #fff; font-weight: 600; }
+[data-theme="dark"] .bbs-img-tab { background: rgba(255,255,255,0.04); color: #888; }
+[data-theme="dark"] .bbs-img-tab.active { color: #fff; }
+.bbs-img-dropzone {
+  border: 2px dashed rgba(0,0,0,0.12); border-radius: 10px; padding: 28px;
+  text-align: center; cursor: pointer; transition: all 0.15s; color: #bbb;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.bbs-img-dropzone:hover { border-color: var(--theme-color,#399FFF); color: var(--theme-color,#399FFF); }
+.bbs-img-dropzone.has-file { border-color: #34c759; border-style: solid; background: rgba(52,199,89,0.04); }
+[data-theme="dark"] .bbs-img-dropzone { border-color: rgba(255,255,255,0.15); color: #555; }
+[data-theme="dark"] .bbs-img-dropzone:hover { border-color: var(--theme-color,#399FFF); }
+#bbs-img-file { display: none; }
+.bbs-img-url-input {
+  width: 100%; padding: 10px 12px; border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box;
+  background: rgba(255,255,255,0.8); color: #333;
+}
+[data-theme="dark"] .bbs-img-url-input { background: rgba(40,42,65,0.8); border-color: rgba(255,255,255,0.1); color: #ddd; }
+.bbs-img-url-input:focus { border-color: var(--theme-color,#399FFF); }
+.bbs-img-dialog-actions { display: flex; gap: 8px; margin-top: 16px; }
+.bbs-img-btn {
+  flex: 1; padding: 9px; border: none; border-radius: 8px; font-size: 14px;
+  font-weight: 600; cursor: pointer; transition: opacity 0.15s;
+}
+.bbs-img-ok { background: var(--theme-color,#399FFF); color: #fff; }
+.bbs-img-cancel { background: rgba(0,0,0,0.05); color: #555; }
+[data-theme="dark"] .bbs-img-cancel { background: rgba(255,255,255,0.08); color: #aaa; }
+.bbs-img-ok:hover, .bbs-img-cancel:hover { opacity: 0.85; }
+
 /* ── 响应式 ── */
 @media (max-width: 640px) {
   .bbs-layout { padding: 0 8px 80px; }
   .bbs-header-title { font-size: 17px; }
   .bbs-topic-item { padding: 12px 12px; }
   .bbs-detail-title { font-size: 18px; }
-  .bbs-fab { width: 48px; height: 48px; font-size: 22px; bottom: 24px; right: 20px; }
+  .bbs-fab { width: 44px; height: 44px; font-size: 20px; bottom: 72px; right: 16px; }
   .bbs-modal { padding: 24px; }
 }

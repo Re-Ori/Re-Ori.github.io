@@ -38,16 +38,16 @@ def _bbs_token():
     import hashlib, os
     return hashlib.sha256(os.urandom(32)).hexdigest()[:32]
 
-def _bbs_id():
-    """36进制时间戳+6位随机段，不用检查碰撞"""
-    n = int(time.time() * 1000)
+def _bbs_id(ts=None):
+    """36进制时间戳+6位随机段，可传入时间戳模拟历史时间"""
+    n = int((ts if ts is not None else time.time()) * 1000)
     chars = '0123456789abcdefghijklmnopqrstuvwxyz'
-    ts = ''
+    result = ''
     while n:
-        ts = chars[n % 36] + ts
+        result = chars[n % 36] + result
         n //= 36
     import random, string as _s
-    return ts + ''.join(random.choice(_s.ascii_lowercase + _s.digits) for _ in range(6))
+    return result + ''.join(random.choice(_s.ascii_lowercase + _s.digits) for _ in range(6))
 
 def _bbs_topic_filename(tid, title):
     """生成可读的帖子文件名: {id}_{标题前16位}.json"""
@@ -1197,7 +1197,12 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 t['reply_count'] = len(t.get('replies', []))
                 # 从正文生成预览
                 raw = t.get('content', '')
-                plain = __import__('re').sub(r'[#*`\[\]]+', '', raw).replace('\n', ' ').strip()
+                plain = raw
+                plain = __import__('re').sub(r'```[\s\S]*?```|`([^`]+)`', r'\1', plain)
+                plain = __import__('re').sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', plain)
+                plain = __import__('re').sub(r'\*\*([^*]+)\*\*', r'\1', plain)
+                plain = __import__('re').sub(r'^#{1,6}\s+', '', plain, flags=__import__('re').MULTILINE)
+                plain = plain.replace('\n', ' ').strip()
                 t['content_preview'] = plain[:120] + ('...' if len(plain) > 120 else '')
                 t.pop('replies', None)
             params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -1419,14 +1424,27 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             raw = self.rfile.read(length)
             zf = zipfile.ZipFile(io.BytesIO(raw), 'r')
             namelist = zf.namelist()
+
+            # 检测 ZIP 内是否有 bbs/ 前缀
+            has_bbs = any(n.startswith('bbs/') for n in namelist)
+            users_path = 'bbs/users.json' if has_bbs else 'users.json'
+            topic_prefix = 'bbs/topics/' if has_bbs else 'topics/'
+
             # 覆盖 users.json
-            if 'users.json' in namelist:
-                BBS_USERS_FILE.write_text(zf.read('users.json').decode('utf-8'), encoding='utf-8')
-            # 覆盖 topics/*.json
+            if users_path in namelist:
+                BBS_USERS_FILE.write_text(zf.read(users_path).decode('utf-8'), encoding='utf-8')
+
+            # 清空 topics 目录再写入（覆盖模式）
             BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
+            for f in list(BBS_TOPICS_DIR.iterdir()):
+                if f.suffix == '.json':
+                    f.unlink()
+
             for name in namelist:
-                if name.startswith('topics/') and name.endswith('.json'):
-                    (BBS_TOPICS_DIR / name[7:]).write_text(zf.read(name).decode('utf-8'), encoding='utf-8')
+                if name.startswith(topic_prefix) and name.endswith('.json'):
+                    rel = name[len(topic_prefix):]
+                    (BBS_TOPICS_DIR / rel).write_text(zf.read(name).decode('utf-8'), encoding='utf-8')
+
             zf.close()
             log(f'BBS 导入 ZIP by {user.get("user_id", "?")}')
             self._send_json({'ok': True})
@@ -1448,7 +1466,12 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             for t in all_topics:
                 if t.get('author_id') == uid:
                     raw = t.get('content', '')
-                    plain = __import__('re').sub(r'[#*`\[\]]+', '', raw).replace('\n', ' ').strip()
+                    plain = raw
+                    plain = __import__('re').sub(r'```[\s\S]*?```|`([^`]+)`', r'\1', plain)
+                    plain = __import__('re').sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', plain)
+                    plain = __import__('re').sub(r'\*\*([^*]+)\*\*', r'\1', plain)
+                    plain = __import__('re').sub(r'^#{1,6}\s+', '', plain, flags=__import__('re').MULTILINE)
+                    plain = plain.replace('\n', ' ').strip()
                     user_topics.append({
                         'id': t['id'],
                         'title': t['title'],
