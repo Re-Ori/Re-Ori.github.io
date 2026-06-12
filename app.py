@@ -1432,7 +1432,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
 
             # 覆盖 users.json
             if users_path in namelist:
-                BBS_USERS_FILE.write_text(zf.read(users_path).decode('utf-8'), encoding='utf-8')
+                data = zf.read(users_path)
+                BBS_USERS_FILE.write_text(data.decode('utf-8', errors='replace'), encoding='utf-8')
 
             # 清空 topics 目录再写入（覆盖模式）
             BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
@@ -1443,7 +1444,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             for name in namelist:
                 if name.startswith(topic_prefix) and name.endswith('.json'):
                     rel = name[len(topic_prefix):]
-                    (BBS_TOPICS_DIR / rel).write_text(zf.read(name).decode('utf-8'), encoding='utf-8')
+                    data = zf.read(name)
+                    (BBS_TOPICS_DIR / rel).write_text(data.decode('utf-8', errors='replace'), encoding='utf-8')
 
             zf.close()
             log(f'BBS 导入 ZIP by {user.get("user_id", "?")}')

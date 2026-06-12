@@ -930,11 +930,13 @@
           loadTopics();
         } else if (xhr.status === 403) {
           showToast('无权限');
+        } else if (xhr.response && xhr.response.error) {
+          showToast('导入失败: ' + xhr.response.error);
         } else {
           showToast('导入失败');
         }
       };
-      xhr.onerror = function() { showToast('导入失败'); };
+      xhr.onerror = function() { showToast('导入失败: 网络错误'); };
       xhr.send(e.target.result);
     };
     reader.readAsArrayBuffer(file);
