@@ -326,6 +326,67 @@
   100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
 }
 
+/* ── 搜索栏 ── */
+.bbs-search-bar {
+  display: flex; gap: 8px; margin-bottom: 16px;
+}
+.bbs-search-bar input {
+  flex: 1; padding: 9px 14px; border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 8px; font-size: 14px; background: rgba(255,255,255,0.8);
+  color: #333; outline: none; transition: border-color 0.15s;
+}
+[data-theme="dark"] .bbs-search-bar input {
+  background: rgba(40,42,65,0.8); border-color: rgba(255,255,255,0.1); color: #ddd;
+}
+.bbs-search-bar input:focus { border-color: var(--theme-color,#399FFF); }
+.bbs-search-bar input::placeholder { color: #bbb; }
+[data-theme="dark"] .bbs-search-bar input::placeholder { color: #555; }
+.bbs-search-btn {
+  padding: 0 18px; border: none; border-radius: 8px; font-size: 14px;
+  font-weight: 600; cursor: pointer; background: var(--theme-color,#399FFF);
+  color: #fff; transition: opacity 0.2s; white-space: nowrap;
+}
+.bbs-search-btn:hover { opacity: 0.85; }
+
+/* ── 搜索结果高亮 ── */
+.bbs-highlight {
+  font-weight: 700; background: rgba(57,159,255,0.12); color: inherit;
+  border-radius: 2px; padding: 0 1px;
+  font-style: normal;
+}
+[data-theme="dark"] .bbs-highlight {
+  background: rgba(90,180,255,0.3); color: inherit;
+}
+
+/* ── 分页 ── */
+.bbs-pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: 4px; padding: 24px 0 12px; flex-wrap: wrap;
+}
+.bbs-page-btn {
+  min-width: 36px; height: 36px; padding: 0 10px;
+  border: 1px solid rgba(0,0,0,0.12); border-radius: 8px; font-size: 13px;
+  background: transparent; color: #555; cursor: pointer;
+  transition: all 0.15s; display: inline-flex; align-items: center;
+  justify-content: center; user-select: none;
+}
+[data-theme="dark"] .bbs-page-btn { border-color: rgba(255,255,255,0.1); color: #aaa; }
+.bbs-page-btn:hover:not(:disabled):not(.current) {
+  border-color: var(--theme-color,#399FFF); color: var(--theme-color,#399FFF);
+}
+.bbs-page-btn.current {
+  background: var(--theme-color,#399FFF); color: #fff;
+  border-color: var(--theme-color,#399FFF); cursor: default;
+}
+.bbs-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.bbs-page-dots {
+  min-width: 28px; text-align: center; color: #8e8e93; font-size: 14px;
+  letter-spacing: 2px;
+}
+.bbs-page-info {
+  margin-left: 8px; font-size: 12px; color: #8e8e93;
+}
+
 /* ── 响应式 ── */
 @media (max-width: 640px) {
   .bbs-layout { padding: 0 8px 80px; }

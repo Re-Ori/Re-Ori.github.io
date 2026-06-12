@@ -1154,6 +1154,13 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                     except Exception:
                         t['content_preview'] = ''
             params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            # 搜索过滤
+            q = params.get('q', [None])[0]
+            if q:
+                q = q.strip().lower()
+                topics = [t for t in topics if q in t.get('title', '').lower()
+                          or q in t.get('content_preview', '').lower()
+                          or q in t.get('author_name', '').lower()]
             page = int(params.get('page', ['1'])[0])
             limit = int(params.get('limit', ['20'])[0])
             limit = min(limit, 50)

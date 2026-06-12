@@ -104,6 +104,10 @@
   var USER_ID = localStorage.getItem('bbs_user_id') || '';
   window.USER_ID = USER_ID; // 供 HTML onclick 使用
   var ROLE = '';
+  var CURRENT_PAGE = 1;
+  var SEARCH_QUERY = '';
+  var TOTAL_TOPICS = 0;
+  var PAGE_LIMIT = 20;
 
   // ── 工具函数 ──
 
@@ -124,6 +128,21 @@
 
   function escapeHtml(s) {
     var d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+  }
+
+  function highlightText(text, query) {
+    if (!query || !text) return escapeHtml(text);
+    var q = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    var parts = text.split(new RegExp('(' + q + ')', 'gi'));
+    var html = '';
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].toLowerCase() === query.toLowerCase()) {
+        html += '<mark class="bbs-highlight">' + escapeHtml(parts[i]) + '</mark>';
+      } else {
+        html += escapeHtml(parts[i]);
+      }
+    }
+    return html;
   }
 
   function authorBadges(authorId, authorRole, authorTags) {
@@ -274,11 +293,22 @@
 
   // ── 加载帖子列表 ──
 
-  function loadTopics() {
+  function loadTopics(page) {
+    page = (page !== undefined) ? page : CURRENT_PAGE;
+    CURRENT_PAGE = page;
     var container = document.getElementById('bbs-topic-list');
     container.innerHTML = '<div class="bbs-loading">加载中…</div>';
-    api('GET', '/api/bbs/topics').then(function(res) {
+    var params = '?page=' + page + '&limit=' + PAGE_LIMIT;
+    if (SEARCH_QUERY) {
+      params += '&q=' + encodeURIComponent(SEARCH_QUERY);
+    }
+    api('GET', '/api/bbs/topics' + params).then(function(res) {
       if (res && res.topics) {
+        TOTAL_TOPICS = res.total || 0;
+        if (res.topics.length === 0 && page > 1 && TOTAL_TOPICS > 0) {
+          loadTopics(1);
+          return;
+        }
         renderTopicList(res.topics);
       } else {
         container.innerHTML = '<div class="bbs-empty">加载失败</div>';
@@ -290,34 +320,77 @@
 
   function renderTopicList(topics) {
     var container = document.getElementById('bbs-topic-list');
+    var html = '';
+
+    // 搜索栏
+    html += '<div class="bbs-search-bar">' +
+      '<input type="text" id="bbs-search-input" placeholder="搜索帖子标题…" value="' + escapeHtml(SEARCH_QUERY) + '" />' +
+      '<button class="bbs-search-btn" onclick="bbsSearch()">搜索</button>' +
+      '</div>';
+
+    // 帖子列表
     if (!topics || topics.length === 0) {
-      container.innerHTML = '<div class="bbs-empty">还没有帖子，点击右下角 + 发布第一条</div>';
-      return;
+      html += '<div class="bbs-empty">' + (SEARCH_QUERY ? '没有找到匹配的帖子' : '还没有帖子，点击右下角 + 发布第一条') + '</div>';
+    } else {
+      html += '<div class="bbs-topic-list">';
+      for (var i = 0; i < topics.length; i++) {
+        var t = topics[i];
+        var time = new Date(t.created_at * 1000).toLocaleString();
+        var aname = t.author_name || '账号不存在';
+        var badges = authorBadges(t.author_id, t.author_role, t.author_tags);
+        var preview = t.content_preview ? highlightText(t.content_preview, SEARCH_QUERY) : '';
+        html += '<div class="bbs-topic-item" onclick="bbsOpenTopic(\'' + t.id + '\')">' +
+          '<div class="bbs-topic-main">' +
+          '<div class="bbs-topic-title">' + highlightText(t.title, SEARCH_QUERY) + '</div>' +
+          (preview ? '<div class="bbs-topic-preview">' + preview + '</div>' : '') +
+          '<div class="bbs-topic-meta">' +
+          '<span class="bbs-author-link" onclick="event.stopPropagation();bbsOpenUser(\'' + escapeHtml(t.author_id || '') + '\')">' + highlightText(aname, SEARCH_QUERY) + '</span>' + badges +
+          '<span>·</span>' +
+          '<span>' + time + '</span>' +
+          '</div></div>' +
+          '<div class="bbs-topic-stats">' +
+          '<span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:2px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> ' + t.reply_count + '</span>' +
+          '</div>' +
+          (canDeleteTopic(t.author_id) ? '<button class="bbs-topic-delete-btn" onclick="event.stopPropagation();bbsDeleteTopic(\'' + t.id + '\')" title="删除"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' : '') +
+          '</div>';
+      }
+      html += '</div>';
     }
-    var html = '<div class="bbs-topic-list">';
-    for (var i = 0; i < topics.length; i++) {
-      var t = topics[i];
-      var time = new Date(t.created_at * 1000).toLocaleString();
-      var aname = t.author_name || '账号不存在';
-      var badges = authorBadges(t.author_id, t.author_role, t.author_tags);
-      var preview = t.content_preview ? escapeHtml(t.content_preview) : '';
-      html += '<div class="bbs-topic-item" onclick="bbsOpenTopic(\'' + t.id + '\')">' +
-        '<div class="bbs-topic-main">' +
-        '<div class="bbs-topic-title">' + escapeHtml(t.title) + '</div>' +
-        (preview ? '<div class="bbs-topic-preview">' + preview + '</div>' : '') +
-        '<div class="bbs-topic-meta">' +
-        '<span class="bbs-author-link" onclick="event.stopPropagation();bbsOpenUser(\'' + escapeHtml(t.author_id || '') + '\')">' + escapeHtml(aname) + '</span>' + badges +
-        '<span>·</span>' +
-        '<span>' + time + '</span>' +
-        '</div></div>' +
-        '<div class="bbs-topic-stats">' +
-        '<span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:2px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> ' + t.reply_count + '</span>' +
-        '</div>' +
-        (canDeleteTopic(t.author_id) ? '<button class="bbs-topic-delete-btn" onclick="event.stopPropagation();bbsDeleteTopic(\'' + t.id + '\')" title="删除"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' : '') +
-        '</div>';
+
+    // 分页 + 总数
+    var totalPages = Math.max(1, Math.ceil(TOTAL_TOPICS / PAGE_LIMIT));
+    html += '<div class="bbs-pagination">';
+    if (totalPages > 1) {
+      html += '<button class="bbs-page-btn" onclick="bbsGoToPage(' + (CURRENT_PAGE - 1) + ')"' + (CURRENT_PAGE <= 1 ? ' disabled' : '') + '>上一页</button>';
+      var lastShown = 0;
+      for (var i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= CURRENT_PAGE - 2 && i <= CURRENT_PAGE + 2)) {
+          if (lastShown > 0 && i - lastShown > 1) {
+            html += '<span class="bbs-page-dots">…</span>';
+          }
+          if (i === CURRENT_PAGE) {
+            html += '<span class="bbs-page-btn current">' + i + '</span>';
+          } else {
+            html += '<button class="bbs-page-btn" onclick="bbsGoToPage(' + i + ')">' + i + '</button>';
+          }
+          lastShown = i;
+        }
+      }
+      html += '<button class="bbs-page-btn" onclick="bbsGoToPage(' + (CURRENT_PAGE + 1) + ')"' + (CURRENT_PAGE >= totalPages ? ' disabled' : '') + '>下一页</button>';
     }
+    html += '<span class="bbs-page-info">共 ' + TOTAL_TOPICS + ' 条</span>';
     html += '</div>';
+
     container.innerHTML = html;
+
+    // 绑定搜索框回车
+    var si = document.getElementById('bbs-search-input');
+    if (si) {
+      si.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); bbsSearch(); }
+      });
+      if (SEARCH_QUERY) si.focus();
+    }
   }
 
   function canDeleteTopic(authorId) {
@@ -325,6 +398,17 @@
     if (ROLE === 'admin') return true;
     return USER_ID === authorId;
   }
+
+  window.bbsSearch = function() {
+    var q = document.getElementById('bbs-search-input').value.trim();
+    SEARCH_QUERY = q;
+    loadTopics(1);
+  };
+
+  window.bbsGoToPage = function(page) {
+    if (page < 1) return;
+    loadTopics(page);
+  };
 
   // ── 打开帖子详情 ──
 
@@ -420,7 +504,7 @@
     history.pushState({ list: true }, '', window.location.pathname);
     document.getElementById('bbs-detail').style.display = 'none';
     document.getElementById('bbs-topic-list').style.display = '';
-    loadTopics();
+    loadTopics(CURRENT_PAGE);
   };
 
   // ── 用户主页 ──
