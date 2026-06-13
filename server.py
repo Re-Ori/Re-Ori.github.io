@@ -39,9 +39,11 @@ LOCAL_ONLY = frozenset({".update_state.json", ".crash_marker.json", "AutoUpdate.
 # 同步黑名单：路径前缀匹配，长度越长优先级越高（范围越小优先级越大）
 # 匹配的文件不会被 GitHub 同步覆盖
 SYNC_LOCAL_PATHS = (
-    "bbs/topics.json",
-    "bbs/topics/",
-    "short_links.json",
+    ".data/bbs/users.json",
+    ".data/bbs/topics.json",
+    ".data/bbs/topics/",
+    ".data/bbs/tokens.json",
+    ".data/short_link/short_links.json",
 )
 TM_START = "// ===== AutoUpdate Timestamp (do not remove) ====="
 TM_END   = "// ===== End AutoUpdate Timestamp ====="

@@ -22,20 +22,39 @@ _p2p_relay_usage: dict[str, list[float]] = {}
 RELAY_RATE_LIMIT = 5 * 1024 * 1024
 RELAY_RATE_WINDOW = 300
 RELAY_MAX_BUFFER = 200
-SHORT_LINKS_FILE = PROJECT_ROOT / "short_links.json"
+DATA_DIR = PROJECT_ROOT / ".data"
+SHORT_LINKS_DIR = DATA_DIR / "short_link"
+SHORT_LINKS_FILE = SHORT_LINKS_DIR / "short_links.json"
 ANON_SL_TTL = 259200  # 72h
 
 BLACKLIST_FILE = PROJECT_ROOT / "blacklist.json"
-BBS_DIR = PROJECT_ROOT / "bbs"
+BBS_DIR = DATA_DIR / "bbs"
 BBS_USERS_FILE = BBS_DIR / "users.json"
 BBS_TOPICS_FILE = BBS_DIR / "topics.json"
 BBS_TOPICS_DIR = BBS_DIR / "topics"
+BBS_TOKENS_FILE = BBS_DIR / "tokens.json"
 
 BBS_TOKENS: dict[str, dict] = {}
 BBS_TOKEN_TTL = 86400  # 24h
 
-# 帖子列表缓存，增删改时清空
-_bbs_list_cache: list | None = None
+def _bbs_load_tokens():
+    """从磁盘加载 BBS Token"""
+    global BBS_TOKENS
+    try:
+        if BBS_TOKENS_FILE.exists():
+            data = json.loads(BBS_TOKENS_FILE.read_text(encoding='utf-8'))
+            now = time.time()
+            BBS_TOKENS = {k: v for k, v in data.items()
+                          if now - v.get('at', 0) < BBS_TOKEN_TTL}
+            if len(BBS_TOKENS) != len(data):
+                _bbs_save_tokens()
+    except Exception:
+        BBS_TOKENS = {}
+
+def _bbs_save_tokens():
+    """将 BBS Token 持久化到磁盘"""
+    BBS_TOKENS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    BBS_TOKENS_FILE.write_text(json.dumps(BBS_TOKENS, ensure_ascii=False), encoding='utf-8')
 
 def _bbs_token():
     import hashlib, os
@@ -68,12 +87,8 @@ def _bbs_find_topic_file(tid):
     return None
 
 def _bbs_all_topics():
-    """读取并处理所有帖子（含作者解析、生成预览），结果缓存到内存"""
-    global _bbs_list_cache
-    if _bbs_list_cache is not None:
-        return _bbs_list_cache
+    """读取并处理所有帖子（含作者解析、生成预览），每次从磁盘读取"""
     if not BBS_TOPICS_DIR.exists():
-        _bbs_list_cache = []
         return []
     topics = []
     for f in BBS_TOPICS_DIR.iterdir():
@@ -83,7 +98,6 @@ def _bbs_all_topics():
             except Exception:
                 pass
     topics.sort(key=lambda t: t.get('created_at', 0), reverse=True)
-    # 一次处理完所有计算字段，后续请求直接走缓存
     for t in topics:
         aid = t.get('author_id', '')
         info = _bbs_resolve_author(aid)
@@ -101,13 +115,7 @@ def _bbs_all_topics():
         t['content_preview'] = plain[:120] + ('...' if len(plain) > 120 else '')
         t.pop('content', None)
         t.pop('replies', None)
-    _bbs_list_cache = topics
     return topics
-
-def _bbs_clear_cache():
-    """帖子有变更时清空列表缓存"""
-    global _bbs_list_cache
-    _bbs_list_cache = None
 
 def _bbs_migrate_old_format():
     """迁移旧 {id}.json → {id}_{title}.json，清理 topics.json"""
@@ -131,7 +139,9 @@ def _bbs_check(headers):
     e = BBS_TOKENS.get(t)
     if e and time.time() - e['at'] < BBS_TOKEN_TTL:
         return e  # {user_id, username, role, at}
-    BBS_TOKENS.pop(t, None)
+    if t in BBS_TOKENS:
+        BBS_TOKENS.pop(t, None)
+        _bbs_save_tokens()
     return None
 
 def _sl_load():
@@ -1094,6 +1104,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 if u.get('username') == username and u.get('password') == password:
                     token = _bbs_token()
                     BBS_TOKENS[token] = {'user': username, 'at': time.time()}
+                    _bbs_save_tokens()
                     log(f'短链/BBS 登录: {username}')
                     self._send_json({'ok': True, 'token': token, 'user': username})
                     return
@@ -1203,6 +1214,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                         'role': u.get('role', 'user'),
                         'at': time.time(),
                     }
+                    _bbs_save_tokens()
                     log(f'BBS 登录: {u.get("id", "?")}({username})')
                     self._send_json({'ok': True, 'token': token,
                                      'user_id': u.get('id', ''),
@@ -1214,7 +1226,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({'ok': False, 'error': str(e)})
 
     def _handle_bbs_topics(self):
-        """GET /api/bbs/topics — 帖子列表（数据已由 _bbs_all_topics 预处理并缓存）"""
+        """GET /api/bbs/topics — 帖子列表（每次从磁盘读取）"""
         try:
             _bbs_migrate_old_format()
             topics = _bbs_all_topics()
@@ -1266,7 +1278,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             }
             BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
             topic_path.write_text(json.dumps(topic_data, ensure_ascii=False, indent=2), encoding='utf-8')
-            _bbs_clear_cache()
             log(f'BBS 新帖: {tid} "{title}" by {author_id}')
             self._send_json({'ok': True, 'id': tid})
         except Exception as e:
@@ -1326,7 +1337,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             topic.setdefault('replies', []).append(reply)
             topic['updated_at'] = time.time()
             topic_path.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
-            _bbs_clear_cache()
             log(f'BBS 回复: {tid} by {user.get("user_id", "?")}')
             self._send_json({'ok': True, 'reply_id': reply_id})
         except Exception as e:
@@ -1367,7 +1377,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             topic['replies'].pop(idx)
             topic['updated_at'] = time.time()
             topic_path.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
-            _bbs_clear_cache()
             log(f'BBS 删除回复: {tid} reply={reply_id} by {user_id}')
             self._send_json({'ok': True})
         except Exception as e:
@@ -1391,7 +1400,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({'ok': False, 'error': 'forbidden'})
                 return
             topic_path.unlink()
-            _bbs_clear_cache()
             log(f'BBS 删帖: {tid} by {user_id}')
             self._send_json({'ok': True})
         except Exception as e:
@@ -1463,7 +1471,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                     data = zf.read(name)
                     (BBS_TOPICS_DIR / rel).write_text(data.decode('utf-8', errors='replace'), encoding='utf-8')
 
-            _bbs_clear_cache()
             zf.close()
             log(f'BBS 导入 ZIP by {user.get("user_id", "?")}')
             self._send_json({'ok': True})
@@ -1505,9 +1512,36 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({'ok': False, 'error': str(e)})
 
 
+# ── 数据目录初始化与迁移 ─────────────────────────────────
+
+def _init_data_dirs():
+    """确保 .data 目录结构存在，并从旧路径迁移数据"""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 迁移短链数据
+    old_sl = PROJECT_ROOT / "short_links.json"
+    if old_sl.exists() and not SHORT_LINKS_FILE.exists():
+        SHORT_LINKS_DIR.mkdir(parents=True, exist_ok=True)
+        old_sl.rename(SHORT_LINKS_FILE)
+        log(f"迁移短链数据: {old_sl} → {SHORT_LINKS_FILE}")
+
+    # 迁移 BBS 数据
+    old_bbs_dir = PROJECT_ROOT / "bbs"
+    if old_bbs_dir.exists() and not BBS_DIR.exists():
+        old_bbs_dir.rename(BBS_DIR)
+        log(f"迁移 BBS 数据: {old_bbs_dir} → {BBS_DIR}")
+
+    # 确保必要子目录存在
+    BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
+    SHORT_LINKS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 加载持久化 Token
+    _bbs_load_tokens()
+
 # ── 启动入口 ─────────────────────────────────────────────
 
 def main():
+    _init_data_dirs()
     import argparse
 
     parser = argparse.ArgumentParser(
