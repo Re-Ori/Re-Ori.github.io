@@ -25,6 +25,7 @@ STATE_FILE = PROJECT_ROOT / ".update_state.json"
 MAIN_JS = PROJECT_ROOT / "js" / "main.js"
 CRASH_MARKER = PROJECT_ROOT / ".crash_marker.json"
 VERSIONS_DIR = PROJECT_ROOT / ".versions"
+CACHE_DIR = PROJECT_ROOT / ".cache"
 
 REPO_URL = "https://github.com/Re-Ori/Re-Ori.github.io"
 ZIP_URL = f"{REPO_URL}/archive/refs/heads/main.zip"
@@ -42,6 +43,7 @@ LOCAL_ONLY = frozenset({".update_state.json", ".crash_marker.json", "AutoUpdate.
 # 对同一文件，白名单路径比黑名单更精确（更长）时，白名单胜出。
 SYNC_LOCAL_PATHS = (
     ".data/",
+    ".cache/",
 )
 SYNC_ALLOW_PATHS = (
     ".data/bbs/users.json",
@@ -392,33 +394,56 @@ def _run_update():
     if (PROJECT_ROOT / "AutoUpdate.disabled").exists():
         _log("⚠️ AutoUpdate.disabled 存在，自动同步已禁用")
         return "disabled"
-    with tempfile.TemporaryDirectory(prefix="au_") as td:
-        td, zp = Path(td), Path(td) / "src.zip"
-        if not _dl_zip(zp): return "uptodate"
-        ed = td / "ext"; ed.mkdir()
-        if not _extract(zp, ed): return "uptodate"
-        sd = ed / EXTRACTED_DIR_PREFIX
-        if not sd.exists(): sd = ed
-        upd, add, rem = _cmp(sd, PROJECT_ROOT)
-        if not upd and not add and not rem:
-            _log("本地已是最新"); return "uptodate"
 
-        ac = "app.py" in upd or "app.py" in add
-        if ac:
-            _log("检测到 app.py 更新，备份当前版本…")
-            _backup_app()
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    zp = CACHE_DIR / "src.zip"
+    ed = CACHE_DIR / "ext"
 
-        _apply(sd, PROJECT_ROOT, upd, add, rem)
-        global _RESTART_NEEDED
-        if "server.py" in upd or "server.py" in add: _RESTART_NEEDED = True
-        if ac:
-            sv, vc = _sv_state(_load_state()), _sv_state(_load_state()).get("version_counter", 0) + 1
-            sv["current_version_id"] = sv["version_counter"] = vc
-            _save_sv(sv); _RESTART_NEEDED = True
+    # 尝试下载，GitHub 返回 304 时使用缓存
+    dl_result = _dl_zip(zp)
+    if dl_result is None:
+        if not zp.exists():
+            # 无缓存 → 清除 ETag 强制重新下载
+            _log("本地无缓存，强制重新下载…")
+            st.pop("etag", None)
+            _save_state(st)
+            dl_result = _dl_zip(zp)
+            if dl_result is None:
+                return "uptodate"
+        else:
+            _log("GitHub 内容未变，使用缓存比对")
 
-        _save_state({**_load_state(), "last_updated": datetime.now().isoformat()})
-        _log(f"更新完成 ({len(upd)+len(add)+len(rem)} 个文件)")
-        return "updated"
+    # 新下载时清理旧的 extract
+    if dl_result is not None and ed.exists():
+        shutil.rmtree(ed)
+
+    if not ed.exists():
+        ed.mkdir(parents=True)
+    if not _extract(zp, ed):
+        return "uptodate"
+
+    sd = ed / EXTRACTED_DIR_PREFIX
+    if not sd.exists(): sd = ed
+    upd, add, rem = _cmp(sd, PROJECT_ROOT)
+    if not upd and not add and not rem:
+        _log("本地已是最新"); return "uptodate"
+
+    ac = "app.py" in upd or "app.py" in add
+    if ac:
+        _log("检测到 app.py 更新，备份当前版本…")
+        _backup_app()
+
+    _apply(sd, PROJECT_ROOT, upd, add, rem)
+    global _RESTART_NEEDED
+    if "server.py" in upd or "server.py" in add: _RESTART_NEEDED = True
+    if ac:
+        sv, vc = _sv_state(_load_state()), _sv_state(_load_state()).get("version_counter", 0) + 1
+        sv["current_version_id"] = sv["version_counter"] = vc
+        _save_sv(sv); _RESTART_NEEDED = True
+
+    _save_state({**_load_state(), "last_updated": datetime.now().isoformat()})
+    _log(f"更新完成 ({len(upd)+len(add)+len(rem)} 个文件)")
+    return "updated"
 
 # ── 访问时更新检查回调 ──
 
