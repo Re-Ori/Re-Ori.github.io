@@ -262,9 +262,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if req_path == '/api/ping':
             self._send_json({'ok': True, 'server': 'autoupdate'})
             return
-        if req_path == '/api/diag':
-            self._handle_diag()
-            return
         if req_path == '/api/p2p/signal':
             self._handle_p2p_poll()
             return
@@ -1528,91 +1525,13 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
 
-    def _handle_diag(self):
-        """GET /api/diag — 诊断文件系统状态"""
-        import os, json
-        info = {
-            'project_root': str(PROJECT_ROOT),
-            'data_dir': str(DATA_DIR),
-            'bbs_dir': str(BBS_DIR),
-            'users_file_exists': BBS_USERS_FILE.exists(),
-            'users_file_size': BBS_USERS_FILE.stat().st_size if BBS_USERS_FILE.exists() else 0,
-            'topics_dir_exists': BBS_TOPICS_DIR.exists(),
-            'topics_count': len(list(BBS_TOPICS_DIR.iterdir())) if BBS_TOPICS_DIR.exists() else 0,
-            'tokens_file_exists': BBS_TOKENS_FILE.exists(),
-            'tokens_count': len(BBS_TOKENS),
-            'short_links_file_exists': SHORT_LINKS_FILE.exists(),
-            'old_bbs_exists': (PROJECT_ROOT / "bbs").exists(),
-            'old_sl_exists': (PROJECT_ROOT / "short_links.json").exists(),
-        }
-        try:
-            if BBS_USERS_FILE.exists():
-                users = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
-                info['users_count'] = len(users)
-                info['users_preview'] = [u.get('username', '?') for u in users[:5]]
-        except Exception as e:
-            info['users_parse_error'] = str(e)
-        self._send_json(info)
-
-
-# ── 数据目录初始化与迁移 ─────────────────────────────────
+# ── 数据目录初始化 ─────────────────────────────────────
 
 def _init_data_dirs():
-    """确保 .data 目录结构存在，并从旧路径迁移数据"""
+    """确保 .data 目录结构存在"""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    # 迁移短链数据
-    old_sl = PROJECT_ROOT / "short_links.json"
-    if old_sl.exists() and not SHORT_LINKS_FILE.exists():
-        SHORT_LINKS_DIR.mkdir(parents=True, exist_ok=True)
-        old_sl.rename(SHORT_LINKS_FILE)
-        log(f"迁移短链数据: {old_sl} → {SHORT_LINKS_FILE}")
-
-    # 迁移 BBS 数据
-    old_bbs_dir = PROJECT_ROOT / "bbs"
-    old_users = old_bbs_dir / "users.json"
-    old_topics_dir = old_bbs_dir / "topics"
-    old_tokens = old_bbs_dir / "tokens.json"
-
-    # 情况1: 旧数据存在且新位置无数据 → 重命名整个目录
-    if old_bbs_dir.exists() and not BBS_USERS_FILE.exists():
-        new_has_data = (BBS_USERS_FILE.exists() or BBS_TOKENS_FILE.exists()
-                        or (BBS_TOPICS_DIR.exists() and any(BBS_TOPICS_DIR.iterdir())))
-        if not new_has_data:
-            if BBS_DIR.exists() and not any(BBS_DIR.iterdir()):
-                BBS_DIR.rmdir()
-            if not BBS_DIR.exists():
-                old_bbs_dir.rename(BBS_DIR)
-                log(f"迁移 BBS 数据: {old_bbs_dir} → {BBS_DIR}")
-                return
-
-    # 情况2: 旧 users.json 在旧目录但 topics 在新目录（部分迁移）
-    if old_users.exists() and not BBS_USERS_FILE.exists():
-        BBS_DIR.mkdir(parents=True, exist_ok=True)
-        old_users.rename(BBS_USERS_FILE)
-        log(f"迁移 BBS 用户: {old_users} → {BBS_USERS_FILE}")
-    if old_tokens.exists() and not BBS_TOKENS_FILE.exists():
-        BBS_DIR.mkdir(parents=True, exist_ok=True)
-        old_tokens.rename(BBS_TOKENS_FILE)
-        log(f"迁移 BBS Token: {old_tokens} → {BBS_TOKENS_FILE}")
-    if old_topics_dir.exists() and BBS_TOPICS_DIR.exists():
-        for f in old_topics_dir.iterdir():
-            if f.suffix == '.json' and not (BBS_TOPICS_DIR / f.name).exists():
-                BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
-                f.rename(BBS_TOPICS_DIR / f.name)
-                log(f"迁移帖子: {f.name}")
-
-    # 确保必要子目录存在
     BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
     SHORT_LINKS_DIR.mkdir(parents=True, exist_ok=True)
-
-    # 检查最终状态
-    if not BBS_USERS_FILE.exists():
-        log(f"警告: {BBS_USERS_FILE} 不存在，BBS 登录将失败")
-    else:
-        log(f"BBS 数据就绪: {BBS_USERS_FILE} ({BBS_USERS_FILE.stat().st_size} 字节)")
-
-    # 加载持久化 Token
     _bbs_load_tokens()
 
 # ── 启动入口 ─────────────────────────────────────────────
