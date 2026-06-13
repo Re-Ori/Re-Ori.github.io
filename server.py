@@ -450,7 +450,7 @@ def _run_update():
 def _make_checker():
     """返回注入到 app._on_access_check 的回调函数"""
     last_check, updating = 0.0, False
-    lock, interval = threading.Lock(), 300
+    lock, interval = threading.Lock(), 60
 
     def checker(cls):
         nonlocal last_check, updating
@@ -529,7 +529,7 @@ def main():
             parser = __import__('argparse').ArgumentParser()
             parser.add_argument("--host", default="0.0.0.0", nargs='?')
             parser.add_argument("--port", type=int, default=9876, nargs='?')
-            parser.add_argument("--interval", type=int, default=300, nargs='?')
+            parser.add_argument("--interval", type=int, default=60, nargs='?')
             args, _ = parser.parse_known_args()
 
             app.AutoUpdateHandler.CHECK_INTERVAL = args.interval

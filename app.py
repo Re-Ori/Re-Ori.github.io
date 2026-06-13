@@ -244,7 +244,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     last_check_time = 0.0
     update_in_progress = False
     check_lock = threading.Lock()
-    CHECK_INTERVAL = 300  # 5 分钟冷却
+    CHECK_INTERVAL = 60  # 1 分钟冷却
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(PROJECT_ROOT), **kwargs)
