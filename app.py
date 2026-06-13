@@ -1525,11 +1525,18 @@ def _init_data_dirs():
         old_sl.rename(SHORT_LINKS_FILE)
         log(f"迁移短链数据: {old_sl} → {SHORT_LINKS_FILE}")
 
-    # 迁移 BBS 数据
+    # 迁移 BBS 数据：检查旧目录是否存在且新目录没有数据文件
     old_bbs_dir = PROJECT_ROOT / "bbs"
-    if old_bbs_dir.exists() and not BBS_DIR.exists():
-        old_bbs_dir.rename(BBS_DIR)
-        log(f"迁移 BBS 数据: {old_bbs_dir} → {BBS_DIR}")
+    if old_bbs_dir.exists():
+        new_has_data = (BBS_USERS_FILE.exists() or BBS_TOKENS_FILE.exists()
+                        or (BBS_TOPICS_DIR.exists() and any(BBS_TOPICS_DIR.iterdir())))
+        if not new_has_data:
+            # 如果新目录存在但为空，先移除再重命名
+            if BBS_DIR.exists() and not any(BBS_DIR.iterdir()):
+                BBS_DIR.rmdir()
+            if not BBS_DIR.exists():
+                old_bbs_dir.rename(BBS_DIR)
+                log(f"迁移 BBS 数据: {old_bbs_dir} → {BBS_DIR}")
 
     # 确保必要子目录存在
     BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
@@ -1541,7 +1548,6 @@ def _init_data_dirs():
 # ── 启动入口 ─────────────────────────────────────────────
 
 def main():
-    _init_data_dirs()
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -1624,6 +1630,9 @@ def main():
         log("\n服务已停止")
         server.server_close()
 
+
+# 模块导入时自动执行数据目录初始化和 Token 加载
+_init_data_dirs()
 
 if __name__ == "__main__":
     main()
