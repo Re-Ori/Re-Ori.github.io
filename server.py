@@ -36,32 +36,42 @@ WORKERS = 8
 MAX_VERSIONS = 4
 DOWNLOAD_TIMEOUT = 60
 LOCAL_ONLY = frozenset({".update_state.json", ".crash_marker.json", "AutoUpdate.disabled"})
-# 同步黑名单：路径前缀匹配，长度越长优先级越高（范围越小优先级越大）
-# 匹配的文件不会被 GitHub 同步覆盖
+# 同步黑/白名单：使用最长前缀匹配，范围越小优先级越高。
+#   SYNC_LOCAL_PATHS — 匹配的路径不会被 GitHub 覆盖（黑名单）
+#   SYNC_ALLOW_PATHS — 匹配的路径允许被 GitHub 覆盖（白名单），优先于黑名单
+# 对同一文件，白名单路径比黑名单更精确（更长）时，白名单胜出。
 SYNC_LOCAL_PATHS = (
+    ".data/",
+)
+SYNC_ALLOW_PATHS = (
     ".data/bbs/users.json",
-    ".data/bbs/topics.json",
-    ".data/bbs/topics/",
-    ".data/bbs/tokens.json",
-    ".data/short_link/short_links.json",
 )
 TM_START = "// ===== AutoUpdate Timestamp (do not remove) ====="
 TM_END   = "// ===== End AutoUpdate Timestamp ====="
 HASH_STRIP = {"js/main.js": (TM_START, TM_END)}
 _RESTART_NEEDED = False
 
-def _is_sync_local(path: str) -> bool:
-    """检查路径是否在同步黑名单中（不应被 GitHub 覆盖），使用最长前缀匹配。
-    目录路径以 / 结尾做前缀匹配，文件路径做精确匹配。"""
+def _best_match(path: str, patterns: tuple) -> str:
+    """返回 path 在 patterns 中的最长匹配项，目录以 / 结尾做前缀匹配，文件精确匹配。"""
     best = ""
-    for p in SYNC_LOCAL_PATHS:
-        if path == p:
+    for p in patterns:
+        if path == p or (p.endswith('/') and path.startswith(p)):
             if len(p) > len(best):
                 best = p
-        elif p.endswith('/') and path.startswith(p):
-            if len(p) > len(best):
-                best = p
-    return bool(best)
+    return best
+
+def _is_sync_local(path: str) -> bool:
+    """检查路径是否不应被 GitHub 覆盖。
+
+    白名单（SYNC_ALLOW_PATHS）和黑名单（SYNC_LOCAL_PATHS）
+    各自取最长前缀匹配，匹配项更精确（路径字符串更长）的一方胜出。
+    """
+    allow = _best_match(path, SYNC_ALLOW_PATHS)
+    deny  = _best_match(path, SYNC_LOCAL_PATHS)
+    # 白名单比黑名单更精确时，允许同步（不视为 local）
+    if len(allow) > len(deny):
+        return False
+    return bool(deny)
 
 # ── 日志 ──
 

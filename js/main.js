@@ -1015,7 +1015,7 @@ document.addEventListener('DOMContentLoaded', () => {
   );
   console.log(
     '  本地文件版本: %s',
-    '2026.06.13 22:57:06 [UTC+8]'
+    '2026.06.13 23:06:39 [UTC+8]'
   );
   console.log(
     '  GitHub 远程版本: %s',
