@@ -86,3 +86,49 @@
 [23:08:13] 
 [23:08:21] → POST /api/short-link HTTP/1.1  200 (-)
 [23:08:21] → GET /s/4lAtU0 HTTP/1.1  200 (-)
+[23:16:08] 检测到上次异常退出
+[23:16:08] 版本队列为空
+[23:16:08] 无可回退版本，使用当前 app.py
+[23:16:08] 
+[23:16:08] ==================================================
+[23:16:08]   AutoUpdate 服务器已启动
+[23:16:08]   地址: http://localhost:9876
+[23:16:08]   目录: E:\Code\ReOri
+[23:16:08]   源:   https://github.com/Re-Ori/Re-Ori.github.io
+[23:16:08]   冷却: 60s（访问时触发）
+[23:16:08]   ⚠️⚠️⚠️ 自动同步已禁用（AutoUpdate.disabled）⚠️⚠️⚠️
+[23:16:08] ==================================================
+[23:16:08] 
+[23:16:23] 检查 GitHub 更新…
+[23:16:23] → GET / HTTP/1.1  304 (-)
+[23:16:23] ⚠️ AutoUpdate.disabled 存在，自动同步已禁用
+[23:16:23] → GET /css/style.css HTTP/1.1  304 (-)
+[23:16:23] → GET /js/main.js HTTP/1.1  200 (-)
+[23:16:23] → GET /js/navbar.js HTTP/1.1  304 (-)
+[23:16:24] → GET /json/config.json HTTP/1.1  304 (-)
+[23:16:24] → GET /blogs/blogs.json HTTP/1.1  304 (-)
+[23:16:24] → GET /images/copy.svg HTTP/1.1  304 (-)
+[23:16:25] ⛔ 自动同步已禁用（存在 AutoUpdate.disabled 文件）
+[23:16:25] → GET /index.html?blog_list=/blogs/tools/tools.json HTTP/1.1  304 (-)
+[23:16:26] → GET /js/main.js HTTP/1.1  200 (-)
+[23:16:26] → GET /blogs/tools/tools.json HTTP/1.1  200 (-)
+[23:16:28] → GET /Tool/short-link.html HTTP/1.1  200 (-)
+[23:16:28] → GET /js/main.js HTTP/1.1  304 (-)
+[23:16:28] → GET /api/ping HTTP/1.1  200 (-)
+[23:16:29] → GET /api/short-links HTTP/1.1  200 (-)
+[23:16:33] 短链/BBS 登录: Origin
+[23:16:33] → POST /api/short-link/auth HTTP/1.1  200 (-)
+[23:16:34] → GET /Tool/short-link.html HTTP/1.1  304 (-)
+[23:16:34] → GET /js/main.js HTTP/1.1  304 (-)
+[23:16:34] → GET /api/ping HTTP/1.1  200 (-)
+[23:16:34] → GET /api/short-links HTTP/1.1  200 (-)
+[23:16:38] 短链创建: nOf1uJ → https://reori.cn/forum.html?topic=mqcjgubnxxlimk (by )
+[23:16:38] → POST /api/short-link HTTP/1.1  200 (-)
+[23:16:38] → GET /api/short-links HTTP/1.1  200 (-)
+[23:16:40] 短链删除: nOf1uJ (by anonymous)
+[23:16:40] → POST /api/short-link/delete HTTP/1.1  200 (-)
+[23:16:40] → GET /api/short-links HTTP/1.1  200 (-)
+[23:16:43] → GET /Tool/short-link.html HTTP/1.1  304 (-)
+[23:16:43] → GET /js/main.js HTTP/1.1  304 (-)
+[23:16:43] → GET /api/ping HTTP/1.1  200 (-)
+[23:16:44] → GET /api/short-links HTTP/1.1  200 (-)
