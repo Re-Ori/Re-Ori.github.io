@@ -17,3 +17,8 @@
 [21:25:35] → GET /api/ping HTTP/1.1  200 (-)
 [21:25:36] ⛔ 自动同步已禁用（存在 AutoUpdate.disabled 文件）
 [21:25:36] → GET /api/github-proxy/repos/Re-Ori/Re-Ori.github.io HTTP/1.1  200 (-)
+[22:43:52] 检查 GitHub 更新…
+[22:43:52] → GET /api/short-links HTTP/1.1  200 (-)
+[22:43:52] ⚠️ AutoUpdate.disabled 存在，自动同步已禁用
+[22:43:53] → POST /api/short-link HTTP/1.1  200 (-)
+[22:43:53] ⛔ 自动同步已禁用（存在 AutoUpdate.disabled 文件）
