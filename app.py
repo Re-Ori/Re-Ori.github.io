@@ -152,6 +152,7 @@ def _sl_load():
     return {}
 
 def _sl_save(d):
+    SHORT_LINKS_DIR.mkdir(parents=True, exist_ok=True)
     SHORT_LINKS_FILE.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
 
 _on_access_check = lambda: None  # server.py \u5c06\u66ff\u6362\u6b64\u56de\u8c03

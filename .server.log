@@ -22,3 +22,67 @@
 [22:43:52] ⚠️ AutoUpdate.disabled 存在，自动同步已禁用
 [22:43:53] → POST /api/short-link HTTP/1.1  200 (-)
 [22:43:53] ⛔ 自动同步已禁用（存在 AutoUpdate.disabled 文件）
+[23:02:38] 检测到上次异常退出
+[23:02:38] 版本队列为空
+[23:02:38] 无可回退版本，使用当前 app.py
+[23:02:38] 
+[23:02:38] ==================================================
+[23:02:38]   AutoUpdate 服务器已启动
+[23:02:38]   地址: http://localhost:9876
+[23:02:38]   目录: E:\Code\ReOri
+[23:02:38]   源:   https://github.com/Re-Ori/Re-Ori.github.io
+[23:02:38]   冷却: 60s（访问时触发）
+[23:02:38]   ⚠️⚠️⚠️ 自动同步已禁用（AutoUpdate.disabled）⚠️⚠️⚠️
+[23:02:38] ==================================================
+[23:02:38] 
+[23:02:48] → GET /api/ping HTTP/1.1  200 (-)
+[23:02:48] 检查 GitHub 更新…
+[23:02:48] ⚠️ AutoUpdate.disabled 存在，自动同步已禁用
+[23:02:50] ⛔ 自动同步已禁用（存在 AutoUpdate.disabled 文件）
+[23:06:16] → POST /api/short-link HTTP/1.1  200 (-)
+[23:06:16] ⚠️ AutoUpdate.disabled 存在，自动同步已禁用
+[23:06:18] ⛔ 自动同步已禁用（存在 AutoUpdate.disabled 文件）
+[23:06:21] 短链创建: 4lAtU0 → https://news.ycombinator.com (匿名, 72h过期)
+[23:06:21] → POST /api/short-link HTTP/1.1  200 (-)
+[23:06:49] 短链创建: B50yFv → https://github.com (匿名, 72h过期)
+[23:06:49] → POST /api/short-link HTTP/1.1  200 (-)
+[23:06:49] → POST /api/short-link/auth HTTP/1.1  200 (-)
+[23:06:49] → POST /api/short-link HTTP/1.1  200 (-)
+[23:06:54] → GET /api/short-link HTTP/1.1  404 (-)
+[23:06:54] → GET /themes/preferred_color_scheme.css HTTP/1.1  200 (-)
+[23:06:55] → GET /_next/static/css/1ba63f4f1b975b30.css HTTP/1.1  200 (-)
+[23:06:55] → GET /_next/static/chunks/webpack-6b2584c51f2fda40.js HTTP/1.1  200 (-)
+[23:06:55] → GET /_next/static/chunks/framework-821422f1c2a18a27.js HTTP/1.1  200 (-)
+[23:06:56] → GET /_next/static/chunks/main-150a3b60f55bb087.js HTTP/1.1  200 (-)
+[23:06:56] → GET /_next/static/chunks/pages/_app-f0e12f9072ad11d5.js HTTP/1.1  200 (-)
+[23:06:57] → GET /site.webmanifest HTTP/1.1  200 (-)
+[23:07:59] 检查 GitHub 更新…
+[23:07:59] ⚠️ AutoUpdate.disabled 存在，自动同步已禁用
+[23:08:00] → GET /_next/static/chunks/pages/_error-b4e4e7797d38b620.js HTTP/1.1  200 (-)
+[23:08:00] Giscus proxy error (/_next/static/chunks/pages/_error-b4e4e7797d38b620.js): [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
+[23:08:00] → ❌ 502 Bad Gateway
+[23:08:00] → GET /_next/static/chunks/pages/_error-b4e4e7797d38b620.js HTTP/1.1  502 (-)
+[23:08:00] → GET /_next/static/GqWWgLl6veNV_vhow6sKY/_buildManifest.js HTTP/1.1  200 (-)
+[23:08:00] Giscus proxy error (/_next/static/GqWWgLl6veNV_vhow6sKY/_buildManifest.js): [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
+[23:08:00] → ❌ 502 Bad Gateway
+[23:08:00] → GET /_next/static/GqWWgLl6veNV_vhow6sKY/_buildManifest.js HTTP/1.1  502 (-)
+[23:08:01] ⛔ 自动同步已禁用（存在 AutoUpdate.disabled 文件）
+[23:08:01] → GET /_next/static/GqWWgLl6veNV_vhow6sKY/_ssgManifest.js HTTP/1.1  200 (-)
+[23:08:01] Giscus proxy error (/_next/static/GqWWgLl6veNV_vhow6sKY/_ssgManifest.js): [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
+[23:08:01] → ❌ 502 Bad Gateway
+[23:08:01] → GET /_next/static/GqWWgLl6veNV_vhow6sKY/_ssgManifest.js HTTP/1.1  502 (-)
+[23:08:13] 检测到上次异常退出
+[23:08:13] 版本队列为空
+[23:08:13] 无可回退版本，使用当前 app.py
+[23:08:13] 
+[23:08:13] ==================================================
+[23:08:13]   AutoUpdate 服务器已启动
+[23:08:13]   地址: http://localhost:9876
+[23:08:13]   目录: E:\Code\ReOri
+[23:08:13]   源:   https://github.com/Re-Ori/Re-Ori.github.io
+[23:08:13]   冷却: 60s（访问时触发）
+[23:08:13]   ⚠️⚠️⚠️ 自动同步已禁用（AutoUpdate.disabled）⚠️⚠️⚠️
+[23:08:13] ==================================================
+[23:08:13] 
+[23:08:21] → POST /api/short-link HTTP/1.1  200 (-)
+[23:08:21] → GET /s/4lAtU0 HTTP/1.1  200 (-)
