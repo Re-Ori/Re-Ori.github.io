@@ -184,7 +184,8 @@ def _rollback():
     st, sv = _load_state(), _sv_state(_load_state())
     q = sv.get("version_queue", [])
     if not q: _log("版本队列为空"); return None
-    pid, pp = q[-1], VERSIONS_DIR / f"service.v{pid}.py"
+    pid = q[-1]
+    pp = VERSIONS_DIR / f"service.v{pid}.py"
     if not pp.exists(): _log(f"回退版本 v{pid} 不存在"); return None
 
     # 队列中只剩一个版本，当前 app.py 就是这个版本，不用覆盖直接重启
