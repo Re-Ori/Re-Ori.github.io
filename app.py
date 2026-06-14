@@ -156,12 +156,19 @@ def _sl_save(d):
 
 _on_access_check = lambda: None  # server.py \u5c06\u66ff\u6362\u6b64\u56de\u8c03
 
+APP_LOG_FILE = PROJECT_ROOT / ".server.log"
+
 def log(msg):
     ts = datetime.now().strftime("%H:%M:%S")
+    line = f"[{ts}] {msg}"
     try:
-        print(f"[{ts}] {msg}")
+        print(line)
     except UnicodeEncodeError:
-        print(f"[{ts}] {msg.encode('gbk', 'replace').decode('gbk')}")
+        print(line.encode('gbk', 'replace').decode('gbk'))
+    try:
+        with open(APP_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except: pass
 
 def load_whitelist():
     if not WHITELIST_FILE.exists():
@@ -233,7 +240,13 @@ def _ssl_urlopen(req, timeout):
         err = str(e).lower()
         kw = ("eof","certificate","handshake","remote end","connection aborted","connection reset","connection refused","timed out","remote disconnected")
         if any(k in err for k in kw):
-            return urllib.request.urlopen(req, timeout=timeout, context=_make_fallback_ssl_context())
+            try:
+                return urllib.request.urlopen(req, timeout=timeout, context=_make_fallback_ssl_context())
+            except Exception as e2:
+                s2 = str(e2).lower()
+                if any(k in s2 for k in ("eof","certificate","handshake")):
+                    return urllib.request.urlopen(req, timeout=timeout)
+                raise e2
         raise
 
 # ==== AutoUpdateHandler ====

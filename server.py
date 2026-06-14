@@ -26,6 +26,7 @@ MAIN_JS = PROJECT_ROOT / "js" / "main.js"
 CRASH_MARKER = PROJECT_ROOT / ".crash_marker.json"
 VERSIONS_DIR = PROJECT_ROOT / ".versions"
 CACHE_DIR = PROJECT_ROOT / ".cache"
+LOG_FILE = PROJECT_ROOT / ".server.log"
 
 REPO_URL = "https://github.com/Re-Ori/Re-Ori.github.io"
 ZIP_URL = f"{REPO_URL}/archive/refs/heads/main.zip"
@@ -79,8 +80,13 @@ def _is_sync_local(path: str) -> bool:
 
 def _log(m):
     t = datetime.now().strftime("%H:%M:%S")
-    try: print(f"[{t}] {m}")
-    except UnicodeEncodeError: print(f"[{t}] {m.encode('gbk', 'replace').decode('gbk')}")
+    line = f"[{t}] {m}"
+    try: print(line)
+    except UnicodeEncodeError: print(line.encode('gbk', 'replace').decode('gbk'))
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except: pass
 
 def _fmt(dt):
     return dt.strftime("%Y.%m.%d %H:%M:%S") + " [UTC+8]"
@@ -223,7 +229,15 @@ def _urlopen(req, timeout):
         es = str(e).lower()
         if any(k in es for k in ("eof","certificate","handshake","remote end",
             "connection aborted","connection reset","connection refused","timed out","remote disconnected")):
-            return urllib.request.urlopen(req, timeout=timeout, context=_ssl_fallback())
+            # fallback 也包 try，避免双重失败击穿
+            try:
+                return urllib.request.urlopen(req, timeout=timeout, context=_ssl_fallback())
+            except Exception as e2:
+                s2 = str(e2).lower()
+                if any(k in s2 for k in ("eof","certificate","handshake")):
+                    # 最终手段：无 context
+                    return urllib.request.urlopen(req, timeout=timeout)
+                raise e2
         raise
 
 # ── GitHub API ──
@@ -480,10 +494,11 @@ def _make_checker():
 
                 if _RESTART_NEEDED:
                     _log("\n服务器代码已更新，正在重启…"); time.sleep(3)
-                    try: subprocess.Popen([sys.executable] + sys.argv)
+                    try:
+                        subprocess.Popen([sys.executable] + sys.argv)
+                        _log("新进程已启动（端口重试机制将等待旧端口释放）")
                     except Exception as e: _log(f"重启失败: {e}")
-                    try: CRASH_MARKER.write_text('{"status":"clean"}', encoding="utf-8")
-                    except: pass
+                    _clear_cm()
                     os._exit(0)
             except Exception as e: _log(f"更新异常: {e}")
             finally: updating = False
@@ -494,6 +509,18 @@ def _make_checker():
 # ── 启动入口 ──
 
 def main():
+    # 日志轮转：超过 5MB 则归档
+    try:
+        if LOG_FILE.exists() and LOG_FILE.stat().st_size > 5 * 1024 * 1024:
+            bak = LOG_FILE.with_suffix(".log.old")
+            if bak.exists(): bak.unlink()
+            LOG_FILE.rename(bak)
+    except: pass
+
+    # 供重启线程关闭服务器的全局引用
+    global _RESTART_NEEDED
+    _current_server = None
+
     crash = _prev_crash()
     if crash:
         _log("检测到上次异常退出")
@@ -533,8 +560,24 @@ def main():
             args, _ = parser.parse_known_args()
 
             app.AutoUpdateHandler.CHECK_INTERVAL = args.interval
-            server = http.server.HTTPServer((args.host, args.port), app.AutoUpdateHandler)
+
+            # ── 端口绑定重试（应对 TIME_WAIT 或僵尸进程） ──
+            server = None
+            bind_wait = 2
+            for bind_attempt in range(5):
+                try:
+                    server = http.server.HTTPServer((args.host, args.port), app.AutoUpdateHandler)
+                    break
+                except OSError as e:
+                    if bind_attempt < 4:
+                        _log(f"端口 {args.port} 绑定失败，{bind_wait}秒后重试 ({bind_attempt + 1}/5): {e}")
+                        time.sleep(bind_wait)
+                        bind_wait *= 2
+                    else:
+                        raise
+
             addr = args.host if args.host != "0.0.0.0" else "localhost"
+            _current_server = server
 
             _log(""); _log(f"{'='*50}")
             _log(f"  AutoUpdate 服务器已启动")
@@ -546,8 +589,12 @@ def main():
                 _log(f"  {'⚠️' * 3} 自动同步已禁用（AutoUpdate.disabled）{'⚠️' * 3}")
             _log(f"{'='*50}"); _log("")
 
-            try: server.serve_forever()
-            except KeyboardInterrupt: _log("\n服务已停止"); server.server_close()
+            try:
+                server.serve_forever()
+            except KeyboardInterrupt:
+                _log("\n服务已停止")
+            finally:
+                server.server_close()
             return
         except KeyboardInterrupt: return
         except SystemExit: return
