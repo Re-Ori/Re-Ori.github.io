@@ -155,6 +155,9 @@ def _sl_save(d):
     SHORT_LINKS_DIR.mkdir(parents=True, exist_ok=True)
     SHORT_LINKS_FILE.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
 
+# server.py \u542f\u52a8\u65f6\u4f1a\u6ce8\u5165\u6b64\u53d8\u91cf
+CONFIG = {}
+
 _on_access_check = lambda: None  # server.py \u5c06\u66ff\u6362\u6b64\u56de\u8c03
 
 APP_LOG_FILE = PROJECT_ROOT / ".server.log"
@@ -172,6 +175,12 @@ def log(msg):
     except: pass
 
 def load_whitelist():
+    """从统一配置或 whitelist.json 加载白名单。"""
+    # 优先从统一配置读取
+    wl = CONFIG.get("access", {}).get("whitelist")
+    if wl is not None:
+        return [str(p).replace("\\", "/") for p in wl] if isinstance(wl, list) else None
+    # 回退：旧版 whitelist.json
     if not WHITELIST_FILE.exists():
         return None
     try:
@@ -180,7 +189,10 @@ def load_whitelist():
     except: return None
 
 def load_blacklist():
-    """加载黑名单，黑名单中的路径直接返回 403。"""
+    """从统一配置或 blacklist.json 加载黑名单。"""
+    bl = CONFIG.get("access", {}).get("blacklist")
+    if bl is not None:
+        return [str(p).replace("\\", "/") for p in bl] if isinstance(bl, list) else []
     if not BLACKLIST_FILE.exists():
         return []
     try:

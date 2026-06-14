@@ -24,7 +24,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 STATE_FILE = PROJECT_ROOT / ".update_state.json"
 MAIN_JS = PROJECT_ROOT / "js" / "main.js"
 CRASH_MARKER = PROJECT_ROOT / ".crash_marker.json"
-VERSIONS_DIR = PROJECT_ROOT / ".versions"
 CACHE_DIR = PROJECT_ROOT / ".cache"
 LOG_FILE = PROJECT_ROOT / ".server.log"
 
@@ -34,21 +33,51 @@ EXTRACTED_DIR_PREFIX = "Re-Ori.github.io-main"
 _REPO_PATH = REPO_URL.rstrip("/").rsplit("github.com/", 1)[-1]
 REPO_OWNER, REPO_NAME = _REPO_PATH.split("/", 1)
 
+CONFIG_PATH = PROJECT_ROOT / "reori-config.json"
+
 WORKERS = 8
-MAX_VERSIONS = 4
 DOWNLOAD_TIMEOUT = 60
-LOCAL_ONLY = frozenset({".update_state.json", ".crash_marker.json", "AutoUpdate.disabled"})
-# 同步黑/白名单：使用最长前缀匹配，范围越小优先级越高。
-#   SYNC_LOCAL_PATHS — 匹配的路径不会被 GitHub 覆盖（黑名单）
-#   SYNC_ALLOW_PATHS — 匹配的路径允许被 GitHub 覆盖（白名单），优先于黑名单
-# 对同一文件，白名单路径比黑名单更精确（更长）时，白名单胜出。
-SYNC_LOCAL_PATHS = (
-    ".data/",
-    ".cache/",
-)
-SYNC_ALLOW_PATHS = (
-    ".data/bbs/users.json",
-)
+LOCAL_ONLY = frozenset({".update_state.json", ".crash_marker.json", "AutoUpdate.disabled", ".server.log"})
+
+# ── 统一配置加载 ──
+
+_CONFIG_CACHE = None
+_CONFIG_CACHE_AT = 0.0
+
+def _load_config():
+    """读取 reori-config.json，缓存 5 秒。返回配置字典，失败时返回 {}。"""
+    global _CONFIG_CACHE, _CONFIG_CACHE_AT
+    now = time.time()
+    if _CONFIG_CACHE is not None and now - _CONFIG_CACHE_AT < 5:
+        return _CONFIG_CACHE
+    if not CONFIG_PATH.exists():
+        _CONFIG_CACHE, _CONFIG_CACHE_AT = {}, now
+        return _CONFIG_CACHE
+    try:
+        _CONFIG_CACHE = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        _CONFIG_CACHE_AT = now
+        return _CONFIG_CACHE
+    except:
+        _CONFIG_CACHE, _CONFIG_CACHE_AT = {}, now
+        return _CONFIG_CACHE
+
+def _config_sync_paths():
+    """从配置获取同步黑白名单。"""
+    cfg = _load_config()
+    sync = cfg.get("sync", {})
+    local = tuple(sync.get("local_paths", [".data/", ".cache/"]))
+    allow = tuple(sync.get("allow_paths", [".data/bbs/users.json"]))
+    return local, allow
+
+def _config_server():
+    """从配置获取服务器参数。"""
+    cfg = _load_config()
+    srv = cfg.get("server", {})
+    return {
+        "host": srv.get("host", "0.0.0.0"),
+        "port": srv.get("port", 9876),
+        "check_interval": srv.get("check_interval", 60),
+    }
 TM_START = "// ===== AutoUpdate Timestamp (do not remove) ====="
 TM_END   = "// ===== End AutoUpdate Timestamp ====="
 HASH_STRIP = {"js/main.js": (TM_START, TM_END)}
@@ -65,13 +94,11 @@ def _best_match(path: str, patterns: tuple) -> str:
 
 def _is_sync_local(path: str) -> bool:
     """检查路径是否不应被 GitHub 覆盖。
-
-    白名单（SYNC_ALLOW_PATHS）和黑名单（SYNC_LOCAL_PATHS）
-    各自取最长前缀匹配，匹配项更精确（路径字符串更长）的一方胜出。
+    从 reori-config.json 读取黑白名单。
     """
+    SYNC_ALLOW_PATHS, SYNC_LOCAL_PATHS = _config_sync_paths()
     allow = _best_match(path, SYNC_ALLOW_PATHS)
     deny  = _best_match(path, SYNC_LOCAL_PATHS)
-    # 白名单比黑名单更精确时，允许同步（不视为 local）
     if len(allow) > len(deny):
         return False
     return bool(deny)
@@ -140,70 +167,8 @@ def _prev_crash():
     except: pass
     return None
 
-# ── 版本状态 ──
-
-def _sv_state(st=None):
-    if st is None: st = _load_state()
-    return st.setdefault("service_version", {
-        "version_counter": 0, "version_queue": [], "current_version_id": 0, "crash_info": None,
-    })
-
-def _save_sv(sv, st=None):
-    if st is None: st = _load_state()
-    st["service_version"] = sv; _save_state(st)
-
-def _backup_app():
-    ap = PROJECT_ROOT / "app.py"
-    if not ap.exists(): return None
-    st, sv = _load_state(), _sv_state(_load_state())
-    vc, ci = sv.get("version_counter", 0), sv.get("current_version_id", 0)
-    bid = ci if ci > 0 and ci not in sv.get("version_queue", []) else vc + 1
-    VERSIONS_DIR.mkdir(parents=True, exist_ok=True)
-    bp = VERSIONS_DIR / f"service.v{bid}.py"
-    if bp.exists() and _sha256(ap) == _sha256(bp):
-        _log(f"  app v{bid} 已备份，跳过"); return None
-    shutil.copy2(ap, bp)
-    q = sv.get("version_queue", [])
-    if bid not in q: q.append(bid)
-    if bid > vc: vc = bid
-    sv.update(version_counter=vc, version_queue=q, current_version_id=bid)
-    _save_sv(sv, st); _old_clean()
-    _log(f"已备份 app v{bid}"); return bid
-
-def _old_clean():
-    st, sv = _load_state(), _sv_state(_load_state())
-    q = sv.get("version_queue", [])
-    if len(q) <= MAX_VERSIONS: return
-    for vid in q[:-MAX_VERSIONS]:
-        p = VERSIONS_DIR / f"service.v{vid}.py"
-        if p.exists(): p.unlink()
-    sv["version_queue"] = q[-MAX_VERSIONS:]
-    _save_sv(sv, st)
-
-def _rollback():
-    st, sv = _load_state(), _sv_state(_load_state())
-    q = sv.get("version_queue", [])
-    if not q: _log("版本队列为空"); return None
-    pid = q[-1]
-    pp = VERSIONS_DIR / f"service.v{pid}.py"
-    if not pp.exists(): _log(f"回退版本 v{pid} 不存在"); return None
-
-    # 队列中只剩一个版本，当前 app.py 就是这个版本，不用覆盖直接重启
-    if len(q) > 1:
-        ap = PROJECT_ROOT / "app.py"
-        if not ap.exists(): return None
-        try:
-            shutil.copy2(pp, ap)
-        except Exception as e:
-            _log(f"回退失败: {e}"); return None
-
-    now = _fmt(datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=8))
-    info = {"error": "程序异常退出", "crashed_version": sv.get("current_version_id", "?"),
-            "recovered_to_version": pid, "recovered_at": now}
-    sv.update(current_version_id=pid, crash_info=info)
-    _save_sv(sv, st)
-    _log(f"已回退至 app.py v{pid} ({now})")
-    return info
+# ── 版本管理已移除 ──
+# 不再备份 app.py，崩溃或更新后直接重启
 
 # ── SSL ──
 
@@ -335,6 +300,9 @@ def _cmp(temp, root):
             if act == "updated": upd.append(s)
             elif act == "added": add.append(s)
             elif act == "removed": rem.append(s)
+    # 配置文件：GitHub 没有时保留本地，不删除
+    cfg_name = CONFIG_PATH.name
+    rem = [r for r in rem if r != cfg_name]
     return upd, add, rem
 
 def _apply(temp, root, upd, add, rem):
@@ -365,28 +333,17 @@ def _local_updated():
 
 def _inject_ts():
     st = _load_state()
-    sv = _sv_state(st)
     ga = st.get("github_updated_at", "未知")
     sh = st.get("github_commit_sha")
     gd = f"{ga} [{sh}]" if ga != "未知" and sh else ga
     lc = st.get("last_checked_at", "从未检查")
     la = _local_updated() or "未知"
-    ci = sv.get("crash_info")
 
     out  = f"\n\n{TM_START}\n// 此区块由 AutoUpdate Server 自动维护\n(function() {{\n"
     out += f"  console.log(\n    '%c📦 AutoUpdate',\n    'color: #4CAF50; font-size: 13px; font-weight: bold;'\n  );\n"
     out += f"  console.log(\n    '  本地文件版本: %s',\n    '{la}'\n  );\n"
     out += f"  console.log(\n    '  GitHub 远程版本: %s',\n    '{gd}'\n  );\n"
     out += f"  console.log(\n    '  最新检查时间: %s',\n    '{lc}'\n  );\n"
-
-    if ci:
-        err = ci.get("error", "未知错误").replace("\\", "\\\\").replace("'", "\\'")
-        rv, ra = ci.get("recovered_to_version", "?"), ci.get("recovered_at", "未知")
-        out += f"  console.log(\n    '%c⚠️ 版本异常回退',\n    'color: #FF5722; font-size: 13px; font-weight: bold;'\n  );\n"
-        out += f"  console.log(\n    '  错误原因: %s',\n    '{err}'\n  );\n"
-        out += f"  console.log(\n    '  已自动恢复至 %s 的版本 (v{rv})',\n    '{ra}'\n  );\n"
-        sv["crash_info"] = None; _save_sv(sv, st)
-
     out += f"}})();\n{TM_END}\n"
 
     try:
@@ -444,17 +401,14 @@ def _run_update():
         _log("本地已是最新"); return "uptodate"
 
     ac = "app.py" in upd or "app.py" in add
-    if ac:
-        _log("检测到 app.py 更新，备份当前版本…")
-        _backup_app()
-
     _apply(sd, PROJECT_ROOT, upd, add, rem)
     global _RESTART_NEEDED
-    if "server.py" in upd or "server.py" in add: _RESTART_NEEDED = True
-    if ac:
-        sv, vc = _sv_state(_load_state()), _sv_state(_load_state()).get("version_counter", 0) + 1
-        sv["current_version_id"] = sv["version_counter"] = vc
-        _save_sv(sv); _RESTART_NEEDED = True
+    if "server.py" in upd or "server.py" in add or ac:
+        _RESTART_NEEDED = True
+        if ac:
+            _log("app.py 已更新，准备重启")
+        if "server.py" in upd or "server.py" in add:
+            _log("server.py 已更新，准备重启")
 
     _save_state({**_load_state(), "last_updated": datetime.now().isoformat()})
     _log(f"更新完成 ({len(upd)+len(add)+len(rem)} 个文件)")
@@ -524,10 +478,8 @@ def main():
 
     crash = _prev_crash()
     if crash:
-        _log("检测到上次异常退出")
-        if crash.get("error"): _log(f"  错误: {crash['error']}")
-        info = _rollback()
-        _log(f"已恢复至 v{info['recovered_to_version']}" if info else "无可回退版本，使用当前 app.py")
+        _log("检测到上次异常退出，版本管理已关闭，直接重新启动")
+        if crash.get("error"): _log(f"  上次错误: {crash['error']}")
     else:
         _log("上次运行正常退出")
 
@@ -553,39 +505,48 @@ def main():
             if 'app' in sys.modules: importlib.reload(app)
             app._on_access_check = _make_checker()
 
-            _inject_ts()
-            parser = __import__('argparse').ArgumentParser()
-            parser.add_argument("--host", default="0.0.0.0", nargs='?')
-            parser.add_argument("--port", type=int, default=9876, nargs='?')
-            parser.add_argument("--interval", type=int, default=60, nargs='?')
-            args, _ = parser.parse_known_args()
+            # 从 reori-config.json 读取服务器参数
+            srv_cfg = _config_server()
+            host = srv_cfg["host"]
+            port = srv_cfg["port"]
+            check_interval = srv_cfg["check_interval"]
 
-            app.AutoUpdateHandler.CHECK_INTERVAL = args.interval
+            # 命令行参数可覆盖配置
+            parser = __import__('argparse').ArgumentParser()
+            parser.add_argument("--host", default=host, nargs='?')
+            parser.add_argument("--port", type=int, default=port, nargs='?')
+            parser.add_argument("--interval", type=int, default=check_interval, nargs='?')
+            args, _ = parser.parse_known_args()
+            host, port, check_interval = host, port, check_interval
+
+            # 将配置注入 app，供访问控制等使用
+            app.CONFIG = _load_config()
+            app.AutoUpdateHandler.CHECK_INTERVAL = check_interval
 
             # ── 端口绑定重试（应对 TIME_WAIT 或僵尸进程） ──
             server = None
             bind_wait = 2
             for bind_attempt in range(5):
                 try:
-                    server = http.server.HTTPServer((args.host, args.port), app.AutoUpdateHandler)
+                    server = http.server.HTTPServer((host, port), app.AutoUpdateHandler)
                     break
                 except OSError as e:
                     if bind_attempt < 4:
-                        _log(f"端口 {args.port} 绑定失败，{bind_wait}秒后重试 ({bind_attempt + 1}/5): {e}")
+                        _log(f"端口 {port} 绑定失败，{bind_wait}秒后重试 ({bind_attempt + 1}/5): {e}")
                         time.sleep(bind_wait)
                         bind_wait *= 2
                     else:
                         raise
 
-            addr = args.host if args.host != "0.0.0.0" else "localhost"
+            addr = host if host != "0.0.0.0" else "localhost"
             _current_server = server
 
             _log(""); _log(f"{'='*50}")
             _log(f"  AutoUpdate 服务器已启动")
-            _log(f"  地址: http://{addr}:{args.port}")
+            _log(f"  地址: http://{addr}:{port}")
             _log(f"  目录: {PROJECT_ROOT}")
             _log(f"  源:   {REPO_URL}")
-            _log(f"  冷却: {args.interval}s（访问时触发）")
+            _log(f"  冷却: {check_interval}s（访问时触发）")
             if (PROJECT_ROOT / "AutoUpdate.disabled").exists():
                 _log(f"  {'⚠️' * 3} 自动同步已禁用（AutoUpdate.disabled）{'⚠️' * 3}")
             _log(f"{'='*50}"); _log("")
@@ -603,7 +564,7 @@ def main():
             _log(f"第 {attempt} 次启动失败: {type(e).__name__}: {e}")
             traceback.print_exc()
             if attempt == 1:
-                _log("尝试回退并重试…"); _rollback(); time.sleep(1)
+                _log("等待 3 秒后重试…"); time.sleep(3)
                 sys.modules.pop('app', None)
             else: _log("两次启动均失败"); break
 

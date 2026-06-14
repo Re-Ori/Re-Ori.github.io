@@ -1015,15 +1015,15 @@ document.addEventListener('DOMContentLoaded', () => {
   );
   console.log(
     '  本地文件版本: %s',
-    '2026.06.14 23:16:24 [UTC+8]'
+    '2026.06.14 23:35:16 [UTC+8]'
   );
   console.log(
     '  GitHub 远程版本: %s',
-    '2026.06.14 23:08:51 [UTC+8] [1c9cbf6]'
+    '2026.06.14 23:24:08 [UTC+8] [666a32c]'
   );
   console.log(
     '  最新检查时间: %s',
-    '2026.06.14 23:16:23 [UTC+8]'
+    '2026.06.14 23:35:15 [UTC+8]'
   );
 })();
 // ===== End AutoUpdate Timestamp =====
