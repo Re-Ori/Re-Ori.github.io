@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>服务器统计 — Origin Base</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    .st-detect-overlay {
+      position: fixed; inset: 0; background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(12px); display: flex; align-items: center;
+      justify-content: center; z-index: 200;
+    }
+    [data-theme="dark"] .st-detect-overlay { background: rgba(26,27,46,0.95); }
+    .st-detect-box { text-align: center; padding: 40px; max-width: 400px; }
+    .st-detect-box h2 { font-size: 22px; margin-bottom: 8px; color: #1a1a1a; }
+    [data-theme="dark"] .st-detect-box h2 { color: #e0e0e0; }
+    .st-detect-box p { font-size: 14px; color: #8e8e93; margin-bottom: 24px; }
+    .st-spinner {
+      width: 40px; height: 40px; border: 3px solid rgba(57,159,255,0.2);
+      border-top-color: var(--theme-color,#399FFF); border-radius: 50%;
+      animation: st-spin 0.8s linear infinite; margin: 0 auto 16px;
+    }
+    @keyframes st-spin { to { transform: rotate(360deg); } }
+
+    .st-body { max-width: 780px; margin: 0 auto; padding: 0 12px 80px; }
+    .st-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 0 16px; border-bottom: 1px solid rgba(0,0,0,0.06);
+      margin-bottom: 24px;
+    }
+    [data-theme="dark"] .st-header { border-color: rgba(255,255,255,0.06); }
+    .st-header h1 { font-size: 20px; font-weight: 700; color: #1a1a1a; display: flex; align-items: center; gap: 8px; }
+    [data-theme="dark"] .st-header h1 { color: #e0e0e0; }
+    .st-header-actions { display: flex; gap: 8px; align-items: center; }
+    .st-refresh-btn {
+      padding: 6px 14px; border: 1px solid rgba(0,0,0,0.12);
+      border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer;
+      background: transparent; color: #555; transition: all 0.15s;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .st-refresh-btn:hover { border-color: var(--theme-color,#399FFF); color: var(--theme-color,#399FFF); }
+    [data-theme="dark"] .st-refresh-btn { color: #aaa; border-color: rgba(255,255,255,0.15); }
+    .st-refresh-btn.loading { pointer-events: none; opacity: 0.6; }
+
+    /* ── 7 天概览 ── */
+    .st-week-summary {
+      display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;
+      margin-bottom: 20px;
+    }
+    .st-day-card {
+      background: #fff; border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 12px; padding: 12px 4px; text-align: center;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+    }
+    [data-theme="dark"] .st-day-card {
+      background: #1c1c1e; border-color: rgba(255,255,255,0.06);
+    }
+    .st-day-card .day-label { font-size: 10px; color: #8e8e93; margin-bottom: 4px; }
+    .st-day-card .day-num {
+      font-size: 18px; font-weight: 800; color: var(--theme-color,#399FFF);
+      line-height: 1.2;
+    }
+    .st-day-card.today { border-color: var(--theme-color,#399FFF); background: rgba(57,159,255,0.04); }
+    [data-theme="dark"] .st-day-card.today { background: rgba(57,159,255,0.08); }
+
+    /* ── 流量图 ── */
+    .st-chart-card {
+      background: #fff; border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 14px; padding: 20px; margin-bottom: 20px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    [data-theme="dark"] .st-chart-card {
+      background: #1c1c1e; border-color: rgba(255,255,255,0.06);
+    }
+    .st-chart-title {
+      font-size: 13px; font-weight: 600; color: #8e8e93; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .st-chart-wrap { position: relative; }
+    .st-chart-svg { width: 100%; height: 160px; overflow: visible; }
+    .st-chart-y-label {
+      font-size: 10px; fill: #bbb;
+    }
+    .st-chart-bar { transition: opacity 0.2s; }
+    .st-chart-bar:hover { opacity: 0.75; }
+    .st-chart-x-label { font-size: 10px; fill: #bbb; }
+    .st-chart-legend {
+      display: flex; gap: 16px; justify-content: center; margin-top: 12px; font-size: 11px; color: #555;
+    }
+    [data-theme="dark"] .st-chart-legend { color: #888; }
+    .st-chart-legend span { display: flex; align-items: center; gap: 4px; }
+    .st-legend-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+    /* ── 统计卡片网格 ── */
+    .st-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+    .st-card {
+      background: #fff; border: 1px solid rgba(0,0,0,0.06);
+      border-radius: 14px; padding: 18px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    [data-theme="dark"] .st-card {
+      background: #1c1c1e; border-color: rgba(255,255,255,0.06);
+    }
+    .st-card-wide { grid-column: 1 / -1; }
+    .st-card-title {
+      font-size: 12px; font-weight: 600; color: #8e8e93; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 6px; text-transform: uppercase;
+    }
+
+    .st-total-row {
+      display: flex; align-items: baseline; justify-content: space-between;
+      padding: 7px 0; border-bottom: 1px solid rgba(0,0,0,0.03);
+    }
+    .st-total-row:last-child { border-bottom: none; }
+    [data-theme="dark"] .st-total-row { border-color: rgba(255,255,255,0.03); }
+    .st-total-label { font-size: 13px; color: #555; display: flex; align-items: center; gap: 5px; }
+    [data-theme="dark"] .st-total-label { color: #888; }
+    .st-total-val { font-size: 15px; font-weight: 700; color: #1a1a1a; }
+    [data-theme="dark"] .st-total-val { color: #e0e0e0; }
+
+    .st-big-num-box { text-align: center; padding: 8px 0; }
+    .st-big-num-box .num { font-size: 40px; font-weight: 800; color: var(--theme-color,#399FFF); line-height: 1; }
+    .st-big-num-box .label { font-size: 11px; color: #8e8e93; margin-top: 4px; }
+    .st-uptime { font-size: 12px; color: #8e8e93; text-align: center; padding: 8px 0 20px; }
+    .st-error { text-align: center; padding: 24px; color: #ff3b30; font-size: 14px; }
+
+    @media (max-width: 600px) {
+      .st-week-summary { grid-template-columns: repeat(4, 1fr); }
+      .st-grid { grid-template-columns: 1fr; }
+      .st-big-num-box .num { font-size: 32px; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div id="st-detect" class="st-detect-overlay">
+    <div class="st-detect-box">
+      <div class="st-spinner"></div>
+      <h2>正在加载统计</h2>
+      <p>获取服务器数据…</p>
+    </div>
+  </div>
+  <div id="st-unavailable" class="st-detect-overlay" style="display:none;">
+    <div class="st-detect-box">
+      <h2>统计</h2>
+      <p style="color:#ff3b30;font-size:15px;">此功能需要自建服务器运行。</p>
+    </div>
+  </div>
+
+  <div id="st-app" style="display:none;">
+    <div class="st-body">
+      <div class="st-header">
+        <h1>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
+            <polyline points="12 7 12 12 15 15"/>
+          </svg>
+          服务器统计
+        </h1>
+        <div class="st-header-actions">
+          <span id="st-update-hint" style="font-size:11px;color:#bbb;"></span>
+          <button class="st-refresh-btn" id="st-refresh" onclick="load()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"/>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            刷新
+          </button>
+        </div>
+      </div>
+      <div id="st-content"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/navbar.js"></script>
+<script>window.showFooter = false;</script>
+<script src="/js/main.js"></script>
+
+<script>
+(function() {
+  window.__navActive = ["工具"];
+
+  function $(id) { return document.getElementById(id); }
+
+  function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function fmtTime(s) {
+    if (s <= 0) return '刚刚启动';
+    var d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600);
+    var m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+    var parts = [];
+    if (d > 0) parts.push(d + '天');
+    if (h > 0) parts.push(h + '时');
+    if (m > 0) parts.push(m + '分');
+    parts.push(sec + '秒');
+    return parts.join('');
+  }
+
+  function fmtBytes(b) {
+    if (b <= 0) return '0 B';
+    var u = ['B','KB','MB','GB']; var i = 0; var s = b;
+    while (s >= 1024 && i < u.length-1) { s /= 1024; i++; }
+    return (i === 0 ? s : s.toFixed(1)) + ' ' + u[i];
+  }
+
+  function detect() {
+    fetch('/api/ping', { cache: 'no-store' }).then(function(r) {
+      if (r.ok) { $('st-detect').style.display = 'none'; $('st-app').style.display = ''; load(); }
+      else throw new Error();
+    }).catch(function() { $('st-detect').style.display = 'none'; $('st-unavailable').style.display = ''; });
+  }
+
+  // ── 颜色方案 ──
+  var COLORS = {
+    p2p: '#4CAF50', short_link: '#399FFF', short_link_redirect: '#FF6B35',
+    bbs: '#AF52DE', github_proxy: '#34c759', giscus_proxy: '#8e8e93',
+    stats: '#FF2D55', other_api: '#FF9500', static: '#5ac8fa'
+  };
+  var CAT_NAMES = {
+    p2p: 'P2P', short_link: '短链API', short_link_redirect: '短链跳转',
+    bbs: 'BBS', github_proxy: 'GitHub代理', giscus_proxy: 'Giscus',
+    stats: '统计API', other_api: '其他API', static: '静态资源'
+  };
+  var CAT_ORDER = ['static','p2p','short_link','short_link_redirect','bbs','github_proxy','giscus_proxy','stats','other_api'];
+
+  window.load = function() {
+    var btn = $('st-refresh');
+    if (btn) btn.classList.add('loading');
+    fetch('/api/stats', { cache: 'no-store' })
+      .then(function(r) { return r.json(); })
+      .then(render)
+      .catch(function() { $('st-content').innerHTML = '<div class="st-error">加载失败</div>'; })
+      .finally(function() { if (btn) btn.classList.remove('loading'); });
+  };
+
+  function render(d) {
+    if (!d || !d.requests) { $('st-content').innerHTML = '<div class="st-error">数据异常</div>'; return; }
+    var html = '';
+    var daily = d.daily_7d || [];
+    var r = d.requests, p2p = d.p2p || {}, sl = d.short_links || {};
+    var totalReqs = r.total || 0;
+    var uptimeStr = d.uptime ? fmtTime(d.uptime) : '未知';
+
+    // 更新提示时间
+    var hint = $('st-update-hint');
+    if (hint) hint.textContent = new Date().toLocaleTimeString();
+
+    // ── 1. 7 天概览卡片 ──
+    html += '<div class="st-week-summary">';
+    var todayName = ['日','一','二','三','四','五','六'];
+    for (var i = 0; i < daily.length; i++) {
+      var day = daily[i];
+      var dt = new Date(day.date);
+      var dayLabel = (i === daily.length - 1 ? '今天' : (todayName[dt.getDay()] || ''));
+      var cls = i === daily.length - 1 ? 'st-day-card today' : 'st-day-card';
+      html += '<div class="' + cls + '">' +
+        '<div class="day-label">' + esc(dayLabel || (dt.getMonth()+1)+'/'+dt.getDate()) + '</div>' +
+        '<div class="day-num">' + (day.total || 0) + '</div>' +
+        '</div>';
+    }
+    html += '</div>';
+
+    // ── 2. 请求流量图 ──
+    html += '<div class="st-chart-card">' +
+      '<div class="st-chart-title">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' +
+        '近 7 天请求数' +
+      '</div>' +
+      '<div class="st-chart-wrap">' +
+        drawChart(daily) +
+      '</div>' +
+      '<div class="st-chart-legend">';
+    for (var ci = 0; ci < CAT_ORDER.length; ci++) {
+      var key = CAT_ORDER[ci];
+      html += '<span><span class="st-legend-dot" style="background:' + COLORS[key] + '"></span>' + CAT_NAMES[key] + '</span>';
+    }
+    html += '</div></div>' +
+
+    // ── 3. 带宽图 ──
+    '<div class="st-chart-card">' +
+      '<div class="st-chart-title">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>' +
+        '近 7 天网络流量' +
+      '</div>' +
+      '<div class="st-chart-wrap">' +
+        drawBWChart(daily) +
+      '</div>' +
+      '<div class="st-chart-legend">' +
+        '<span><span class="st-legend-dot" style="background:#399FFF"></span>发送</span>' +
+        '<span><span class="st-legend-dot" style="background:#FF6B35"></span>接收</span>' +
+      '</div></div>';
+
+    // ── 3. 总计数据 ──
+    html += '<div class="st-grid">';
+
+    // 总请求数 + 带宽
+    html += '<div class="st-card st-card-wide">' +
+      '<div class="st-card-title">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>' +
+        '累计总量' +
+      '</div>' +
+      '<div class="st-big-num-box"><div class="num">' + (totalReqs >= 1000 ? (totalReqs / 1000).toFixed(1) + 'k' : totalReqs) + '</div><div class="label">总请求</div></div>';
+
+    for (var ci2 = 0; ci2 < CAT_ORDER.length; ci2++) {
+      var k = CAT_ORDER[ci2];
+      var v = r[k] || 0;
+      var pct = totalReqs > 0 ? (v / totalReqs * 100).toFixed(1) : '0.0';
+      html += '<div class="st-total-row">' +
+        '<span class="st-total-label"><span class="st-legend-dot" style="background:' + COLORS[k] + '"></span>' + CAT_NAMES[k] + '</span>' +
+        '<span class="st-total-val">' + v + ' <span style="font-size:11px;font-weight:400;color:#8e8e93;">(' + pct + '%)</span></span>' +
+        '</div>';
+    }
+    // 带宽
+    var bw = d.bandwidth || {};
+    html += '<div class="st-total-row" style="margin-top:6px;border-top:1px solid rgba(0,0,0,0.06);padding-top:10px;">' +
+      '<span class="st-total-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:2px;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> 发送</span>' +
+      '<span class="st-total-val">' + fmtBytes(bw.sent || 0) + '</span></div>';
+    html += '<div class="st-total-row">' +
+      '<span class="st-total-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:2px;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> 接收</span>' +
+      '<span class="st-total-val">' + fmtBytes(bw.received || 0) + '</span></div>';
+    html += '</div>';
+
+    // P2P
+    html += '<div class="st-card">' +
+      '<div class="st-card-title">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' +
+        'P2P 总计' +
+      '</div>' +
+      '<div class="st-total-row"><span class="st-total-label">活跃房间</span><span class="st-total-val">' + (p2p.active_rooms || 0) + '</span></div>' +
+      '<div class="st-total-row"><span class="st-total-label">在线用户</span><span class="st-total-val">' + (p2p.total_peers || 0) + '</span></div>' +
+      '<div class="st-total-row"><span class="st-total-label">累计信号</span><span class="st-total-val">' + (p2p.signals_sent || 0) + '</span></div>' +
+      '<div class="st-total-row"><span class="st-total-label">中转流量</span><span class="st-total-val">' + fmtBytes(p2p.relay_bytes || 0) + '</span></div>' +
+      '</div>';
+
+    // 短链
+    html += '<div class="st-card">' +
+      '<div class="st-card-title">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>' +
+        '短链 总计' +
+      '</div>' +
+      '<div class="st-total-row"><span class="st-total-label">总链接</span><span class="st-total-val">' + (sl.total || 0) + '</span></div>' +
+      '<div class="st-total-row"><span class="st-total-label">跳转次数</span><span class="st-total-val">' + (sl.redirects || 0) + '</span></div>' +
+      '<div class="st-total-row"><span class="st-total-label">已过期</span><span class="st-total-val">' + (sl.expired || 0) + '</span></div>' +
+      '</div>';
+
+    html += '</div>'; // /st-grid
+    html += '<div class="st-uptime">已运行 ' + uptimeStr + '</div>';
+
+    $('st-content').innerHTML = html;
+  }
+
+  // ── SVG 堆叠柱状图 ──
+  function drawChart(daily) {
+    if (!daily || daily.length === 0) return '<div style="text-align:center;color:#bbb;padding:24px;">暂无数据</div>';
+    var W = 700, H = 160, PAD = { top: 12, bottom: 22, left: 0, right: 0 };
+    var chartW = W - PAD.left - PAD.right;
+    var chartH = H - PAD.top - PAD.bottom;
+    var barW = Math.max(12, Math.min(36, (chartW / daily.length) * 0.6));
+    var gap = (chartW - barW * daily.length) / (daily.length + 1);
+
+    // 找出最大
+    var maxTotal = 1;
+    for (var i = 0; i < daily.length; i++) {
+      if (daily[i].total > maxTotal) maxTotal = daily[i].total;
+    }
+    // 凑整到最近的 10/100/1000
+    var mag = Math.pow(10, Math.floor(Math.log10(maxTotal)));
+    var niceMax = Math.ceil(maxTotal / mag) * mag;
+    if (niceMax <= maxTotal) niceMax += mag;
+    var scaleY = chartH / niceMax;
+
+    var svg = '<svg class="st-chart-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">';
+
+    // Y 轴参考线
+    var ySteps = 4;
+    for (var yi = 0; yi <= ySteps; yi++) {
+      var yVal = Math.round(niceMax / ySteps * yi);
+      var yPos = H - PAD.bottom - yVal * scaleY;
+      svg += '<line x1="' + PAD.left + '" y1="' + yPos + '" x2="' + (W - PAD.right) + '" y2="' + yPos + '" stroke="rgba(0,0,0,0.04)" stroke-width="1"/>';
+      svg += '<text class="st-chart-y-label" x="' + (PAD.left + 2) + '" y="' + (yPos - 3) + '">' + (yVal >= 1000 ? (yVal/1000).toFixed(1)+'k' : yVal) + '</text>';
+    }
+
+    // 柱状图
+    for (var i = 0; i < daily.length; i++) {
+      var day = daily[i];
+      var x = PAD.left + gap + i * (barW + gap);
+      var total = day.total || 0;
+      var barH = total * scaleY;
+      var yBase = H - PAD.bottom;
+
+      // 堆叠从底部画起
+      var stacked = 0;
+      for (var ci = 0; ci < CAT_ORDER.length; ci++) {
+        var cat = CAT_ORDER[ci];
+        var val = day[cat] || 0;
+        if (val === 0) continue;
+        var catH = val * scaleY;
+        var y0 = yBase - stacked - catH;
+        svg += '<rect class="st-chart-bar" x="' + x + '" y="' + y0 + '" width="' + barW + '" height="' + Math.max(1, catH) + '" fill="' + COLORS[cat] + '" rx="1"/>';
+        stacked += catH;
+      }
+
+      // 日期标签
+      var dt = new Date(day.date);
+      var label = (dt.getMonth()+1)+'/'+dt.getDate();
+      svg += '<text class="st-chart-x-label" x="' + (x + barW / 2) + '" y="' + (H - 4) + '" text-anchor="middle">' + label + '</text>';
+    }
+
+    svg += '</svg>';
+    return svg;
+  }
+
+  // ── 带宽折线图 ──
+  function drawBWChart(daily) {
+    if (!daily || daily.length === 0) return '<div style="text-align:center;color:#bbb;padding:24px;">暂无数据</div>';
+    var W = 700, H = 160, PAD = { top: 16, bottom: 22, left: 0, right: 8 };
+    var chartW = W - PAD.left - PAD.right;
+    var chartH = H - PAD.top - PAD.bottom;
+    var maxBW = 1;
+    for (var i = 0; i < daily.length; i++) {
+      var s = daily[i].bw_sent || 0, r = daily[i].bw_recv || 0;
+      if (s > maxBW) maxBW = s;
+      if (r > maxBW) maxBW = r;
+    }
+    var mag = maxBW < 10 ? 1 : Math.pow(10, Math.floor(Math.log10(maxBW)));
+    var niceMax = Math.ceil(maxBW / mag) * mag;
+    if (niceMax <= maxBW) niceMax += mag;
+    if (niceMax === 0) niceMax = 10;
+    var scaleY = chartH / niceMax;
+    var stepX = daily.length > 1 ? chartW / (daily.length - 1) : chartW / 2;
+
+    var svg = '<svg class="st-chart-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">';
+    // Y 参考线
+    for (var yi = 0; yi <= 4; yi++) {
+      var yVal = Math.round(niceMax / 4 * yi);
+      var yPos = H - PAD.bottom - yVal * scaleY;
+      svg += '<line x1="' + PAD.left + '" y1="' + yPos + '" x2="' + (W - PAD.right) + '" y2="' + yPos + '" stroke="rgba(0,0,0,0.04)" stroke-width="1"/>';
+      svg += '<text class="st-chart-y-label" x="' + (PAD.left + 2) + '" y="' + (yPos - 3) + '">' + fmtBytes(yVal) + '</text>';
+    }
+    // 数据点
+    var pts_s = '', pts_r = '';
+    for (var i = 0; i < daily.length; i++) {
+      var x = PAD.left + i * stepX;
+      var sent = daily[i].bw_sent || 0, recv = daily[i].bw_recv || 0;
+      var ys = H - PAD.bottom - sent * scaleY;
+      var yr = H - PAD.bottom - recv * scaleY;
+      pts_s += (i === 0 ? '' : ' ') + x + ',' + ys;
+      pts_r += (i === 0 ? '' : ' ') + x + ',' + yr;
+    }
+    // 填充区（发送）
+    var fill_s = pts_s + ' ' + (PAD.left + (daily.length-1)*stepX) + ',' + (H - PAD.bottom) + ' ' + PAD.left + ',' + (H - PAD.bottom);
+    svg += '<polygon points="' + fill_s + '" fill="rgba(57,159,255,0.08)"/>';
+    // 折线（发送）
+    svg += '<polyline points="' + pts_s + '" fill="none" stroke="#399FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+    // 填充区（接收）
+    var fill_r = pts_r + ' ' + (PAD.left + (daily.length-1)*stepX) + ',' + (H - PAD.bottom) + ' ' + PAD.left + ',' + (H - PAD.bottom);
+    svg += '<polygon points="' + fill_r + '" fill="rgba(255,107,53,0.08)"/>';
+    // 折线（接收）
+    svg += '<polyline points="' + pts_r + '" fill="none" stroke="#FF6B35" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+    // 圆点（发送）
+    for (var i = 0; i < daily.length; i++) {
+      var x = PAD.left + i * stepX;
+      var ys = H - PAD.bottom - (daily[i].bw_sent || 0) * scaleY;
+      svg += '<circle cx="' + x + '" cy="' + ys + '" r="2.5" fill="#fff" stroke="#399FFF" stroke-width="2"/>';
+    }
+    // 圆点（接收）
+    for (var i = 0; i < daily.length; i++) {
+      var x = PAD.left + i * stepX;
+      var yr = H - PAD.bottom - (daily[i].bw_recv || 0) * scaleY;
+      svg += '<circle cx="' + x + '" cy="' + yr + '" r="2.5" fill="#fff" stroke="#FF6B35" stroke-width="2"/>';
+    }
+    // X 轴日期
+    for (var i = 0; i < daily.length; i++) {
+      var x = PAD.left + i * stepX;
+      var dt = new Date(daily[i].date);
+      svg += '<text class="st-chart-x-label" x="' + x + '" y="' + (H - 4) + '" text-anchor="middle" font-size="9">' + ((dt.getMonth()+1)+'/'+dt.getDate()) + '</text>';
+    }
+    svg += '</svg>';
+    return svg;
+  }
+
+  detect();
+})();
+</script>
+</body>
+</html>

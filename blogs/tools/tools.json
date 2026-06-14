@@ -29,6 +29,15 @@
       "themeColor": "#399FFF",
       "date": "2026-06-07",
       "url": "/Tool/short-link.html"
+    },
+    {
+      "id": "stats",
+      "priority": 5,
+      "title": "服务器统计",
+      "description": "全站流量、P2P 和短链使用数据",
+      "themeColor": "#8e8e93",
+      "date": "2026-06-14",
+      "url": "/Tool/stats.html"
     }
   ]
 }

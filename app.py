@@ -34,6 +34,149 @@ BBS_TOPICS_FILE = BBS_DIR / "topics.json"
 BBS_TOPICS_DIR = BBS_DIR / "topics"
 BBS_TOKENS_FILE = BBS_DIR / "tokens.json"
 
+# ── 统计追踪 ──
+STATS_DIR = DATA_DIR / "stats"
+STATS_DAILY_FILE = STATS_DIR / "daily.json"
+_stats_lock = threading.RLock()
+_stats = {
+    "started_at": 0,
+    "requests": {
+        "total": 0, "p2p": 0, "short_link": 0, "short_link_redirect": 0,
+        "bbs": 0, "github_proxy": 0, "giscus_proxy": 0, "stats": 0, "other_api": 0, "static": 0,
+    },
+    "p2p": {"rooms_created": 0, "signals": 0, "relay_bytes": 0, "peak_peers": 0},
+    "short_link": {"created": 0, "redirects": 0},
+    "bandwidth": {"sent": 0, "received": 0},
+}
+
+def _incr(category: str, sub: str = "", amount=1):
+    with _stats_lock:
+        if sub:
+            _stats.setdefault(category, {})
+            _stats[category][sub] = _stats[category].get(sub, 0) + amount
+        else:
+            _stats[category] = _stats.get(category, 0) + amount
+
+def _track_req(path: str, method: str = "GET"):
+    cat = "static"
+    with _stats_lock:
+        if not _stats["started_at"]:
+            _stats["started_at"] = time.time()
+        _stats["requests"]["total"] += 1
+        p = path.split("?")[0].split("#")[0]
+        if p.startswith("/api/p2p/"):
+            _stats["requests"]["p2p"] += 1; cat = "p2p"
+        elif p.startswith("/api/short-link") or p == "/api/short-links":
+            _stats["requests"]["short_link"] += 1; cat = "short_link"
+        elif p.startswith("/s/"):
+            _stats["requests"]["short_link_redirect"] += 1; cat = "short_link_redirect"
+        elif p.startswith("/api/bbs/"):
+            _stats["requests"]["bbs"] += 1; cat = "bbs"
+        elif p.startswith("/api/github-proxy/"):
+            _stats["requests"]["github_proxy"] += 1; cat = "github_proxy"
+        elif p.startswith(("/zh-CN/", "/en/", "/_next/", "/api/oauth/")) or p in ("/default.css", "/light.css", "/dark.css", "/cider.css"):
+            _stats["requests"]["giscus_proxy"] += 1; cat = "giscus_proxy"
+        elif p == "/api/stats":
+            _stats["requests"]["stats"] += 1; cat = "stats"
+        elif p.startswith("/api/"):
+            _stats["requests"]["other_api"] += 1; cat = "other_api"
+        else:
+            _stats["requests"]["static"] += 1
+    _track_daily(cat)
+
+_bandwidth_lock = threading.RLock()
+
+def _track_bandwidth(sent=0, received=0):
+    with _bandwidth_lock:
+        _stats["bandwidth"]["sent"] += sent
+        _stats["bandwidth"]["received"] += received
+    # 也写入每日统计
+    try:
+        today = _daily_date()
+        daily = _load_daily()
+        day = daily.setdefault(today, {})
+        day["bw_sent"] = day.get("bw_sent", 0) + sent
+        day["bw_recv"] = day.get("bw_recv", 0) + received
+        _DAILY_DIRTY = True
+    except: pass
+
+# ── 每日统计持久化 ──
+
+_DAILY_CACHE = None
+_DAILY_DIRTY = False
+
+def _daily_date():
+    return datetime.now().strftime("%Y-%m-%d")
+
+def _load_daily():
+    global _DAILY_CACHE
+    if _DAILY_CACHE is not None:
+        return _DAILY_CACHE
+    try:
+        if STATS_DAILY_FILE.exists():
+            _DAILY_CACHE = json.loads(STATS_DAILY_FILE.read_text(encoding="utf-8"))
+            return _DAILY_CACHE
+    except: pass
+    _DAILY_CACHE = {}
+    return _DAILY_CACHE
+
+def _save_daily():
+    global _DAILY_DIRTY, _DAILY_CACHE
+    if not _DAILY_DIRTY or _DAILY_CACHE is None:
+        return
+    try:
+        STATS_DIR.mkdir(parents=True, exist_ok=True)
+        STATS_DAILY_FILE.write_text(json.dumps(_DAILY_CACHE, ensure_ascii=False), encoding="utf-8")
+        _DAILY_DIRTY = False
+    except: pass
+
+def _track_daily(category: str):
+    today = _daily_date()
+    daily = _load_daily()
+    day = daily.setdefault(today, {"total": 0, "p2p": 0, "short_link": 0, "short_link_redirect": 0,
+        "bbs": 0, "github_proxy": 0, "giscus_proxy": 0, "other_api": 0, "static": 0})
+    day["total"] = day.get("total", 0) + 1
+    day[category] = day.get(category, 0) + 1
+    cutoff = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+    for k in list(daily.keys()):
+        if k < cutoff:
+            del daily[k]
+    _DAILY_DIRTY = True
+    if day["total"] % 10 == 0:
+        _save_daily()
+
+def _get_daily_7d():
+    daily = _load_daily()
+    today = datetime.now()
+    result = []
+    for i in range(6, -1, -1):
+        d = (today - timedelta(days=i)).strftime("%Y-%m-%d")
+        day = daily.get(d, {})
+        result.append({
+            "date": d,
+            "total": day.get("total", 0),
+            "p2p": day.get("p2p", 0),
+            "short_link": day.get("short_link", 0),
+            "short_link_redirect": day.get("short_link_redirect", 0),
+            "bbs": day.get("bbs", 0),
+            "github_proxy": day.get("github_proxy", 0),
+            "giscus_proxy": day.get("giscus_proxy", 0),
+            "stats": day.get("stats", 0),
+            "other_api": day.get("other_api", 0),
+            "static": day.get("static", 0),
+            "bw_sent": day.get("bw_sent", 0),
+            "bw_recv": day.get("bw_recv", 0),
+        })
+    return result
+
+def _stats_flusher():
+    while True:
+        time.sleep(30)
+        try: _save_daily()
+        except: pass
+
+threading.Thread(target=_stats_flusher, daemon=True).start()
+
 BBS_TOKENS: dict[str, dict] = {}
 BBS_TOKEN_TTL = 86400  # 24h
 
@@ -162,6 +305,25 @@ _on_access_check = lambda: None  # server.py \u5c06\u66ff\u6362\u6b64\u56de\u8c0
 
 APP_LOG_FILE = PROJECT_ROOT / ".server.log"
 
+# ── 字节计数（自动统计所有响应流量） ──
+class _CountingWriter:
+    """包裹 wfile，自动累加写入字节数，每请求结束时上报"""
+    def __init__(self, inner):
+        self._inner = inner
+        self._start = 0
+    def write(self, data):
+        n = self._inner.write(data)
+        self._start += n
+        return n
+    def flush(self):
+        self._inner.flush()
+    def get_and_reset(self):
+        n = self._start
+        self._start = 0
+        return n
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
 def log(msg):
     ts = datetime.now().strftime("%H:%M:%S")
     line = f"[{ts}] {msg}"
@@ -175,11 +337,16 @@ def log(msg):
     except: pass
 
 def load_whitelist():
-    """从统一配置或 whitelist.json 加载白名单。"""
+    """从统一配置或 whitelist.json 加载白名单。空数组/无配置 = 允许所有。"""
     # 优先从统一配置读取
     wl = CONFIG.get("access", {}).get("whitelist")
     if wl is not None:
-        return [str(p).replace("\\", "/") for p in wl] if isinstance(wl, list) else None
+        if isinstance(wl, list) and wl:
+            return [str(p).replace("\\", "/") for p in wl]
+        # 空数组 = 有配置但无限制 → 返回特殊标记让 is_path_allowed 放行
+        if isinstance(wl, list) and not wl:
+            return ["__ALLOW_ALL__"]
+        return None
     # 回退：旧版 whitelist.json
     if not WHITELIST_FILE.exists():
         return None
@@ -202,6 +369,7 @@ def load_blacklist():
 
 def is_path_allowed(p, wl):
     if not wl: return False
+    if "__ALLOW_ALL__" in wl: return True
     for e in wl:
         if e == "/" and p == "/": return True
         if e != "/" and e.endswith("/") and p.startswith(e): return True
@@ -275,7 +443,17 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(PROJECT_ROOT), **kwargs)
 
+    def setup(self):
+        super().setup()
+        # 包裹 wfile 以统计发送流量（在 handle() 之前完成）
+        try:
+            if not isinstance(self.wfile, _CountingWriter):
+                self.wfile = _CountingWriter(self.wfile)
+        except: pass
+
     def do_GET(self):
+        _track_req(self.path)
+        _track_bandwidth(received=int(self.headers.get('Content-Length', 0)))
         self._try_check_update()          # 先触发更新（403 页面也要触发）
         # ACME HTTP-01 挑战 — 从可能的 web root 提供验证文件
         if self._try_serve_acme_challenge():
@@ -287,6 +465,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         # 自有 API 端点（放在 Giscus 代理前面，避免 /api/ 路径冲突）
         if req_path == '/api/ping':
             self._send_json({'ok': True, 'server': 'autoupdate'})
+            return
+        if req_path == '/api/stats':
+            self._handle_stats()
             return
         if req_path == '/api/p2p/signal':
             self._handle_p2p_poll()
@@ -324,6 +505,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             code = req_path[3:]
             links = _sl_load()
             if code in links:
+                _incr("short_link", "redirects")
                 target = links[code]
                 if isinstance(target, dict):
                     # 检查匿名短链是否过期
@@ -422,6 +604,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
+        _track_req(self.path, "POST")
+        _track_bandwidth(received=int(self.headers.get('Content-Length', 0)))
         self._try_check_update()
         parsed = urllib.parse.urlparse(self.path)
         req_path = parsed.path
@@ -762,6 +946,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     STALE_PEER_TIMEOUT = 15   # 秒 — 超过此时间未收到轮询/保活视为断连
 
     def _store_signal(self, room: str, from_p: str, to_p: str, sig_type: str, data: dict):
+        _incr("p2p", "signals")
         with _p2p_signals_lock:
             # 存储 peer_leave 时移除该 peer 残留的 peer_join 信号，避免反复触发
             if sig_type == 'peer_leave':
@@ -803,6 +988,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     def _handle_p2p_join(self):
         global _p2p_last_activity
         _p2p_last_activity = time.time()
+        _incr("p2p", "rooms_created")
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
             room = body.get('room', '')
@@ -1016,6 +1202,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({'ok': False, 'error': 'missing_fields'})
                 return
 
+            _incr("p2p", "relay_bytes", len(data))
+
             # WebRTC 直连房间（websrc）无速率与文件大小限制
             with _p2p_signals_lock:
                 is_webrtc = _p2p_rooms.get(room, {}).get("type") == "websrc"
@@ -1063,6 +1251,59 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(resp.encode())
 
+    # ── 统计 ──
+
+    def _handle_stats(self):
+        """GET /api/stats — 返回全站统计数据"""
+        sl_total, sl_expired = 0, 0
+        try:
+            links = _sl_load()
+            now = time.time()
+            for v in links.values():
+                sl_total += 1
+                if isinstance(v, dict) and v.get('expires_at') and now > v['expires_at']:
+                    sl_expired += 1
+        except: pass
+
+        with _stats_lock:
+            r = dict(_stats.get("requests", {}))
+            p = dict(_stats.get("p2p", {}))
+            sl = dict(_stats.get("short_link", {}))
+            started = _stats.get("started_at", 0)
+
+        # P2P 实时数据
+        p2p_active_rooms = len(_p2p_rooms)
+        p2p_total_peers = sum(len(rd.get("peers", {})) for rd in _p2p_rooms.values())
+        p2p_pending_signals = sum(len(sig) for sig in _p2p_signals.values())
+        p2p_relay_buffered = sum(len(buf) for buf in _p2p_relay_buffers.values())
+
+        uptime = time.time() - started if started else 0
+
+        bw = dict(_stats.get("bandwidth", {}))
+
+        self._send_json({
+            "uptime": round(uptime),
+            "requests": r,
+            "bandwidth": bw,
+            "p2p": {
+                "active_rooms": p2p_active_rooms,
+                "total_peers": p2p_total_peers,
+                "pending_signals": p2p_pending_signals,
+                "relay_buffered": p2p_relay_buffered,
+                "rooms_created": p.get("rooms_created", 0),
+                "signals_sent": p.get("signals", 0),
+                "relay_bytes": p.get("relay_bytes", 0),
+                "peak_peers": p.get("peak_peers", 0),
+            },
+            "daily_7d": _get_daily_7d(),
+            "short_links": {
+                "total": sl_total,
+                "expired": sl_expired,
+                "created": sl.get("created", 0),
+                "redirects": sl.get("redirects", 0),
+            },
+        })
+
     # -- 更新触发 --
     @classmethod
     def _try_check_update(cls):
@@ -1085,6 +1326,16 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 cls.update_in_progress = False
 
         threading.Thread(target=_do, daemon=True).start()
+
+    # ── 每请求结束后从 CountingWriter 上报发送字节 ──
+    def handle_one_request(self):
+        super().handle_one_request()
+        try:
+            if isinstance(self.wfile, _CountingWriter):
+                sent = self.wfile.get_and_reset()
+                if sent > 0:
+                    _track_bandwidth(sent=sent)
+        except: pass
 
     def log_message(self, fmt, *args):
         if len(args) == 3:
@@ -1144,6 +1395,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({'ok': False, 'error': str(e)})
 
     def _handle_sl_create(self, user):
+        _incr("short_link", "created")
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
             url = body.get('url', '').strip()
