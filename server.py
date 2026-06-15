@@ -95,9 +95,9 @@ def _is_sync_local(path: str) -> bool:
     """检查路径是否不应被 GitHub 覆盖。
     从 reori-config.json 读取黑白名单。
     """
-    SYNC_ALLOW_PATHS, SYNC_LOCAL_PATHS = _config_sync_paths()
-    allow = _best_match(path, SYNC_ALLOW_PATHS)
-    deny  = _best_match(path, SYNC_LOCAL_PATHS)
+    SYNC_LOCAL_PATHS, SYNC_ALLOW_PATHS = _config_sync_paths()
+    deny  = _best_match(path, SYNC_LOCAL_PATHS)   # local_paths → 拒绝同步
+    allow = _best_match(path, SYNC_ALLOW_PATHS)   # allow_paths → 允许覆盖
     if len(allow) > len(deny):
         return False
     return bool(deny)
@@ -105,7 +105,7 @@ def _is_sync_local(path: str) -> bool:
 # ── 日志 ──
 
 def _log(m):
-    t = datetime.now().strftime("%H:%M:%S")
+    t = datetime.now().strftime("%Y.%m.%d %H:%M:%S")
     line = f"[{t}] {m}"
     try: print(line)
     except UnicodeEncodeError: print(line.encode('gbk', 'replace').decode('gbk'))
@@ -373,7 +373,10 @@ def _run_update():
         _log("本地已是最新"); return "uptodate"
 
     if rem:
-        _log(f"同步将删除 {len(rem)} 个文件: {rem[:10]}{'...' if len(rem) > 10 else ''}")
+        data_rem = [r for r in rem if r.startswith(".data/")]
+        if data_rem:
+            _log(f"⚠️ .data/ 文件将被删除! ({len(data_rem)} 个): {data_rem}")
+        _log(f"同步将删除 {len(rem)} 个文件 (首尾: {rem[:3]} ... {rem[-3:]})")
     if upd:
         _log(f"同步将更新 {len(upd)} 个文件: {upd[:5]}{'...' if len(upd) > 5 else ''}")
 
@@ -441,12 +444,22 @@ def _make_checker():
 # ── 启动入口 ──
 
 def main():
-    # 日志轮转：超过 5MB 则归档
+    # 日志轮转：保留 7 天
     try:
-        if LOG_FILE.exists() and LOG_FILE.stat().st_size > 5 * 1024 * 1024:
-            bak = LOG_FILE.with_suffix(".log.old")
-            if bak.exists(): bak.unlink()
-            LOG_FILE.rename(bak)
+        if LOG_FILE.exists():
+            cutoff = time.time() - 7 * 86400
+            with open(LOG_FILE, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            keep = []
+            for line in lines:
+                if line.startswith("[") and len(line) > 20:
+                    try:
+                        ts = datetime.strptime(line[1:11], "%Y.%m.%d")
+                        if ts.timestamp() < cutoff: continue
+                    except: pass
+                keep.append(line)
+            if len(keep) < len(lines):
+                LOG_FILE.write_text("".join(keep), encoding="utf-8")
     except: pass
 
     # 供重启线程关闭服务器的全局引用

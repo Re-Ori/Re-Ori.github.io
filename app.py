@@ -343,7 +343,7 @@ _on_access_check = lambda: None  # server.py \u5c06\u66ff\u6362\u6b64\u56de\u8c0
 
 APP_LOG_FILE = PROJECT_ROOT / ".server.log"
 
-# ── 字节计数（自动统计所有响应流量） ──
+# ── 字节计数（自动统计所有流量） ──
 class _CountingWriter:
     """包裹 wfile，自动累加写入字节数，每请求结束时上报"""
     def __init__(self, inner):
@@ -362,8 +362,28 @@ class _CountingWriter:
     def __getattr__(self, name):
         return getattr(self._inner, name)
 
+class _CountingReader:
+    """包裹 rfile，自动累加读取字节数（请求行 + 请求头 + 请求体）"""
+    def __init__(self, inner):
+        self._inner = inner
+        self._start = 0
+    def read(self, n=-1):
+        data = self._inner.read(n)
+        self._start += len(data)
+        return data
+    def readline(self, n=-1):
+        data = self._inner.readline(n)
+        self._start += len(data)
+        return data
+    def get_and_reset(self):
+        n = self._start
+        self._start = 0
+        return n
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
 def log(msg):
-    ts = datetime.now().strftime("%H:%M:%S")
+    ts = datetime.now().strftime("%Y.%m.%d %H:%M:%S")
     line = f"[{ts}] {msg}"
     try:
         print(line)
@@ -481,15 +501,18 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
 
     def setup(self):
         super().setup()
-        # 包裹 wfile 以统计发送流量（在 handle() 之前完成）
+        # 包裹 wfile 以统计发送流量，包裹 rfile 以统计接收流量（含请求行+头+体）
         try:
             if not isinstance(self.wfile, _CountingWriter):
                 self.wfile = _CountingWriter(self.wfile)
         except: pass
+        try:
+            if not isinstance(self.rfile, _CountingReader):
+                self.rfile = _CountingReader(self.rfile)
+        except: pass
 
     def do_GET(self):
         _track_req(self.path)
-        _track_bandwidth(received=int(self.headers.get('Content-Length', 0)))
         self._try_check_update()          # 先触发更新（403 页面也要触发）
         # ACME HTTP-01 挑战 — 从可能的 web root 提供验证文件
         if self._try_serve_acme_challenge():
@@ -641,7 +664,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         _track_req(self.path, "POST")
-        _track_bandwidth(received=int(self.headers.get('Content-Length', 0)))
         self._try_check_update()
         parsed = urllib.parse.urlparse(self.path)
         req_path = parsed.path
@@ -1361,10 +1383,10 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     def handle_one_request(self):
         super().handle_one_request()
         try:
-            if isinstance(self.wfile, _CountingWriter):
-                sent = self.wfile.get_and_reset()
-                if sent > 0:
-                    _track_bandwidth(sent=sent)
+            sent = self.wfile.get_and_reset() if isinstance(self.wfile, _CountingWriter) else 0
+            recv = self.rfile.get_and_reset() if isinstance(self.rfile, _CountingReader) else 0
+            if sent > 0 or recv > 0:
+                _track_bandwidth(sent=sent, received=recv)
         except: pass
 
     def log_message(self, fmt, *args):
@@ -1845,6 +1867,24 @@ def _init_data_dirs():
 # ── 启动入口 ─────────────────────────────────────────────
 
 def main():
+    # 日志轮转：保留 7 天
+    try:
+        if APP_LOG_FILE.exists():
+            cutoff = time.time() - 7 * 86400
+            with open(APP_LOG_FILE, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            keep = []
+            for line in lines:
+                if line.startswith("[") and len(line) > 20:
+                    try:
+                        ts = datetime.strptime(line[1:11], "%Y.%m.%d")
+                        if ts.timestamp() < cutoff: continue
+                    except: pass
+                keep.append(line)
+            if len(keep) < len(lines):
+                APP_LOG_FILE.write_text("".join(keep), encoding="utf-8")
+    except: pass
+
     import argparse
 
     parser = argparse.ArgumentParser(
