@@ -374,9 +374,19 @@ def log(msg):
             f.write(line + "\n")
     except: pass
 
+def _load_config_direct():
+    """每次直接读 reori-config.json（不依赖启动时注入的 CONFIG）"""
+    try:
+        cfg = PROJECT_ROOT / "reori-config.json"
+        if cfg.exists():
+            return json.loads(cfg.read_text(encoding="utf-8"))
+    except: pass
+    return {}
+
 def load_whitelist():
     """从统一配置加载白名单。空数组 = 允许所有。"""
-    wl = CONFIG.get("access", {}).get("whitelist")
+    cfg = _load_config_direct()
+    wl = cfg.get("access", {}).get("whitelist")
     if wl is not None:
         if isinstance(wl, list) and wl:
             return [str(p).replace("\\", "/") for p in wl]
@@ -387,7 +397,8 @@ def load_whitelist():
 
 def load_blacklist():
     """从统一配置加载黑名单。"""
-    bl = CONFIG.get("access", {}).get("blacklist")
+    cfg = _load_config_direct()
+    bl = cfg.get("access", {}).get("blacklist")
     if bl is not None:
         return [str(p).replace("\\", "/") for p in bl] if isinstance(bl, list) else []
     return []
