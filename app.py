@@ -1574,6 +1574,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         try:
             _bbs_migrate_old_format()
             topics = _bbs_all_topics()
+            log(f"BBS 帖子列表: 磁盘共 {len(topics)} 条")
             params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             q = params.get('q', [None])[0]
             if q:
@@ -1809,14 +1810,16 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 if f.suffix == '.json':
                     f.unlink()
 
+            imported = 0
             for name in namelist:
                 if name.startswith(topic_prefix) and name.endswith('.json'):
                     rel = name[len(topic_prefix):]
                     data = zf.read(name)
                     (BBS_TOPICS_DIR / rel).write_text(data.decode('utf-8', errors='replace'), encoding='utf-8')
+                    imported += 1
 
             zf.close()
-            log(f'BBS 导入 ZIP by {user.get("user_id", "?")}')
+            log(f'BBS 导入 ZIP by {user.get("user_id", "?")} (users={users_path in namelist}, topics_prefix={topic_prefix!r}, imported={imported})')
             self._send_json({'ok': True})
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
