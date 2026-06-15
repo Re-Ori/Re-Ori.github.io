@@ -7,7 +7,6 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-WHITELIST_FILE = PROJECT_ROOT / "whitelist.json"
 ACME_CHALLENGE_ROOTS: list[Path] = [PROJECT_ROOT]
 GISCUS_ORIGIN = "https://giscus.app"
 GITHUB_API_ORIGIN = "https://api.github.com"
@@ -27,7 +26,6 @@ SHORT_LINKS_DIR = DATA_DIR / "short_link"
 SHORT_LINKS_FILE = SHORT_LINKS_DIR / "short_links.json"
 ANON_SL_TTL = 259200  # 72h
 
-BLACKLIST_FILE = PROJECT_ROOT / "blacklist.json"
 BBS_DIR = DATA_DIR / "bbs"
 BBS_USERS_FILE = BBS_DIR / "users.json"
 BBS_TOPICS_FILE = BBS_DIR / "topics.json"
@@ -37,32 +35,68 @@ BBS_TOKENS_FILE = BBS_DIR / "tokens.json"
 # ── 统计追踪 ──
 STATS_DIR = DATA_DIR / "stats"
 STATS_DAILY_FILE = STATS_DIR / "daily.json"
+STATS_AGGREGATE_FILE = STATS_DIR / "aggregate.json"
 _stats_lock = threading.RLock()
-_stats = {
-    "started_at": 0,
-    "requests": {
-        "total": 0, "p2p": 0, "short_link": 0, "short_link_redirect": 0,
-        "bbs": 0, "github_proxy": 0, "giscus_proxy": 0, "stats": 0, "other_api": 0, "static": 0,
-    },
-    "p2p": {"rooms_created": 0, "signals": 0, "relay_bytes": 0, "peak_peers": 0},
-    "short_link": {"created": 0, "redirects": 0},
-    "bandwidth": {"sent": 0, "received": 0},
-}
+_STATS_DIRTY = False
+
+def _load_stats():
+    """从磁盘加载聚合统计数据，文件不存在时返回初始值"""
+    try:
+        if STATS_AGGREGATE_FILE.exists():
+            data = json.loads(STATS_AGGREGATE_FILE.read_text(encoding="utf-8"))
+            # 确保所有字段存在
+            data.setdefault("started_at", 0)
+            data.setdefault("requests", {"total": 0, "p2p": 0, "short_link": 0, "short_link_redirect": 0,
+                "bbs": 0, "github_proxy": 0, "giscus_proxy": 0, "stats": 0, "other_api": 0, "static": 0})
+            data.setdefault("p2p", {"rooms_created": 0, "signals": 0, "relay_bytes": 0, "peak_peers": 0})
+            data.setdefault("short_link", {"created": 0, "redirects": 0})
+            data.setdefault("bandwidth", {"sent": 0, "received": 0})
+            return data
+    except: pass
+    return {
+        "started_at": 0,
+        "requests": {
+            "total": 0, "p2p": 0, "short_link": 0, "short_link_redirect": 0,
+            "bbs": 0, "github_proxy": 0, "giscus_proxy": 0, "stats": 0, "other_api": 0, "static": 0,
+        },
+        "p2p": {"rooms_created": 0, "signals": 0, "relay_bytes": 0, "peak_peers": 0},
+        "short_link": {"created": 0, "redirects": 0},
+        "bandwidth": {"sent": 0, "received": 0},
+    }
+
+_stats = _load_stats()
+
+def _save_stats():
+    """将聚合统计数据写入磁盘"""
+    global _STATS_DIRTY
+    if not _STATS_DIRTY:
+        return
+    try:
+        STATS_DIR.mkdir(parents=True, exist_ok=True)
+        with _stats_lock:
+            data = dict(_stats)
+        STATS_AGGREGATE_FILE.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        _STATS_DIRTY = False
+    except: pass
 
 def _incr(category: str, sub: str = "", amount=1):
+    global _STATS_DIRTY
     with _stats_lock:
         if sub:
             _stats.setdefault(category, {})
             _stats[category][sub] = _stats[category].get(sub, 0) + amount
         else:
             _stats[category] = _stats.get(category, 0) + amount
+        _STATS_DIRTY = True
 
 def _track_req(path: str, method: str = "GET"):
+    global _STATS_DIRTY
     cat = "static"
     with _stats_lock:
         if not _stats["started_at"]:
             _stats["started_at"] = time.time()
         _stats["requests"]["total"] += 1
+        _STATS_DIRTY = True
         p = path.split("?")[0].split("#")[0]
         if p.startswith("/api/p2p/"):
             _stats["requests"]["p2p"] += 1; cat = "p2p"
@@ -87,9 +121,11 @@ def _track_req(path: str, method: str = "GET"):
 _bandwidth_lock = threading.RLock()
 
 def _track_bandwidth(sent=0, received=0):
+    global _STATS_DIRTY
     with _bandwidth_lock:
         _stats["bandwidth"]["sent"] += sent
         _stats["bandwidth"]["received"] += received
+        _STATS_DIRTY = True
     # 也写入每日统计
     try:
         today = _daily_date()
@@ -137,7 +173,7 @@ def _track_daily(category: str):
         "bbs": 0, "github_proxy": 0, "giscus_proxy": 0, "other_api": 0, "static": 0})
     day["total"] = day.get("total", 0) + 1
     day[category] = day.get(category, 0) + 1
-    cutoff = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+    cutoff = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
     for k in list(daily.keys()):
         if k < cutoff:
             del daily[k]
@@ -171,8 +207,10 @@ def _get_daily_7d():
 
 def _stats_flusher():
     while True:
-        time.sleep(30)
+        time.sleep(60)
         try: _save_daily()
+        except: pass
+        try: _save_stats()
         except: pass
 
 threading.Thread(target=_stats_flusher, daemon=True).start()
@@ -337,8 +375,7 @@ def log(msg):
     except: pass
 
 def load_whitelist():
-    """从统一配置或 whitelist.json 加载白名单。空数组/无配置 = 允许所有。"""
-    # 优先从统一配置读取
+    """从统一配置加载白名单。空数组 = 允许所有。"""
     wl = CONFIG.get("access", {}).get("whitelist")
     if wl is not None:
         if isinstance(wl, list) and wl:
@@ -346,26 +383,14 @@ def load_whitelist():
         # 空数组 = 有配置但无限制 → 返回特殊标记让 is_path_allowed 放行
         if isinstance(wl, list) and not wl:
             return ["__ALLOW_ALL__"]
-        return None
-    # 回退：旧版 whitelist.json
-    if not WHITELIST_FILE.exists():
-        return None
-    try:
-        data = json.loads(WHITELIST_FILE.read_text(encoding="utf-8"))
-        return [str(p).replace("\\", "/") for p in data] if isinstance(data, list) else []
-    except: return None
+    return None
 
 def load_blacklist():
-    """从统一配置或 blacklist.json 加载黑名单。"""
+    """从统一配置加载黑名单。"""
     bl = CONFIG.get("access", {}).get("blacklist")
     if bl is not None:
         return [str(p).replace("\\", "/") for p in bl] if isinstance(bl, list) else []
-    if not BLACKLIST_FILE.exists():
-        return []
-    try:
-        data = json.loads(BLACKLIST_FILE.read_text(encoding="utf-8"))
-        return [str(p).replace("\\", "/") for p in data] if isinstance(data, list) else []
-    except: return []
+    return []
 
 def is_path_allowed(p, wl):
     if not wl: return False
@@ -693,14 +718,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     # -- 白名单检查 --
     def _check_whitelist(self) -> bool:
         """检查路径是否在黑名单内，再检查是否在白名单内。不在则返回 403。"""
-        # whitelist.json 本身永远不允许直接访问
-        WHITELIST_PATH = "/whitelist.json"
         parsed = urllib.parse.urlparse(self.path)
         req_path = parsed.path
-
-        if req_path == WHITELIST_PATH:
-            self.send_error(403, "Forbidden")
-            return False
 
         # 黑名单检查（优先级高于白名单）
         blacklist = load_blacklist()

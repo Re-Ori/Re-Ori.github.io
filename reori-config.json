@@ -8,9 +8,28 @@
   },
   "access": {
     "// whitelist": "允许访问的路径，空数组 = 所有路径都允许。目录以 / 结尾做前缀匹配",
-    "whitelist": [],
+    "whitelist": [
+      "/",
+      "/index.html",
+      "/css/",
+      "/js/",
+      "/json/",
+      "/images/",
+      "/blogs/",
+      "/OLDReOri/",
+      "/favicon.ico",
+      "/.well-known/",
+      "/forum.html",
+      "/p2p.html",
+      "/Tool/",
+      "/s/",
+      "/bbs/",
+      "/api/bbs/"
+    ],
     "// blacklist": "禁止访问的路径（优先于 whitelist）",
-    "blacklist": []
+    "blacklist": [
+      "/.data/"
+    ]
   },
   "server": {
     "// port": "监听端口",
@@ -21,8 +40,9 @@
     "check_interval": 60
   },
   "push": {
+    "// 说明": "本项配置仅影响编辑时传到GitHub的文件内容，不影响服务器运行",
     "// exclude_parts": "路径中包含这些名称的任意部分就会被跳过",
-    "exclude_parts": [".claude", ".versions", ".vscode", "__pycache__", ".update_state.json", ".crash_marker.json", ".server.log", "AutoUpdate.disabled"],
+    "exclude_parts": [".claude", ".versions", ".vscode", "__pycache__", ".update_state.json", ".server.log", "AutoUpdate.disabled"],
     "// exclude_paths": "完整路径前缀匹配，目录以 / 结尾",
     "exclude_paths": [".data/bbs/tokens.json", ".data/bbs/topics/", ".data/short_link/", ".data/stats/"]
   }

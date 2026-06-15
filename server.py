@@ -12,7 +12,7 @@ AutoUpdate Web Server — 更新与启动
 
 from __future__ import annotations
 import os, sys, json, time, socket, ssl, hashlib, shutil, zipfile
-import tempfile, subprocess, threading, atexit, traceback
+import tempfile, subprocess, threading, traceback
 import http.server, urllib.request, urllib.error
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -23,7 +23,6 @@ from concurrent.futures import ThreadPoolExecutor
 PROJECT_ROOT = Path(__file__).resolve().parent
 STATE_FILE = PROJECT_ROOT / ".update_state.json"
 MAIN_JS = PROJECT_ROOT / "js" / "main.js"
-CRASH_MARKER = PROJECT_ROOT / ".crash_marker.json"
 CACHE_DIR = PROJECT_ROOT / ".cache"
 LOG_FILE = PROJECT_ROOT / ".server.log"
 
@@ -37,7 +36,7 @@ CONFIG_PATH = PROJECT_ROOT / "reori-config.json"
 
 WORKERS = 8
 DOWNLOAD_TIMEOUT = 60
-LOCAL_ONLY = frozenset({".update_state.json", ".crash_marker.json", "AutoUpdate.disabled", ".server.log"})
+LOCAL_ONLY = frozenset({".update_state.json", "AutoUpdate.disabled", ".server.log"})
 
 # ── 统一配置加载 ──
 
@@ -139,33 +138,6 @@ def _load_state():
 def _save_state(s):
     STATE_FILE.write_text(json.dumps(s, indent=2, ensure_ascii=False), encoding="utf-8")
 
-# ── 崩溃标记 ──
-
-def _write_cm():
-    CRASH_MARKER.write_text(json.dumps({"pid": os.getpid(), "status": "running",
-        "started_at": _fmt(datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=8)),
-    }), encoding="utf-8")
-
-def _clear_cm():
-    try:
-        if CRASH_MARKER.exists(): CRASH_MARKER.unlink()
-    except: pass
-
-def _mark_clean():
-    try:
-        if CRASH_MARKER.exists():
-            d = json.loads(CRASH_MARKER.read_text(encoding="utf-8"))
-            d["status"] = "clean"
-            CRASH_MARKER.write_text(json.dumps(d), encoding="utf-8")
-    except: pass
-
-def _prev_crash():
-    if not CRASH_MARKER.exists(): return None
-    try:
-        d = json.loads(CRASH_MARKER.read_text(encoding="utf-8"))
-        if d.get("status") == "running" and d.get("pid") != os.getpid(): return d
-    except: pass
-    return None
 
 # ── 版本管理已移除 ──
 # 不再备份 app.py，崩溃或更新后直接重启
@@ -401,9 +373,10 @@ def _run_update():
         _log("本地已是最新"); return "uptodate"
 
     ac = "app.py" in upd or "app.py" in add
+    cc = CONFIG_PATH.name in upd or CONFIG_PATH.name in add
     _apply(sd, PROJECT_ROOT, upd, add, rem)
     global _RESTART_NEEDED
-    if "server.py" in upd or "server.py" in add or ac:
+    if "server.py" in upd or "server.py" in add or ac or cc:
         _RESTART_NEEDED = True
         if ac:
             _log("app.py 已更新，准备重启")
@@ -453,7 +426,6 @@ def _make_checker():
                         subprocess.Popen([sys.executable] + sys.argv)
                         _log("新进程已启动（端口重试机制将等待旧端口释放）")
                     except Exception as e: _log(f"重启失败: {e}")
-                    _clear_cm()
                     os._exit(0)
             except Exception as e: _log(f"更新异常: {e}")
             finally: updating = False
@@ -475,15 +447,6 @@ def main():
     # 供重启线程关闭服务器的全局引用
     global _RESTART_NEEDED
     _current_server = None
-
-    crash = _prev_crash()
-    if crash:
-        _log("检测到上次异常退出，版本管理已关闭，直接重新启动")
-        if crash.get("error"): _log(f"  上次错误: {crash['error']}")
-    else:
-        _log("上次运行正常退出")
-
-    _clear_cm(); _write_cm(); atexit.register(_mark_clean)
 
     # ├─ 首次启动：如果 app.py 不存在，先下载 ──
     if not (PROJECT_ROOT / "app.py").exists():
@@ -569,8 +532,6 @@ def main():
             else: _log("两次启动均失败"); break
 
     _log("启动失败，退出")
-    try: CRASH_MARKER.write_text(json.dumps({"pid": os.getpid(), "status": "running", "error": "启动失败"}), encoding="utf-8")
-    except: pass
     sys.exit(1)
 
 if __name__ == "__main__":
