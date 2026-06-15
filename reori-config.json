@@ -2,9 +2,9 @@
   "// 说明": "ReOri 服务器配置 — 修改后重启 server.py 生效",
   "sync": {
     "// local_paths": "本地路径不会被 GitHub 覆盖（黑名单），目录以 / 结尾做前缀匹配",
-    "local_paths": [".data/", ".cache/"],
+    "local_paths": ["/.data/", "/.cache/"],
     "// allow_paths": "即使匹配 local_paths 也允许被覆盖的文件（白名单），更精确的路径胜出",
-    "allow_paths": [".data/bbs/users.json"]
+    "allow_paths": ["/.data/bbs/users.json"]
   },
   "access": {
     "// whitelist": "允许访问的路径，空数组 = 所有路径都允许。目录以 / 结尾做前缀匹配",

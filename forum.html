@@ -191,15 +191,18 @@
   }
 
   function showToast(msg, duration) {
-    duration = duration || 2500;
+    duration = duration !== undefined ? duration : 2500;
     var t = document.createElement('div');
     t.className = 'bbs-toast'; t.textContent = msg;
     document.body.appendChild(t);
     setTimeout(function() { t.classList.add('show'); }, 10);
-    setTimeout(function() {
-      t.classList.remove('show');
-      setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
-    }, duration);
+    if (duration > 0) {
+      setTimeout(function() {
+        t.classList.remove('show');
+        setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
+      }, duration);
+    }
+    return t;
   }
 
   function showLoginError(msg) {
@@ -939,6 +942,7 @@
     var file = this.files[0];
     if (!file) return;
     if (!confirm('确定导入数据？这将覆盖全部现有论坛数据。')) { this.value = ''; return; }
+    var toast = showToast('导入中…', 0);
     var reader = new FileReader();
     reader.onload = function(e) {
       var xhr = new XMLHttpRequest();
@@ -947,6 +951,7 @@
       xhr.setRequestHeader('X-Auth-Token', TOKEN);
       xhr.responseType = 'json';
       xhr.onload = function() {
+        if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
         if (xhr.response && xhr.response.ok) {
           showToast('导入成功');
           loadTopics();
@@ -958,7 +963,10 @@
           showToast('导入失败');
         }
       };
-      xhr.onerror = function() { showToast('导入失败: 网络错误'); };
+      xhr.onerror = function() {
+        if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+        showToast('导入失败: 网络错误');
+      };
       xhr.send(e.target.result);
     };
     reader.readAsArrayBuffer(file);
