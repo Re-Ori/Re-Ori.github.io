@@ -129,10 +129,17 @@ def _track_bandwidth(sent=0, received=0):
     # 也写入每日统计
     try:
         today = _daily_date()
+        hour = datetime.now().strftime("%H")
         daily = _load_daily()
         day = daily.setdefault(today, {})
         day["bw_sent"] = day.get("bw_sent", 0) + sent
         day["bw_recv"] = day.get("bw_recv", 0) + received
+        # 每10分钟带宽明细
+        slot = str((datetime.now().hour * 60 + datetime.now().minute) // 10)
+        bw_slots = day.setdefault("bw_slots", {})
+        bs = bw_slots.setdefault(slot, {"sent": 0, "recv": 0})
+        bs["sent"] = bs.get("sent", 0) + sent
+        bs["recv"] = bs.get("recv", 0) + recv
         _DAILY_DIRTY = True
     except: pass
 
@@ -168,11 +175,19 @@ def _save_daily():
 
 def _track_daily(category: str):
     today = _daily_date()
+    now = datetime.now()
+    slot = str((now.hour * 60 + now.minute) // 10)  # 0-143, 每10分钟
     daily = _load_daily()
     day = daily.setdefault(today, {"total": 0, "p2p": 0, "short_link": 0, "short_link_redirect": 0,
         "bbs": 0, "github_proxy": 0, "giscus_proxy": 0, "other_api": 0, "static": 0})
     day["total"] = day.get("total", 0) + 1
     day[category] = day.get(category, 0) + 1
+    # 每10分钟明细
+    slots = day.setdefault("slots", {})
+    s = slots.setdefault(slot, {"total": 0, "p2p": 0, "short_link": 0, "short_link_redirect": 0,
+        "bbs": 0, "github_proxy": 0, "giscus_proxy": 0, "other_api": 0, "static": 0})
+    s["total"] = s.get("total", 0) + 1
+    s[category] = s.get(category, 0) + 1
     cutoff = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
     for k in list(daily.keys()):
         if k < cutoff:
@@ -188,7 +203,7 @@ def _get_daily_7d():
     for i in range(6, -1, -1):
         d = (today - timedelta(days=i)).strftime("%Y-%m-%d")
         day = daily.get(d, {})
-        result.append({
+        entry = {
             "date": d,
             "total": day.get("total", 0),
             "p2p": day.get("p2p", 0),
@@ -202,7 +217,38 @@ def _get_daily_7d():
             "static": day.get("static", 0),
             "bw_sent": day.get("bw_sent", 0),
             "bw_recv": day.get("bw_recv", 0),
-        })
+        }
+        # 每10分钟明细
+        raw = day.get("slots", {})
+        slots = []
+        for si in range(144):
+            sk = str(si)
+            sd = raw.get(sk, {})
+            slots.append({
+                "slot": si,
+                "total": sd.get("total", 0),
+                "p2p": sd.get("p2p", 0),
+                "short_link": sd.get("short_link", 0),
+                "bbs": sd.get("bbs", 0),
+                "github_proxy": sd.get("github_proxy", 0),
+                "giscus_proxy": sd.get("giscus_proxy", 0),
+                "other_api": sd.get("other_api", 0),
+                "static": sd.get("static", 0),
+            })
+        entry["slots"] = slots
+        # 每10分钟带宽明细
+        bw_raw = day.get("bw_slots", {})
+        bw_slots = []
+        for si in range(144):
+            sk = str(si)
+            bd = bw_raw.get(sk, {})
+            bw_slots.append({
+                "slot": si,
+                "sent": bd.get("sent", 0),
+                "recv": bd.get("recv", 0),
+            })
+        entry["bw_slots"] = bw_slots
+        result.append(entry)
     return result
 
 def _stats_flusher():
