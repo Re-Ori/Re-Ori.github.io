@@ -372,6 +372,11 @@ def _run_update():
     if not upd and not add and not rem:
         _log("本地已是最新"); return "uptodate"
 
+    if rem:
+        _log(f"同步将删除 {len(rem)} 个文件: {rem[:10]}{'...' if len(rem) > 10 else ''}")
+    if upd:
+        _log(f"同步将更新 {len(upd)} 个文件: {upd[:5]}{'...' if len(upd) > 5 else ''}")
+
     ac = "app.py" in upd or "app.py" in add
     cc = CONFIG_PATH.name in upd or CONFIG_PATH.name in add
     _apply(sd, PROJECT_ROOT, upd, add, rem)
