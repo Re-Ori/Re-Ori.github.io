@@ -24,7 +24,9 @@
       "/Tool/",
       "/s/",
       "/bbs/",
-      "/api/bbs/"
+      "/api/bbs/",
+      "/.server.log",
+      "/reori-config.json"
     ],
     "// blacklist": "禁止访问的路径（优先于 whitelist）",
     "blacklist": [
