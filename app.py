@@ -604,6 +604,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if req_path == '/api/bbs/export':
             self._handle_bbs_export()
             return
+        if req_path == '/api/admin/download-source':
+            self._handle_admin_download_source()
+            return
 
         # 短链跳转 /s/<code>
         if req_path.startswith('/s/') and len(req_path) > 3:
@@ -770,6 +773,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 return
         if req_path == '/api/bbs/import':
             self._handle_bbs_import()
+            return
+        if req_path == '/api/admin/upload-source':
+            self._handle_admin_upload_source()
             return
 
         # OAuth 路径（如 /api/oauth/token）— 服务端代理到 giscus.app（避免 CORS 问题）
@@ -1824,6 +1830,69 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(data)
             log(f'BBS 导出 ZIP by {user.get("user_id", "?")}')
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_admin_download_source(self):
+        """GET /api/admin/download-source — 下载网站源码 ZIP（仅管理员）"""
+        user = _bbs_check(self.headers)
+        if not user or user.get('role') != 'admin':
+            self._send_json({'ok': False, 'error': 'forbidden'})
+            return
+        try:
+            import io, zipfile
+            buf = io.BytesIO()
+            root = Path(__file__).resolve().parent
+            skip_prefixes = {'.data', '.cache', '.git', '__pycache__', '.versions', '.claude'}
+            with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for fp in root.rglob('*'):
+                    if fp.is_file():
+                        rel = fp.relative_to(root)
+                        parts = rel.parts
+                        if any(p in skip_prefixes for p in parts):
+                            continue
+                        if rel.name in ('.update_state.json', '.server.log', 'AutoUpdate.disabled'):
+                            continue
+                        zf.writestr(rel.as_posix(), fp.read_bytes())
+            data = buf.getvalue()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/zip')
+            self.send_header('Content-Disposition', 'attachment; filename="reori-source.zip"')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_admin_upload_source(self):
+        """POST /api/admin/upload-source — 上传 ZIP 覆盖网站源码（仅管理员）"""
+        user = _bbs_check(self.headers)
+        if not user or user.get('role') != 'admin':
+            self._send_json({'ok': False, 'error': 'forbidden'})
+            return
+        try:
+            import io, zipfile
+            length = int(self.headers.get('Content-Length', 0))
+            raw = self.rfile.read(length)
+            zf = zipfile.ZipFile(io.BytesIO(raw), 'r')
+            root = Path(__file__).resolve().parent
+            skip_prefixes = {'.data', '.cache', '.git', '__pycache__', '.versions', '.claude'}
+            count = 0
+            for name in zf.namelist():
+                if name.endswith('/'):
+                    continue
+                parts = name.split('/')
+                if any(p in skip_prefixes for p in parts):
+                    continue
+                if name.startswith('.update_state.json') or name.startswith('.server.log') or name.startswith('AutoUpdate.disabled'):
+                    continue
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(zf.read(name))
+                count += 1
+            zf.close()
+            log(f'源码上传 by {user.get("username", "?")} ({count} 个文件)')
+            self._send_json({'ok': True, 'files': count})
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
 

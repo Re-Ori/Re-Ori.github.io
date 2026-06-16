@@ -30,6 +30,9 @@
             <button class="bbs-login-btn" onclick="bbsExport()" title="导出全部数据">导出</button>
             <button class="bbs-login-btn" onclick="document.getElementById('bbs-import-input').click()" title="导入数据覆盖全部">导入</button>
             <input type="file" id="bbs-import-input" accept=".zip" style="display:none">
+            <button class="bbs-login-btn" onclick="bbsDownloadSource()" title="下载网站源码">下载源码</button>
+            <button class="bbs-login-btn" onclick="document.getElementById('bbs-source-input').click()" title="上传 ZIP 更新网站文件">上传源码</button>
+            <input type="file" id="bbs-source-input" accept=".zip" style="display:none">
           </div>
           <div id="bbs-user-badge" class="bbs-user-badge" style="display:none;">
             <span id="bbs-username" style="cursor:pointer" onclick="bbsOpenUser(USER_ID)" title="个人主页"></span>
@@ -937,6 +940,66 @@
     xhr.onerror = function() { showToast('导出失败'); };
     xhr.send();
   };
+
+  window.bbsDownloadSource = function() {
+    var toast = showToast('打包中…', 0);
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/admin/download-source', true);
+    xhr.setRequestHeader('X-Auth-Token', TOKEN);
+    xhr.responseType = 'blob';
+    xhr.onload = function() {
+      if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+      if (xhr.status === 200) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(xhr.response);
+        a.download = 'reori-source.zip';
+        a.click();
+        showToast('源码下载成功');
+      } else if (xhr.status === 403) {
+        showToast('无权限');
+      } else {
+        showToast('下载失败');
+      }
+    };
+    xhr.onerror = function() {
+      if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+      showToast('下载失败');
+    };
+    xhr.send();
+  };
+
+  document.getElementById('bbs-source-input').addEventListener('change', function() {
+    var file = this.files[0];
+    if (!file) return;
+    if (!confirm('确定上传 ZIP？这将覆盖网站文件，不可撤销。')) { this.value = ''; return; }
+    var toast = showToast('上传中…', 0);
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/admin/upload-source', true);
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      xhr.setRequestHeader('X-Auth-Token', TOKEN);
+      xhr.responseType = 'json';
+      xhr.onload = function() {
+        if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+        if (xhr.response && xhr.response.ok) {
+          showToast('上传成功，共 ' + xhr.response.files + ' 个文件');
+        } else if (xhr.status === 403) {
+          showToast('无权限');
+        } else if (xhr.response && xhr.response.error) {
+          showToast('上传失败: ' + xhr.response.error);
+        } else {
+          showToast('上传失败');
+        }
+      };
+      xhr.onerror = function() {
+        if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+        showToast('上传失败: 网络错误');
+      };
+      xhr.send(e.target.result);
+    };
+    reader.readAsArrayBuffer(file);
+  });
 
   document.getElementById('bbs-import-input').addEventListener('change', function() {
     var file = this.files[0];
