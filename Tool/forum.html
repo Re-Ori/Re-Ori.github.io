@@ -509,6 +509,7 @@
   // ── 导入导出（带进度） ──
 
   var _progressXhr = null;
+  var _progressTimer = null;
 
   function formatSize(bytes) {
     if (bytes === 0) return '0 B';
@@ -528,6 +529,7 @@
   }
 
   function hideProgress() {
+    if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
     document.getElementById('bbs-progress-modal').style.display = 'none';
   }
 
@@ -542,54 +544,69 @@
 
   window.bbsExport = function() {
     if (!TOKEN || ROLE !== 'admin') { showToast('无权限'); return; }
-    showProgress('导出数据', '正在生成 ZIP 压缩包…', 10, '', false);
-    var xhr = new XMLHttpRequest();
-    _progressXhr = xhr;
-    xhr.responseType = 'blob';
-    xhr.open('GET', '/api/bbs/export', true);
-    xhr.setRequestHeader('X-Auth-Token', TOKEN);
-
-    xhr.onprogress = function(e) {
-      if (e.lengthComputable) {
-        var pct = 10 + (e.loaded / e.total) * 80;
-        showProgress('导出数据', '正在下载 ZIP…', pct, formatSize(e.loaded) + ' / ' + formatSize(e.total), false);
+    // 先显示弹窗启动模拟进度
+    showProgress('导出数据', '正在生成 ZIP 压缩包…', 0, '', false);
+    var simPct = 0;
+    var simTimer = setInterval(function() {
+      if (simPct < 30) {
+        simPct += 1.5; // 模拟生成阶段 0→30%
+        showProgress('导出数据', '正在生成 ZIP 压缩包…', simPct, '', false);
       } else {
-        showProgress('导出数据', '正在下载 ZIP…', 50, formatSize(e.loaded), false);
+        clearInterval(simTimer);
       }
-    };
+    }, 100);
+    // 小延迟确保弹窗已渲染
+    setTimeout(function() {
+      var xhr = new XMLHttpRequest();
+      _progressXhr = xhr;
+      xhr.responseType = 'blob';
+      xhr.open('GET', '/api/bbs/export', true);
+      xhr.setRequestHeader('X-Auth-Token', TOKEN);
 
-    xhr.onload = function() {
-      _progressXhr = null;
-      if (xhr.status === 200) {
-        showProgress('导出数据', '下载完成', 100, formatSize(xhr.response.size), true);
-        // 触发浏览器下载
-        var blob = xhr.response;
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = 'bbs-backup.zip';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
-        showToast('导出成功（' + formatSize(blob.size) + '）');
-        setTimeout(hideProgress, 2000);
-      } else if (xhr.status === 403) {
+      xhr.onprogress = function(e) {
+        clearInterval(simTimer);
+        if (e.lengthComputable) {
+          var pct = 30 + (e.loaded / e.total) * 65;
+          showProgress('导出数据', '正在下载 ZIP…', pct, formatSize(e.loaded) + ' / ' + formatSize(e.total), false);
+        } else {
+          showProgress('导出数据', '正在下载 ZIP…', 50, formatSize(e.loaded), false);
+        }
+      };
+
+      xhr.onload = function() {
+        _progressXhr = null;
+        clearInterval(simTimer);
+        if (xhr.status === 200) {
+          showProgress('导出数据', '下载完成', 100, formatSize(xhr.response.size), true);
+          var blob = xhr.response;
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = 'bbs-backup.zip';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+          showToast('导出成功（' + formatSize(blob.size) + '）');
+          setTimeout(hideProgress, 2000);
+        } else if (xhr.status === 403) {
+          hideProgress();
+          showToast('导出失败：无权限');
+        } else {
+          hideProgress();
+          showToast('导出失败（' + xhr.status + '）');
+        }
+      };
+
+      xhr.onerror = function() {
+        _progressXhr = null;
+        clearInterval(simTimer);
         hideProgress();
-        showToast('导出失败：无权限');
-      } else {
-        hideProgress();
-        showToast('导出失败（' + xhr.status + '）');
-      }
-    };
+        showToast('导出失败：网络错误');
+      };
 
-    xhr.onerror = function() {
-      _progressXhr = null;
-      hideProgress();
-      showToast('导出失败：网络错误');
-    };
-
-    xhr.send();
+      xhr.send();
+    }, 200);
   };
 
   window.bbsImport = function() {
@@ -610,6 +627,17 @@
     }
 
     showProgress('导入数据', '正在上传…', 0, '总大小 ' + formatSize(file.size), false);
+    // 模拟上传进度（实际 onprogress 会覆盖它）
+    var simPct = 0;
+    var simTimer = setInterval(function() {
+      if (simPct < 90) {
+        simPct += Math.random() * 3 + 0.5;
+        if (simPct > 90) simPct = 90;
+        showProgress('导入数据', '正在上传…', simPct, '', false);
+      } else {
+        clearInterval(simTimer);
+      }
+    }, 200);
 
     var xhr = new XMLHttpRequest();
     _progressXhr = xhr;
@@ -618,22 +646,26 @@
 
     xhr.upload.onprogress = function(e) {
       if (e.lengthComputable) {
-        var pct = (e.loaded / e.total) * 90;
+        var pct = (e.loaded / e.total) * 95;
         showProgress('导入数据', '正在上传…', pct,
           formatSize(e.loaded) + ' / ' + formatSize(e.total), false);
-      } else {
-        showProgress('导入数据', '正在上传…', 45, formatSize(e.loaded), false);
+        // 有真实进度时停止模拟
+        clearInterval(simTimer);
       }
     };
 
     xhr.onload = function() {
       _progressXhr = null;
+      clearInterval(simTimer);
       if (xhr.status === 200) {
         var res = JSON.parse(xhr.responseText);
         if (res.ok) {
-          showProgress('导入数据', '导入完成', 100, '总大小 ' + formatSize(file.size), true);
-          showToast('导入成功');
-          setTimeout(function() { hideProgress(); location.reload(); }, 1500);
+          showProgress('导入数据', '正在处理数据…', 98, '总大小 ' + formatSize(file.size), false);
+          setTimeout(function() {
+            showProgress('导入数据', '导入完成', 100, '总大小 ' + formatSize(file.size), true);
+            showToast('导入成功');
+            setTimeout(function() { hideProgress(); location.reload(); }, 1500);
+          }, 500);
         } else {
           hideProgress();
           showToast('导入失败：' + (res.error || '服务器错误'));
@@ -649,6 +681,7 @@
 
     xhr.onerror = function() {
       _progressXhr = null;
+      clearInterval(simTimer);
       hideProgress();
       showToast('导入失败：网络错误');
     };
