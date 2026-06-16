@@ -1842,19 +1842,12 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         try:
             import io, zipfile, tempfile, os
             root = Path(__file__).resolve().parent
-            skip_prefixes = {'.data', '.cache', '.git', '__pycache__', '.versions', '.claude'}
-            # 写入临时文件再读取发送，避免 BytesIO 问题
             tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
             try:
                 with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as zf:
                     for fp in root.rglob('*'):
                         if fp.is_file():
                             rel = fp.relative_to(root)
-                            parts = rel.parts
-                            if any(p in skip_prefixes for p in parts):
-                                continue
-                            if rel.name in ('.update_state.json', '.server.log', 'AutoUpdate.disabled'):
-                                continue
                             zf.writestr(rel.as_posix(), fp.read_bytes())
                 tmp.close()
                 with open(tmp.name, 'rb') as f:
@@ -1883,16 +1876,10 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             raw = self.rfile.read(length)
             zf = zipfile.ZipFile(io.BytesIO(raw), 'r')
             root = Path(__file__).resolve().parent
-            skip_prefixes = {'.data', '.cache', '.git', '__pycache__', '.versions', '.claude'}
             count = 0
             uploaded_names = []
             for name in zf.namelist():
                 if name.endswith('/'):
-                    continue
-                parts = name.split('/')
-                if any(p in skip_prefixes for p in parts):
-                    continue
-                if name.startswith('.update_state.json') or name.startswith('.server.log') or name.startswith('AutoUpdate.disabled'):
                     continue
                 target = root / name
                 target.parent.mkdir(parents=True, exist_ok=True)

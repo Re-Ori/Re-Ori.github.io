@@ -942,7 +942,7 @@
   };
 
   window.bbsDownloadSource = function() {
-    var toast = showToast('打包中…', 0);
+    var toast = showToast('下载中…', 0);
     var xhr = new XMLHttpRequest();
     xhr.open('GET', '/api/admin/download-source', true);
     xhr.setRequestHeader('X-Auth-Token', TOKEN);
@@ -971,7 +971,7 @@
   document.getElementById('bbs-source-input').addEventListener('change', function() {
     var file = this.files[0];
     if (!file) return;
-    if (!confirm('确定上传 ZIP？这将覆盖网站文件，不可撤销。')) { this.value = ''; return; }
+    if (!confirm('确定上传 ZIP？这将覆盖服务器上所有文件（含数据），不可撤销！')) { this.value = ''; return; }
     var toast = showToast('上传中…', 0);
     var reader = new FileReader();
     reader.onload = function(e) {
