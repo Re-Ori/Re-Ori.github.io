@@ -1840,27 +1840,34 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({'ok': False, 'error': 'forbidden'})
             return
         try:
-            import io, zipfile
-            buf = io.BytesIO()
+            import io, zipfile, tempfile, os
             root = Path(__file__).resolve().parent
             skip_prefixes = {'.data', '.cache', '.git', '__pycache__', '.versions', '.claude'}
-            with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-                for fp in root.rglob('*'):
-                    if fp.is_file():
-                        rel = fp.relative_to(root)
-                        parts = rel.parts
-                        if any(p in skip_prefixes for p in parts):
-                            continue
-                        if rel.name in ('.update_state.json', '.server.log', 'AutoUpdate.disabled'):
-                            continue
-                        zf.writestr(rel.as_posix(), fp.read_bytes())
-            data = buf.getvalue()
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/zip')
-            self.send_header('Content-Disposition', 'attachment; filename="reori-source.zip"')
-            self.send_header('Content-Length', str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
+            # 写入临时文件再读取发送，避免 BytesIO 问题
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+            try:
+                with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    for fp in root.rglob('*'):
+                        if fp.is_file():
+                            rel = fp.relative_to(root)
+                            parts = rel.parts
+                            if any(p in skip_prefixes for p in parts):
+                                continue
+                            if rel.name in ('.update_state.json', '.server.log', 'AutoUpdate.disabled'):
+                                continue
+                            zf.writestr(rel.as_posix(), fp.read_bytes())
+                tmp.close()
+                with open(tmp.name, 'rb') as f:
+                    data = f.read()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/zip')
+                self.send_header('Content-Disposition', 'attachment; filename="reori-source.zip"')
+                self.send_header('Content-Length', str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            finally:
+                try: os.unlink(tmp.name)
+                except: pass
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
 
