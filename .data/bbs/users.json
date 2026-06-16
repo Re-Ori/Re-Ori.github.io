@@ -31,5 +31,17 @@
     "username": "梧桐",
     "password": "wantong20100305",
     "role": "user"
+  },
+  {
+    "id": "user003",
+    "username": "SYZ",
+    "password": "syz2009",
+    "role": "user"
+  },
+  {
+    "id": "user004",
+    "username": "WZA",
+    "password": "",
+    "role": "user"
   }
 ]
