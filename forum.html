@@ -100,6 +100,24 @@
   </div>
 </div>
 
+<!-- 导入导出进度弹窗 -->
+<div id="bbs-progress-modal" class="bbs-modal-overlay" style="display:none;">
+  <div class="bbs-modal bbs-progress-modal">
+    <h3 id="bbs-progress-title">处理中</h3>
+    <div class="bbs-progress-status" id="bbs-progress-status">准备中…</div>
+    <div class="bbs-progress-bar-track">
+      <div class="bbs-progress-bar-fill" id="bbs-progress-fill"></div>
+    </div>
+    <div class="bbs-progress-info">
+      <span id="bbs-progress-percent">0%</span>
+      <span id="bbs-progress-size"></span>
+    </div>
+    <div class="bbs-modal-actions" id="bbs-progress-actions">
+      <button class="bbs-modal-secondary" onclick="bbsCloseProgress()">取消</button>
+    </div>
+  </div>
+</div>
+
 <!-- 图片插入对话框 -->
 <div id="bbs-img-dialog" class="bbs-img-dialog" style="display:none;">
   <div class="bbs-img-dialog-inner">
@@ -931,25 +949,97 @@
 
   // ── 数据导入导出 ──
 
+  // ── 进度弹窗辅助 ──
+
+  var _progressXhr = null;
+  var _progressTimer = null;
+
+  function formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    var units = ['B', 'KB', 'MB', 'GB'];
+    var i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+  }
+
+  function showProgress(title, status, pct, sizeText, closable) {
+    var el = document.getElementById('bbs-progress-title');
+    if (!el) return;
+    el.textContent = title;
+    document.getElementById('bbs-progress-status').textContent = status;
+    document.getElementById('bbs-progress-fill').style.width = Math.min(pct, 100) + '%';
+    document.getElementById('bbs-progress-percent').textContent = Math.round(pct) + '%';
+    document.getElementById('bbs-progress-size').textContent = sizeText || '';
+    document.getElementById('bbs-progress-actions').style.display = closable ? '' : 'none';
+    document.getElementById('bbs-progress-modal').style.display = '';
+  }
+
+  function hideProgress() {
+    if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
+    var el = document.getElementById('bbs-progress-modal');
+    if (el) el.style.display = 'none';
+  }
+
+  window.bbsCloseProgress = function() {
+    if (_progressXhr) {
+      try { _progressXhr.abort(); } catch(e) {}
+      _progressXhr = null;
+    }
+    hideProgress();
+    showToast('已取消');
+  };
+
   window.bbsExport = function() {
-    var url = '/api/bbs/export';
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url, true);
-    xhr.setRequestHeader('X-Auth-Token', TOKEN);
-    xhr.responseType = 'blob';
-    xhr.onload = function() {
-      if (xhr.status === 200) {
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(xhr.response);
-        a.download = 'bbs-backup.zip';
-        a.click();
-        showToast('导出成功');
+    showProgress('导出数据', '正在生成 ZIP 压缩包…', 0, '', false);
+    // 模拟进度
+    var simPct = 0;
+    var simTimer = setInterval(function() {
+      if (simPct < 30) {
+        simPct += 1.5;
+        showProgress('导出数据', '正在生成 ZIP 压缩包…', simPct, '', false);
       } else {
-        showToast('导出失败：' + (xhr.status === 403 ? '无权限' : '服务器错误'));
+        clearInterval(simTimer);
       }
-    };
-    xhr.onerror = function() { showToast('导出失败'); };
-    xhr.send();
+    }, 100);
+    setTimeout(function() {
+      var xhr = new XMLHttpRequest();
+      _progressXhr = xhr;
+      xhr.open('GET', '/api/bbs/export', true);
+      xhr.setRequestHeader('X-Auth-Token', TOKEN);
+      xhr.responseType = 'blob';
+      xhr.onprogress = function(e) {
+        clearInterval(simTimer);
+        if (e.lengthComputable) {
+          var pct = 30 + (e.loaded / e.total) * 65;
+          showProgress('导出数据', '正在下载 ZIP…', pct, formatSize(e.loaded) + ' / ' + formatSize(e.total), false);
+        } else {
+          showProgress('导出数据', '正在下载 ZIP…', 50, formatSize(e.loaded), false);
+        }
+      };
+      xhr.onload = function() {
+        _progressXhr = null;
+        clearInterval(simTimer);
+        if (xhr.status === 200) {
+          var size = xhr.response.size;
+          showProgress('导出数据', '下载完成', 100, formatSize(size), true);
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(xhr.response);
+          a.download = 'bbs-backup.zip';
+          a.click();
+          showToast('导出成功（' + formatSize(size) + '）');
+          setTimeout(hideProgress, 2000);
+        } else {
+          hideProgress();
+          showToast('导出失败：' + (xhr.status === 403 ? '无权限' : '服务器错误'));
+        }
+      };
+      xhr.onerror = function() {
+        _progressXhr = null;
+        clearInterval(simTimer);
+        hideProgress();
+        showToast('导出失败');
+      };
+      xhr.send();
+    }, 200);
   };
 
   window.bbsDownloadSource = function() {
@@ -1017,30 +1107,65 @@
   document.getElementById('bbs-import-input').addEventListener('change', function() {
     var file = this.files[0];
     if (!file) return;
-    if (!confirm('确定导入数据？这将覆盖全部现有论坛数据。')) { this.value = ''; return; }
-    var toast = showToast('导入中…', 0);
+    if (!file.name.endsWith('.zip')) {
+      showToast('请选择 .zip 文件');
+      this.value = '';
+      return;
+    }
+    if (!confirm('确定导入数据？这将覆盖全部现有论坛数据。\n文件大小：' + formatSize(file.size))) {
+      this.value = '';
+      return;
+    }
+    // 阶段1: 读取文件（模拟进度 0→50%）
+    showProgress('导入数据', '正在读取文件…', 0, '总大小 ' + formatSize(file.size), false);
+    var simPct = 0;
+    var simTimer = setInterval(function() {
+      if (simPct < 50) {
+        simPct += Math.random() * 3 + 1;
+        if (simPct > 50) simPct = 50;
+        showProgress('导入数据', '正在读取文件…', simPct, '', false);
+      } else {
+        clearInterval(simTimer);
+      }
+    }, 150);
     var reader = new FileReader();
     reader.onload = function(e) {
+      clearInterval(simTimer);
+      // 阶段2: 上传文件（真实进度 50→95%）
+      showProgress('导入数据', '正在上传…', 50, '总大小 ' + formatSize(file.size), false);
       var xhr = new XMLHttpRequest();
+      _progressXhr = xhr;
       xhr.open('POST', '/api/bbs/import', true);
       xhr.setRequestHeader('Content-Type', 'application/octet-stream');
       xhr.setRequestHeader('X-Auth-Token', TOKEN);
       xhr.responseType = 'json';
+      xhr.upload.onprogress = function(pe) {
+        if (pe.lengthComputable) {
+          var pct = 50 + (pe.loaded / pe.total) * 45;
+          showProgress('导入数据', '正在上传…', pct,
+            formatSize(pe.loaded) + ' / ' + formatSize(pe.total), false);
+        }
+      };
       xhr.onload = function() {
-        if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+        _progressXhr = null;
         if (xhr.response && xhr.response.ok) {
+          showProgress('导入数据', '导入完成', 100, '总大小 ' + formatSize(file.size), true);
           showToast('导入成功');
-          loadTopics();
+          setTimeout(function() { hideProgress(); loadTopics(); }, 1500);
         } else if (xhr.status === 403) {
+          hideProgress();
           showToast('无权限');
         } else if (xhr.response && xhr.response.error) {
+          hideProgress();
           showToast('导入失败: ' + xhr.response.error);
         } else {
+          hideProgress();
           showToast('导入失败');
         }
       };
       xhr.onerror = function() {
-        if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+        _progressXhr = null;
+        hideProgress();
         showToast('导入失败: 网络错误');
       };
       xhr.send(e.target.result);
