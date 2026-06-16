@@ -1878,6 +1878,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             root = Path(__file__).resolve().parent
             skip_prefixes = {'.data', '.cache', '.git', '__pycache__', '.versions', '.claude'}
             count = 0
+            uploaded_names = []
             for name in zf.namelist():
                 if name.endswith('/'):
                     continue
@@ -1890,9 +1891,21 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(zf.read(name))
                 count += 1
+                uploaded_names.append(name)
             zf.close()
-            log(f'源码上传 by {user.get("username", "?")} ({count} 个文件)')
-            self._send_json({'ok': True, 'files': count})
+            needs_restart = 'app.py' in uploaded_names or 'server.py' in uploaded_names
+            log(f'源码上传 by {user.get("username", "?")} ({count} 个文件)' + (' ，将重启' if needs_restart else ''))
+            self._send_json({'ok': True, 'files': count, 'restart': needs_restart})
+            if needs_restart:
+                import threading, os, sys, time
+                def _delayed_restart():
+                    time.sleep(1)
+                    try:
+                        import subprocess
+                        subprocess.Popen([sys.executable] + sys.argv)
+                    except: pass
+                    os._exit(0)
+                threading.Thread(target=_delayed_restart, daemon=False).start()
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
 

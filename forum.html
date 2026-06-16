@@ -983,7 +983,9 @@
       xhr.onload = function() {
         if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
         if (xhr.response && xhr.response.ok) {
-          showToast('上传成功，共 ' + xhr.response.files + ' 个文件');
+          var msg = '上传成功，共 ' + xhr.response.files + ' 个文件';
+          if (xhr.response.restart) msg += '，服务器正在重启…';
+          showToast(msg);
         } else if (xhr.status === 403) {
           showToast('无权限');
         } else if (xhr.response && xhr.response.error) {
