@@ -28,6 +28,12 @@
         <div class="bbs-user-area">
           <div id="bbs-user-badge" class="bbs-user-badge" style="display:none;">
             <span id="bbs-username"></span>
+            <!-- 管理员专属操作 -->
+            <span id="bbs-admin-actions" class="bbs-admin-actions" style="display:none;">
+              <button class="bbs-login-btn" onclick="bbsExport()" title="导出全部论坛数据为 ZIP">导出</button>
+              <button class="bbs-login-btn" onclick="document.getElementById('bbs-import-input').click()" title="从 ZIP 导入覆盖全部论坛数据">导入</button>
+              <input type="file" id="bbs-import-input" accept=".zip" style="display:none">
+            </span>
             <button class="bbs-logout-btn" onclick="bbsLogout()">退出</button>
           </div>
           <button class="bbs-login-btn" id="bbs-login-btn" onclick="bbsShowLogin()">登录</button>
@@ -86,6 +92,24 @@
   </div>
 </div>
 
+<!-- 导入导出进度弹窗 -->
+<div id="bbs-progress-modal" class="bbs-modal-overlay" style="display:none;">
+  <div class="bbs-modal bbs-progress-modal">
+    <h3 id="bbs-progress-title">导出数据</h3>
+    <div class="bbs-progress-status" id="bbs-progress-status">准备中…</div>
+    <div class="bbs-progress-bar-track">
+      <div class="bbs-progress-bar-fill" id="bbs-progress-fill"></div>
+    </div>
+    <div class="bbs-progress-info">
+      <span id="bbs-progress-percent">0%</span>
+      <span id="bbs-progress-size"></span>
+    </div>
+    <div class="bbs-modal-actions" id="bbs-progress-actions">
+      <button class="bbs-modal-secondary" onclick="bbsCloseProgress()">取消</button>
+    </div>
+  </div>
+</div>
+
 <script src="/js/navbar.js"></script>
 <script>window.showFooter = false;</script>
 <script src="/js/main.js"></script>
@@ -94,7 +118,7 @@
   var TOKEN = localStorage.getItem('bbs_token') || '';
   var USER = localStorage.getItem('bbs_user') || '';
   var USER_ID = localStorage.getItem('bbs_user_id') || '';
-  var ROLE = '';
+  var ROLE = localStorage.getItem('bbs_role') || '';
 
   // ── 工具函数 ──
 
@@ -153,6 +177,10 @@
       var badge = document.getElementById('bbs-user-badge');
       badge.style.display = '';
       document.getElementById('bbs-username').textContent = USER;
+      // 管理员显示导入导出按钮
+      if (ROLE === 'admin') {
+        document.getElementById('bbs-admin-actions').style.display = '';
+      }
     }
     loadTopics();
   }
@@ -189,11 +217,14 @@
           localStorage.setItem('bbs_token', TOKEN);
           localStorage.setItem('bbs_user', USER);
           localStorage.setItem('bbs_user_id', USER_ID);
+          localStorage.setItem('bbs_role', ROLE);
           document.getElementById('bbs-login-modal').style.display = 'none';
           document.getElementById('bbs-login-btn').style.display = 'none';
           var badge = document.getElementById('bbs-user-badge');
           badge.style.display = '';
           document.getElementById('bbs-username').textContent = USER;
+          // 管理员显示导入导出按钮
+          document.getElementById('bbs-admin-actions').style.display = ROLE === 'admin' ? '' : 'none';
           showToast('登录成功，欢迎 ' + USER);
         } else if (res.error === 'auth_failed') {
           showLoginError('用户名或密码错误');
@@ -211,9 +242,11 @@
     USER = '';
     USER_ID = '';
     ROLE = '';
+    document.getElementById('bbs-admin-actions').style.display = 'none';
     localStorage.removeItem('bbs_token');
     localStorage.removeItem('bbs_user');
     localStorage.removeItem('bbs_user_id');
+    localStorage.removeItem('bbs_role');
     document.getElementById('bbs-user-badge').style.display = 'none';
     document.getElementById('bbs-login-btn').style.display = '';
     showToast('已退出登录');
@@ -472,6 +505,157 @@
       .catch(function() { showToast('网络错误'); })
       .finally(function() { btn.disabled = false; btn.textContent = '发布'; });
   };
+
+  // ── 导入导出（带进度） ──
+
+  var _progressXhr = null;
+
+  function formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    var units = ['B', 'KB', 'MB', 'GB'];
+    var i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+  }
+
+  function showProgress(title, status, pct, sizeText, closable) {
+    document.getElementById('bbs-progress-title').textContent = title;
+    document.getElementById('bbs-progress-status').textContent = status;
+    document.getElementById('bbs-progress-fill').style.width = Math.min(pct, 100) + '%';
+    document.getElementById('bbs-progress-percent').textContent = Math.round(pct) + '%';
+    document.getElementById('bbs-progress-size').textContent = sizeText || '';
+    document.getElementById('bbs-progress-actions').style.display = closable ? '' : 'none';
+    document.getElementById('bbs-progress-modal').style.display = '';
+  }
+
+  function hideProgress() {
+    document.getElementById('bbs-progress-modal').style.display = 'none';
+  }
+
+  window.bbsCloseProgress = function() {
+    if (_progressXhr) {
+      try { _progressXhr.abort(); } catch(e) {}
+      _progressXhr = null;
+    }
+    hideProgress();
+    showToast('已取消');
+  };
+
+  window.bbsExport = function() {
+    if (!TOKEN || ROLE !== 'admin') { showToast('无权限'); return; }
+    showProgress('导出数据', '正在生成 ZIP 压缩包…', 10, '', false);
+    var xhr = new XMLHttpRequest();
+    _progressXhr = xhr;
+    xhr.responseType = 'blob';
+    xhr.open('GET', '/api/bbs/export', true);
+    xhr.setRequestHeader('X-Auth-Token', TOKEN);
+
+    xhr.onprogress = function(e) {
+      if (e.lengthComputable) {
+        var pct = 10 + (e.loaded / e.total) * 80;
+        showProgress('导出数据', '正在下载 ZIP…', pct, formatSize(e.loaded) + ' / ' + formatSize(e.total), false);
+      } else {
+        showProgress('导出数据', '正在下载 ZIP…', 50, formatSize(e.loaded), false);
+      }
+    };
+
+    xhr.onload = function() {
+      _progressXhr = null;
+      if (xhr.status === 200) {
+        showProgress('导出数据', '下载完成', 100, formatSize(xhr.response.size), true);
+        // 触发浏览器下载
+        var blob = xhr.response;
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'bbs-backup.zip';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+        showToast('导出成功（' + formatSize(blob.size) + '）');
+        setTimeout(hideProgress, 2000);
+      } else if (xhr.status === 403) {
+        hideProgress();
+        showToast('导出失败：无权限');
+      } else {
+        hideProgress();
+        showToast('导出失败（' + xhr.status + '）');
+      }
+    };
+
+    xhr.onerror = function() {
+      _progressXhr = null;
+      hideProgress();
+      showToast('导出失败：网络错误');
+    };
+
+    xhr.send();
+  };
+
+  window.bbsImport = function() {
+    document.getElementById('bbs-import-input').click();
+  };
+
+  document.getElementById('bbs-import-input').addEventListener('change', function() {
+    var file = this.files[0];
+    if (!file) return;
+    if (!file.name.endsWith('.zip')) {
+      showToast('请选择 .zip 文件');
+      this.value = '';
+      return;
+    }
+    if (!confirm('确定导入数据？这将覆盖全部现有论坛数据。\n文件大小：' + formatSize(file.size))) {
+      this.value = '';
+      return;
+    }
+
+    showProgress('导入数据', '正在上传…', 0, '总大小 ' + formatSize(file.size), false);
+
+    var xhr = new XMLHttpRequest();
+    _progressXhr = xhr;
+    xhr.open('POST', '/api/bbs/import', true);
+    xhr.setRequestHeader('X-Auth-Token', TOKEN);
+
+    xhr.upload.onprogress = function(e) {
+      if (e.lengthComputable) {
+        var pct = (e.loaded / e.total) * 90;
+        showProgress('导入数据', '正在上传…', pct,
+          formatSize(e.loaded) + ' / ' + formatSize(e.total), false);
+      } else {
+        showProgress('导入数据', '正在上传…', 45, formatSize(e.loaded), false);
+      }
+    };
+
+    xhr.onload = function() {
+      _progressXhr = null;
+      if (xhr.status === 200) {
+        var res = JSON.parse(xhr.responseText);
+        if (res.ok) {
+          showProgress('导入数据', '导入完成', 100, '总大小 ' + formatSize(file.size), true);
+          showToast('导入成功');
+          setTimeout(function() { hideProgress(); location.reload(); }, 1500);
+        } else {
+          hideProgress();
+          showToast('导入失败：' + (res.error || '服务器错误'));
+        }
+      } else if (xhr.status === 403) {
+        hideProgress();
+        showToast('导入失败：无权限');
+      } else {
+        hideProgress();
+        showToast('导入失败（' + xhr.status + '）');
+      }
+    };
+
+    xhr.onerror = function() {
+      _progressXhr = null;
+      hideProgress();
+      showToast('导入失败：网络错误');
+    };
+
+    xhr.send(file);
+    this.value = '';
+  });
 
   document.getElementById('bbs-post-modal').addEventListener('click', function(e) {
     if (e.target === this) bbsClosePost();
