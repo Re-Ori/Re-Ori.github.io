@@ -156,7 +156,17 @@
     localStorage.removeItem('bbs_token');
     localStorage.removeItem('bbs_user');
     localStorage.removeItem('bbs_user_id');
-    location.reload();
+    // 更新 UI：隐藏用户信息，显示登录按钮
+    document.getElementById('bbs-login-btn').style.display = '';
+    document.getElementById('bbs-user-badge').style.display = 'none';
+    document.getElementById('bbs-admin-actions').style.display = 'none';
+    // 关闭已打开的详情/弹窗
+    document.getElementById('bbs-detail').style.display = 'none';
+    var postModal = document.getElementById('bbs-post-modal');
+    if (postModal) postModal.style.display = 'none';
+    // 重新加载帖子列表（登录后可见的内容会被隐藏）
+    loadTopics();
+    showToast('登录已失效，请重新登录');
   }
 
   function escapeHtml(s) {
@@ -260,6 +270,7 @@
           localStorage.removeItem('bbs_token');
           localStorage.removeItem('bbs_user');
           localStorage.removeItem('bbs_user_id');
+          showToast('登录已失效，请重新登录');
         }
         loadTopics();
       }).catch(function() {

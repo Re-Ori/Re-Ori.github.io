@@ -40,6 +40,11 @@ STATS_AGGREGATE_FILE = STATS_DIR / "aggregate.json"
 _stats_lock = threading.RLock()
 _STATS_DIRTY = False
 
+# stats 响应缓存（避免每请求重建 1008 个 slot 条目 + 读短链磁盘）
+_stats_cache: dict | None = None
+_stats_cache_ts = 0.0
+_STATS_CACHE_TTL = 10.0  # 秒
+
 def _load_stats():
     """从磁盘加载聚合统计数据，文件不存在时返回初始值"""
     try:
@@ -205,54 +210,37 @@ def _get_daily_7d():
     daily = _load_daily()
     today = datetime.now()
     result = []
+    CATS = ("total","p2p","short_link","short_link_redirect","bbs",
+            "github_proxy","giscus_proxy","stats","other_api","static")
     for i in range(6, -1, -1):
         d = (today - timedelta(days=i)).strftime("%Y-%m-%d")
         day = daily.get(d, {})
-        entry = {
-            "date": d,
-            "total": day.get("total", 0),
-            "p2p": day.get("p2p", 0),
-            "short_link": day.get("short_link", 0),
-            "short_link_redirect": day.get("short_link_redirect", 0),
-            "bbs": day.get("bbs", 0),
-            "github_proxy": day.get("github_proxy", 0),
-            "giscus_proxy": day.get("giscus_proxy", 0),
-            "stats": day.get("stats", 0),
-            "other_api": day.get("other_api", 0),
-            "static": day.get("static", 0),
-            "bw_sent": day.get("bw_sent", 0),
-            "bw_recv": day.get("bw_recv", 0),
-        }
-        # 每10分钟明细
+        entry = {"date": d}
+        for c in CATS:
+            entry[c] = day.get(c, 0)
+        entry["bw_sent"] = day.get("bw_sent", 0)
+        entry["bw_recv"] = day.get("bw_recv", 0)
+
+        # 每10分钟明细 — 对象套数组，避免 144×字段名 重复
         raw = day.get("slots", {})
-        slots = []
+        out = {}
+        for c in CATS:
+            out[c] = []
         for si in range(144):
-            sk = str(si)
-            sd = raw.get(sk, {})
-            slots.append({
-                "slot": si,
-                "total": sd.get("total", 0),
-                "p2p": sd.get("p2p", 0),
-                "short_link": sd.get("short_link", 0),
-                "bbs": sd.get("bbs", 0),
-                "github_proxy": sd.get("github_proxy", 0),
-                "giscus_proxy": sd.get("giscus_proxy", 0),
-                "other_api": sd.get("other_api", 0),
-                "static": sd.get("static", 0),
-            })
-        entry["slots"] = slots
-        # 每10分钟带宽明细
+            sd = raw.get(str(si), {})
+            for c in CATS:
+                out[c].append(sd.get(c, 0))
+        entry["slots"] = out
+
+        # 带宽明细同理
         bw_raw = day.get("bw_slots", {})
-        bw_slots = []
+        bw_out = {"sent": [], "recv": []}
         for si in range(144):
-            sk = str(si)
-            bd = bw_raw.get(sk, {})
-            bw_slots.append({
-                "slot": si,
-                "sent": bd.get("sent", 0),
-                "recv": bd.get("recv", 0),
-            })
-        entry["bw_slots"] = bw_slots
+            bd = bw_raw.get(str(si), {})
+            bw_out["sent"].append(bd.get("sent", 0))
+            bw_out["recv"].append(bd.get("recv", 0))
+        entry["bw_slots"] = bw_out
+
         result.append(entry)
     return result
 
@@ -288,9 +276,11 @@ def _bbs_load_tokens():
         BBS_TOKENS = {}
 
 def _bbs_save_tokens():
-    """将 BBS Token 持久化到磁盘"""
+    """将 BBS Token 持久化到磁盘（原子写入）"""
     BBS_TOKENS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    BBS_TOKENS_FILE.write_text(json.dumps(BBS_TOKENS, ensure_ascii=False), encoding='utf-8')
+    tmp = BBS_TOKENS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(BBS_TOKENS, ensure_ascii=False), encoding='utf-8')
+    tmp.replace(BBS_TOKENS_FILE)
 
 def _bbs_token():
     import hashlib, os
@@ -389,7 +379,9 @@ def _sl_load():
 
 def _sl_save(d):
     SHORT_LINKS_DIR.mkdir(parents=True, exist_ok=True)
-    SHORT_LINKS_FILE.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+    tmp = SHORT_LINKS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(SHORT_LINKS_FILE)
 
 # server.py \u542f\u52a8\u65f6\u4f1a\u6ce8\u5165\u6b64\u53d8\u91cf
 CONFIG = {}
@@ -1368,15 +1360,25 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
 
     def _handle_stats(self):
         """GET /api/stats — 返回全站统计数据"""
-        sl_total, sl_expired = 0, 0
-        try:
-            links = _sl_load()
-            now = time.time()
-            for v in links.values():
-                sl_total += 1
-                if isinstance(v, dict) and v.get('expires_at') and now > v['expires_at']:
-                    sl_expired += 1
-        except: pass
+        global _stats_cache, _stats_cache_ts
+        now_ts = time.time()
+
+        # 缓存命中：跳过磁盘读取和 slot 构建，直接复用
+        if _stats_cache and now_ts - _stats_cache_ts < _STATS_CACHE_TTL:
+            sl_total, sl_expired = _stats_cache["sl"]
+            daily_7d = _stats_cache["daily_7d"]
+        else:
+            sl_total, sl_expired = 0, 0
+            try:
+                links = _sl_load()
+                for v in links.values():
+                    sl_total += 1
+                    if isinstance(v, dict) and v.get('expires_at') and now_ts > v['expires_at']:
+                        sl_expired += 1
+            except: pass
+            daily_7d = _get_daily_7d()
+            _stats_cache = {"sl": (sl_total, sl_expired), "daily_7d": daily_7d}
+            _stats_cache_ts = now_ts
 
         with _stats_lock:
             r = dict(_stats.get("requests", {}))
@@ -1408,7 +1410,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 "relay_bytes": p.get("relay_bytes", 0),
                 "peak_peers": p.get("peak_peers", 0),
             },
-            "daily_7d": _get_daily_7d(),
+            "daily_7d": daily_7d,
             "short_links": {
                 "total": sl_total,
                 "expired": sl_expired,

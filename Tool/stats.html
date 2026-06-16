@@ -455,7 +455,7 @@
     if (!daily || daily.length < 1) return [];
     var today = daily[daily.length - 1];
     var yesterday = daily.length > 1 ? daily[daily.length - 2] : null;
-    if (!today.slots || today.slots.length < 1) return [];
+    if (!today.slots || !today.slots.total || today.slots.total.length < 1) return [];
 
     var now = new Date();
     var currentSlot = Math.floor((now.getHours() * 60 + now.getMinutes()) / 10);
@@ -465,22 +465,25 @@
     var needFromYesterday = 144 - currentSlot;
     var result = [];
 
-    if (yesterday && yesterday.slots) {
+    function getSlot(src, i) {
+      return {
+        total: src.total[i] || 0,
+        p2p: src.p2p[i] || 0,
+        short_link: src.short_link[i] || 0,
+        bbs: src.bbs[i] || 0,
+        github_proxy: src.github_proxy[i] || 0,
+        giscus_proxy: src.giscus_proxy[i] || 0,
+        other_api: src.other_api[i] || 0,
+        static: src.static[i] || 0,
+      };
+    }
+
+    if (yesterday && yesterday.slots && yesterday.slots.total) {
       var yStart = Math.max(0, 143 - needFromYesterday);
       for (var i = yStart; i < 144; i++) {
-        var s = yesterday.slots[i];
-        result.push({
-          slot: result.length,
-          total: s ? s.total : 0,
-          p2p: s ? s.p2p : 0,
-          short_link: s ? s.short_link : 0,
-          bbs: s ? s.bbs : 0,
-          github_proxy: s ? s.github_proxy : 0,
-          giscus_proxy: s ? s.giscus_proxy : 0,
-          other_api: s ? s.other_api : 0,
-          static: s ? s.static : 0,
-          _hour: 0
-        });
+        var s = getSlot(yesterday.slots, i);
+        s.slot = result.length; s._hour = 0;
+        result.push(s);
       }
     } else {
       for (var i = 0; i < needFromYesterday; i++) {
@@ -488,19 +491,10 @@
       }
     }
 
-    for (var i = 0; i <= currentSlot && i < today.slots.length; i++) {
-      var s = today.slots[i];
-      result.push({
-        slot: result.length,
-        total: s ? s.total : 0,
-        p2p: s ? s.p2p : 0,
-        short_link: s ? s.short_link : 0,
-        bbs: s ? s.bbs : 0,
-        github_proxy: s ? s.github_proxy : 0,
-        giscus_proxy: s ? s.giscus_proxy : 0,
-        other_api: s ? s.other_api : 0,
-        static: s ? s.static : 0
-      });
+    for (var i = 0; i <= currentSlot && i < today.slots.total.length; i++) {
+      var s = getSlot(today.slots, i);
+      s.slot = result.length;
+      result.push(s);
     }
     return result;
   }
@@ -509,7 +503,7 @@
     if (!daily || daily.length < 1) return [];
     var today = daily[daily.length - 1];
     var yesterday = daily.length > 1 ? daily[daily.length - 2] : null;
-    if (!today.bw_slots || today.bw_slots.length < 1) return [];
+    if (!today.bw_slots || !today.bw_slots.sent || today.bw_slots.sent.length < 1) return [];
 
     var now = new Date();
     var currentSlot = Math.floor((now.getHours() * 60 + now.getMinutes()) / 10);
@@ -517,20 +511,18 @@
     var needFromYesterday = 144 - currentSlot;
     var result = [];
 
-    if (yesterday && yesterday.bw_slots) {
+    if (yesterday && yesterday.bw_slots && yesterday.bw_slots.sent) {
       var yStart = Math.max(0, 143 - needFromYesterday);
       for (var i = yStart; i < 144; i++) {
-        var s = yesterday.bw_slots[i];
-        result.push({ slot: result.length, sent: s ? s.sent : 0, recv: s ? s.recv : 0 });
+        result.push({ slot: result.length, sent: yesterday.bw_slots.sent[i] || 0, recv: yesterday.bw_slots.recv[i] || 0 });
       }
     } else {
       for (var i = 0; i < needFromYesterday; i++) {
         result.push({ slot: result.length, sent: 0, recv: 0 });
       }
     }
-    for (var i = 0; i <= currentSlot && i < today.bw_slots.length; i++) {
-      var s = today.bw_slots[i];
-      result.push({ slot: result.length, sent: s ? s.sent : 0, recv: s ? s.recv : 0 });
+    for (var i = 0; i <= currentSlot && i < today.bw_slots.sent.length; i++) {
+      result.push({ slot: result.length, sent: today.bw_slots.sent[i] || 0, recv: today.bw_slots.recv[i] || 0 });
     }
     return result;
   }
