@@ -5,6 +5,7 @@ import os, sys, json, time, ssl, threading, http.server
 import urllib.parse, urllib.request, urllib.error
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
+import atexit
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 ACME_CHALLENGE_ROOTS: list[Path] = [PROJECT_ROOT]
@@ -66,16 +67,18 @@ def _load_stats():
 
 _stats = _load_stats()
 
-def _save_stats():
-    """将聚合统计数据写入磁盘"""
+def _save_stats(force=False):
+    """将聚合统计数据写入磁盘（原子写入：先写 tmp 再 rename）"""
     global _STATS_DIRTY
-    if not _STATS_DIRTY:
+    if not _STATS_DIRTY and not force:
         return
     try:
         STATS_DIR.mkdir(parents=True, exist_ok=True)
         with _stats_lock:
             data = dict(_stats)
-        STATS_AGGREGATE_FILE.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        tmp = STATS_AGGREGATE_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(STATS_AGGREGATE_FILE)
         _STATS_DIRTY = False
     except: pass
 
@@ -139,7 +142,7 @@ def _track_bandwidth(sent=0, received=0):
         bw_slots = day.setdefault("bw_slots", {})
         bs = bw_slots.setdefault(slot, {"sent": 0, "recv": 0})
         bs["sent"] = bs.get("sent", 0) + sent
-        bs["recv"] = bs.get("recv", 0) + recv
+        bs["recv"] = bs.get("recv", 0) + received
         _DAILY_DIRTY = True
     except: pass
 
@@ -163,13 +166,15 @@ def _load_daily():
     _DAILY_CACHE = {}
     return _DAILY_CACHE
 
-def _save_daily():
+def _save_daily(force=False):
     global _DAILY_DIRTY, _DAILY_CACHE
-    if not _DAILY_DIRTY or _DAILY_CACHE is None:
+    if (not _DAILY_DIRTY or _DAILY_CACHE is None) and not force:
         return
     try:
         STATS_DIR.mkdir(parents=True, exist_ok=True)
-        STATS_DAILY_FILE.write_text(json.dumps(_DAILY_CACHE, ensure_ascii=False), encoding="utf-8")
+        tmp = STATS_DAILY_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(_DAILY_CACHE, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(STATS_DAILY_FILE)
         _DAILY_DIRTY = False
     except: pass
 
@@ -260,6 +265,10 @@ def _stats_flusher():
         except: pass
 
 threading.Thread(target=_stats_flusher, daemon=True).start()
+
+# 注册退出钩子，确保进程正常退出时统计数据和 daily 数据落盘
+atexit.register(_save_stats, force=True)
+atexit.register(_save_daily, force=True)
 
 BBS_TOKENS: dict[str, dict] = {}
 BBS_TOKEN_TTL = 86400  # 24h
@@ -1894,6 +1903,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 import threading, os, sys, time
                 def _delayed_restart():
                     time.sleep(1)
+                    _save_stats(force=True)
+                    _save_daily(force=True)
                     try:
                         import subprocess
                         subprocess.Popen([sys.executable] + sys.argv)
