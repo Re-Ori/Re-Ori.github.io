@@ -421,16 +421,19 @@
     return html;
   }
 
-  function authorBadges(authorId, authorRole, authorTags) {
+  function authorBadges(authorId, authorRole, authorTags, hiddenTags) {
     var badges = [];
-    // 管理员标识
     if (authorRole === 'admin') badges.push('<span class="bbs-role-badge admin">管理员</span>');
-    // 自己（蓝色）
     if (TOKEN && authorId && authorId === USER_ID) badges.push('<span class="bbs-role-badge self">自己</span>');
-    // 自定义标签（紫色）
     if (authorTags && authorTags.length > 0) {
       for (var i = 0; i < authorTags.length; i++) {
         badges.push('<span class="bbs-role-badge custom">' + escapeHtml(authorTags[i]) + '</span>');
+      }
+    }
+    // 隐藏标签（仅管理员可见，描边样式）
+    if (hiddenTags && hiddenTags.length > 0 && ROLE === 'admin') {
+      for (var i = 0; i < hiddenTags.length; i++) {
+        badges.push('<span class="bbs-role-badge custom-outline">' + escapeHtml(hiddenTags[i]) + '</span>');
       }
     }
     return badges.join('');
@@ -864,7 +867,8 @@
 
     var time = new Date(topic.created_at * 1000).toLocaleString();
     var authorName = topic.author_name || '账号不存在';
-    var topicBadges = authorBadges(topic.author_id, topic.author_role, topic.author_tags);
+    var topicHiddenTags = (topic.hidden_tags_map && topic.hidden_tags_map[topic.author_id]) || null;
+    var topicBadges = authorBadges(topic.author_id, topic.author_role, topic.author_tags, topicHiddenTags);
     var replies = topic.replies || [];
     var repliesHtml = '';
   // 两级渲染：一级 + 二级（平行缩进）
@@ -894,7 +898,8 @@
     function _rItem(r, isChild) {
       var rt = new Date(r.created_at * 1000).toLocaleString();
       var rAuthor = r.author_name || '账号不存在';
-      var rBadges = authorBadges(r.author_id, r.author_role, r.author_tags);
+      var rHiddenTags = (topic.hidden_tags_map && topic.hidden_tags_map[r.author_id]) || null;
+      var rBadges = authorBadges(r.author_id, r.author_role, r.author_tags, rHiddenTags);
       if (topic.author_id && r.author_id && r.author_id === topic.author_id) {
         rBadges += '<span class="bbs-role-badge author">贴主</span>';
       }
