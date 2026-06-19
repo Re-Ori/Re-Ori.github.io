@@ -951,11 +951,11 @@
         '<div class="bbs-reply-input-area" id="bbs-reply-input-area">' +
         mdRenderToolbar('bbs-reply-content') +
         '<div class="bbs-md-split">' +
-        '<textarea id="bbs-reply-content" placeholder="输入回复…（支持 Markdown）" maxlength="1024"></textarea>' +
+        '<textarea id="bbs-reply-content" placeholder="输入回复…（支持 Markdown）"></textarea>' +
         '<div class="bbs-md-preview" id="bbs-reply-content-preview"></div>' +
         '</div>' +
         '<div class="bbs-reply-submit-wrap">' +
-        '<span class="bbs-reply-count"><span id="bbs-reply-char">0</span>/1024</span>' +
+        '<span class="bbs-reply-count"><span id="bbs-reply-char">0</span> 字</span>' +
         '<button class="bbs-reply-submit" onclick="bbsDoReply(\'' + topic.id + '\')">回复 <span style="font-size:11px;opacity:0.6;">Ctrl+Enter</span></button>' +
         '</div></div>';
     } else {
@@ -1375,7 +1375,7 @@
     var sName = escapeHtml(rname);
     var html = '<div id="bbs-inline-reply" style="margin:8px 0 12px 0;padding:10px 14px;background:rgba(0,0,0,0.02);border-radius:8px;">' +
       '<div style="font-size:12px;color:#999;margin-bottom:6px;">回复 @' + sName + '</div>' +
-      '<textarea id="bbs-inline-input" style="width:100%;padding:8px 10px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;font-size:13px;resize:none;height:60px;box-sizing:border-box;outline:none;background:rgba(255,255,255,0.8);color:#333;" placeholder="输入回复…" maxlength="1024"></textarea>' +
+      '<textarea id="bbs-inline-input" style="width:100%;padding:8px 10px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;font-size:13px;resize:none;height:60px;box-sizing:border-box;outline:none;background:rgba(255,255,255,0.8);color:#333;" placeholder="输入回复…"></textarea>' +
       '<div style="display:flex;gap:6px;margin-top:6px;">' +
       '<button onclick="bbsDoInlineReply(\'' + tid + '\')" style="padding:5px 14px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;background:var(--theme-color,#399FFF);color:#fff;">发送</button>' +
       '<button onclick="bbsCancelInlineReply()" style="padding:5px 14px;border:none;border-radius:6px;font-size:12px;cursor:pointer;background:rgba(0,0,0,0.05);color:#555;">取消</button>' +
@@ -1393,7 +1393,6 @@
     if (!input) return;
     var content = input.value.trim();
     if (!content) { showToast('请输入回复内容'); return; }
-    if (content.length > 1024) { showToast('回复不能超过 1024 字'); return; }
     var body = { content: content };
     if (_replyToId) body.reply_to = _replyToId;
     api('POST', '/api/bbs/topics/' + tid + '/reply', body).then(function(res) {
@@ -1415,7 +1414,6 @@
     var input = document.getElementById('bbs-reply-content');
     var content = input.value.trim();
     if (!content) { showToast('请输入回复内容'); return; }
-    if (content.length > 1024) { showToast('回复不能超过 1024 字'); return; }
     var btn = document.querySelector('.bbs-reply-submit');
     btn.disabled = true; btn.textContent = '提交中…';
     var replyBody = { content: content };

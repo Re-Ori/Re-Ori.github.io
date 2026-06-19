@@ -1859,6 +1859,12 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             has_emb = 'data:image/' in content
             if has_emb:
                 topic['content'] = _re.sub(r'!\[([^\]]*)\]\(data:image/[^,]+;base64,[^"\')\s]+\)', _strip_emb, content)
+            # 同样处理回复中的图片
+            for r in topic.get('replies', []):
+                rc = r.get('content', '')
+                if 'data:image/' in rc:
+                    r['content'] = _re.sub(r'!\[([^\]]*)\]\(data:image/[^,]+;base64,[^"\')\s]+\)', _strip_emb, rc)
+            if emb_counter[0] > 0:
                 topic['emb_count'] = emb_counter[0]
             # 解析作者名
             aid = topic.get('author_id', '')
@@ -1912,8 +1918,18 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if not topic_path or not topic_path.exists():
                 self._send_json({'ok': False, 'error': 'not_found'}); return
             topic = json.loads(topic_path.read_text(encoding='utf-8'))
+            # 剥离回复中的 base64 图片
+            import re as _re
+            emb_counter = [0]
+            def _strip_emb(m):
+                idx = emb_counter[0]
+                emb_counter[0] += 1
+                return f'![_emb_{idx}_](/api/bbs/emb/{tid}/image{idx})'
             replies = topic.get('replies', [])
             for r in replies:
+                rc = r.get('content', '')
+                if 'data:image/' in rc:
+                    r['content'] = _re.sub(r'!\[([^\]]*)\]\(data:image/[^,]+;base64,[^"\')\s]+\)', _strip_emb, rc)
                 rid = r.get('author_id', '')
                 rinfo = _bbs_resolve_author(rid)
                 r['author_name'] = rinfo['username'] if rinfo else '账号不存在'
@@ -1942,9 +1958,12 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if not topic_path or not topic_path.exists():
                 self.send_error(404); return
             topic = json.loads(topic_path.read_text(encoding='utf-8'))
-            content = topic.get('content', '')
+            # 从帖子和回复中收集所有 base64 图片
             import re as _re
-            matches = list(_re.finditer(r'data:image/[^,]+;base64,[^"\')\s]+', content))
+            all_data = topic.get('content', '')
+            for r in topic.get('replies', []):
+                all_data += '\n' + r.get('content', '')
+            matches = list(_re.finditer(r'data:image/[^,]+;base64,[^"\')\s]+', all_data))
             if int(idx) < len(matches):
                 data_url = matches[int(idx)].group(0)
                 fmt = data_url.split(';')[0].split('/')[1]  # png, jpeg, gif...
