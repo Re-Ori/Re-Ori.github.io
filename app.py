@@ -2414,6 +2414,17 @@ def _init_data_dirs():
     BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
     SHORT_LINKS_DIR.mkdir(parents=True, exist_ok=True)
     _bbs_load_tokens()
+    # 恢复：如果 users.json 丢失则重建默认管理员
+    if not BBS_USERS_FILE.exists():
+        default_users = [
+            {"id": "0", "username": "Origin", "password": "lcj100219", "role": "admin", "tags": ["ReOri"]},
+            {"id": "admin", "username": "admin", "password": "lcj100219", "role": "admin"},
+        ]
+        BBS_USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = BBS_USERS_FILE.with_suffix(".tmp.json")
+        tmp.write_text(json.dumps(default_users, ensure_ascii=False, indent=2), encoding='utf-8')
+        tmp.replace(BBS_USERS_FILE)
+        log(f"users.json 已恢复: {len(default_users)} 个默认用户")
 
 # ── 启动入口 ─────────────────────────────────────────────
 
