@@ -144,6 +144,7 @@
 .bbs-role-badge.self { background: rgba(57,159,255,0.12); color: #399FFF; }
 .bbs-role-badge.author { background: rgba(52,199,89,0.12); color: #34c759; }
 .bbs-role-badge.custom { background: rgba(175,82,222,0.12); color: #af52de; }
+.bbs-role-badge.custom-outline { background: transparent; color: #af52de; border: 1px solid rgba(175,82,222,0.35); }
 .bbs-author-link {
   cursor: pointer; color: var(--theme-color,#399FFF);
   transition: opacity 0.15s;

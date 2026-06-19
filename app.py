@@ -487,10 +487,12 @@ def _bbs_resolve_author(author_id):
         users = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
         for u in users:
             if u.get('id') == author_id:
+                tags = u.get('tags', [])
+                visible_tags = [t for t in tags if not (isinstance(t, str) and t.startswith('_'))]
                 return {
                     'username': u.get('username', ''),
                     'role': u.get('role', 'user'),
-                    'tags': u.get('tags', []),
+                    'tags': visible_tags,
                     'last_login': u.get('last_login', 0),
                 }
     except:
@@ -2422,7 +2424,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                         'content_preview': t.get('content_preview', ''),
                     })
             user_topics.sort(key=lambda x: x.get('created_at', 0), reverse=True)
-            self._send_json({
+            resp = {
                 'ok': True,
                 'user_id': uid,
                 'username': info['username'],
@@ -2431,7 +2433,21 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 'last_login': info.get('last_login', 0),
                 'topics': user_topics,
                 'topic_count': len(user_topics),
-            })
+            }
+            # 管理员查看时附带隐藏标签
+            req_user = _bbs_check(self.headers)
+            if req_user and req_user.get('role') == 'admin':
+                try:
+                    all_u = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
+                    for u in all_u:
+                        if u.get('id') == uid:
+                            all_tags = u.get('tags', [])
+                            hidden = [t[1:] for t in all_tags if isinstance(t, str) and t.startswith('_')]
+                            if hidden:
+                                resp['hidden_tags'] = hidden
+                            break
+                except: pass
+            self._send_json(resp)
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
 

@@ -277,7 +277,7 @@
       <option value="admin">管理员</option>
     </select>
     <div style="font-size:13px;color:#888;margin-bottom:4px;">标签：</div>
-    <input type="text" id="bbs-user-form-tags" placeholder="用英文逗号分隔" autocomplete="off">
+    <input type="text" id="bbs-user-form-tags" placeholder="用英文逗号分隔，下划线开头仅管理员可见" autocomplete="off">
     <div class="bbs-modal-actions">
       <button class="bbs-modal-primary" onclick="bbsSaveUser()">保存</button>
       <button class="bbs-modal-secondary" onclick="bbsCloseUserForm()">取消</button>
@@ -1026,6 +1026,11 @@
         if (res.tags && res.tags.length > 0) {
           for (var ti = 0; ti < res.tags.length; ti++) {
             badgesHtml += '<span class="bbs-role-badge custom">' + escapeHtml(res.tags[ti]) + '</span>';
+          }
+        }
+        if (res.hidden_tags && res.hidden_tags.length > 0 && ROLE === 'admin') {
+          for (var ti = 0; ti < res.hidden_tags.length; ti++) {
+            badgesHtml += '<span class="bbs-role-badge custom-outline">' + escapeHtml(res.hidden_tags[ti]) + '</span>';
           }
         }
         var html = '<div class="bbs-detail">' +
@@ -1841,11 +1846,16 @@
         + '<tr><th>用户名</th><th>ID</th><th>角色</th><th>标签</th><th></th></tr>';
       for (var i = 0; i < res.users.length; i++) {
         var u = res.users[i];
-        var tags = (u.tags || []).join(', ');
+        var tagsHtml = (u.tags || []).map(function(t) {
+          if (typeof t === 'string' && t.startsWith('_')) {
+            return '<span style="color:#bbb;font-style:italic;" title="仅管理员可见">' + escapeHtml(t.slice(1)) + '</span>';
+          }
+          return escapeHtml(t);
+        }).join(', ');
         var roleLabel = u.role === 'admin' ? '管理员' : '用户';
         html += '<tr><td>' + escapeHtml(u.username) + '</td><td style="font-size:11px;color:#999;">'
           + escapeHtml(u.id) + '</td><td>' + roleLabel + '</td>'
-          + '<td>' + escapeHtml(tags) + '</td>'
+          + '<td>' + tagsHtml + '</td>'
           + '<td class="bbs-cc-users-actions">'
           + '<button onclick="bbsEditUser(\'' + u.id + '\')">编辑</button>'
           + '<button onclick="bbsDeleteUser(\'' + u.id + '\',\'' + escapeHtml(u.username).replace(/'/g, "\\'") + '\')">删除</button>'
