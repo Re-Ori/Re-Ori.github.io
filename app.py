@@ -33,6 +33,7 @@ BBS_TOPICS_FILE = BBS_DIR / "topics.json"
 BBS_TOPICS_DIR = BBS_DIR / "topics"
 BBS_TOKENS_FILE = BBS_DIR / "tokens.json"
 BBS_NOTIFICATIONS_FILE = BBS_DIR / "notifications.json"
+BBS_INVITES_FILE = BBS_DIR / "invites.json"
 
 # ── 统计追踪 ──
 STATS_DIR = DATA_DIR / "stats"
@@ -526,6 +527,23 @@ def _parse_mentions(content):
     import re
     return re.findall(r'@\{([^}]+)\}', content)
 
+def _invite_code():
+    import hashlib, os
+    return hashlib.sha256(os.urandom(64)).hexdigest()
+
+def _load_invites():
+    try:
+        if BBS_INVITES_FILE.exists():
+            return json.loads(BBS_INVITES_FILE.read_text(encoding='utf-8'))
+    except: pass
+    return {"invites": []}
+
+def _save_invites(data):
+    BBS_INVITES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = BBS_INVITES_FILE.with_suffix(".tmp.json")
+    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+    tmp.replace(BBS_INVITES_FILE)
+
 def user_agent():
     return f"AutoUpdate/2.0 Python/{sys.version_info.major}.{sys.version_info.minor}"
 
@@ -649,6 +667,14 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if req_path == '/api/admin/users':
             self._handle_admin_users()
             return
+        if req_path == '/api/admin/invites':
+            self._handle_admin_invites()
+            return
+        if req_path.startswith('/api/invite/'):
+            code = req_path[12:]
+            if code:
+                self._handle_invite_info(code)
+                return
 
         # 短链跳转 /s/<code>
         if req_path.startswith('/s/') and len(req_path) > 3:
@@ -839,6 +865,19 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             uid = req_path[17:]
             self._handle_admin_user_update(uid)
             return
+        if req_path == '/api/admin/invites':
+            self._handle_admin_invite_create()
+            return
+        if req_path.startswith('/api/admin/invites/') and req_path.endswith('/delete'):
+            code = req_path[19:-7]
+            if code:
+                self._handle_admin_invite_delete(code)
+                return
+        if req_path.startswith('/api/invite/') and req_path.endswith('/register'):
+            code = req_path[12:-9]
+            if code:
+                self._handle_invite_register(code)
+                return
 
         # OAuth 路径（如 /api/oauth/token）— 服务端代理到 giscus.app（避免 CORS 问题）
         if req_path.startswith('/api/oauth/'):
@@ -2436,6 +2475,99 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             _save_notifications(nd)
         self._send_json({'ok': True})
 
+    # ── 邀请链接 ─────────────────────────────────────────
+
+    def _handle_admin_invites(self):
+        if not self._is_admin():
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        data = _load_invites()
+        self._send_json({'ok': True, 'invites': data['invites']})
+
+    def _handle_admin_invite_create(self):
+        if not self._is_admin():
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            max_uses = int(body.get('max_uses', 1))
+            expire_hours = int(body.get('expire_hours', 24))
+            if max_uses < 1: max_uses = 1
+            if expire_hours < 1: expire_hours = 1
+            code = _invite_code()
+            data = _load_invites()
+            data['invites'].append({
+                'code': code, 'created_by': 'admin',
+                'created_at': time.time(), 'max_uses': max_uses,
+                'used': 0, 'expires_at': time.time() + expire_hours * 3600,
+                'enabled': True,
+            })
+            _save_invites(data)
+            log(f'管理员创建邀请链接: {code[:12]}... ({max_uses}次/{expire_hours}h)')
+            self._send_json({'ok': True, 'code': code})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_admin_invite_delete(self, code):
+        if not self._is_admin():
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        data = _load_invites()
+        data['invites'] = [i for i in data['invites'] if i.get('code') != code]
+        _save_invites(data)
+        self._send_json({'ok': True})
+
+    def _handle_invite_info(self, code):
+        data = _load_invites()
+        for inv in data['invites']:
+            if inv.get('code') == code:
+                if not inv.get('enabled', True):
+                    self._send_json({'ok': False, 'error': '已禁用'}); return
+                if inv.get('expires_at', 0) and time.time() > inv['expires_at']:
+                    self._send_json({'ok': False, 'error': '已过期'}); return
+                if inv.get('used', 0) >= inv.get('max_uses', 1):
+                    self._send_json({'ok': False, 'error': '已达最大使用次数'}); return
+                self._send_json({'ok': True, 'max_uses': inv['max_uses'],
+                                 'used': inv['used'], 'expires_at': inv['expires_at']})
+                return
+        self._send_json({'ok': False, 'error': '邀请链接不存在'})
+
+    def _handle_invite_register(self, code):
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            username = body.get('username', '').strip()
+            password = body.get('password', '').strip()
+            if not username or not password:
+                self._send_json({'ok': False, 'error': '用户名和密码不能为空'}); return
+            data = _load_invites()
+            inv = None
+            for i in data['invites']:
+                if i.get('code') == code: inv = i; break
+            if not inv:
+                self._send_json({'ok': False, 'error': '邀请链接不存在'}); return
+            if not inv.get('enabled', True):
+                self._send_json({'ok': False, 'error': '邀请链接已禁用'}); return
+            if inv.get('expires_at', 0) and time.time() > inv['expires_at']:
+                self._send_json({'ok': False, 'error': '邀请链接已过期'}); return
+            if inv.get('used', 0) >= inv.get('max_uses', 1):
+                self._send_json({'ok': False, 'error': '邀请链接已达最大使用次数'}); return
+            users = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
+            for u in users:
+                if u.get('username') == username:
+                    self._send_json({'ok': False, 'error': '用户名已存在'}); return
+            import random, string
+            while True:
+                uid = 'user' + ''.join(random.choices(string.digits, k=3))
+                if not any(u.get('id') == uid for u in users): break
+            users.append({'id': uid, 'username': username, 'password': password, 'role': 'user'})
+            BBS_USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            tmp = BBS_USERS_FILE.with_suffix(".tmp.json")
+            tmp.write_text(json.dumps(users, ensure_ascii=False, indent=2), encoding='utf-8')
+            tmp.replace(BBS_USERS_FILE)
+            inv['used'] = inv.get('used', 0) + 1
+            _save_invites(data)
+            log(f'邀请注册: {uid}({username}) via {code[:12]}...')
+            self._send_json({'ok': True, 'username': username})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
 # ── 数据目录初始化 ─────────────────────────────────────
 
 def _init_data_dirs():
@@ -2456,113 +2588,6 @@ def _init_data_dirs():
         tmp.replace(BBS_USERS_FILE)
         log(f"users.json 已恢复: {len(default_users)} 个默认用户")
 
-# ── 启动入口 ─────────────────────────────────────────────
-
-def main():
-    # 日志轮转：保留 7 天
-    try:
-        if APP_LOG_FILE.exists():
-            cutoff = time.time() - 7 * 86400
-            with open(APP_LOG_FILE, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-            keep = []
-            for line in lines:
-                if line.startswith("[") and len(line) > 20:
-                    try:
-                        ts = datetime.strptime(line[1:11], "%Y.%m.%d")
-                        if ts.timestamp() < cutoff: continue
-                    except: pass
-                keep.append(line)
-            if len(keep) < len(lines):
-                APP_LOG_FILE.write_text("".join(keep), encoding="utf-8")
-    except: pass
-
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="AutoUpdate Web Server - 自更新静态网站服务器"
-    )
-    parser.add_argument(
-        "--host", default="0.0.0.0",
-        help="监听地址 (默认: 0.0.0.0)"
-    )
-    parser.add_argument(
-        "--port", type=int, default=9876,
-        help="监听端口 (默认: 9876)"
-    )
-    parser.add_argument(
-        "--interval", type=int, default=300,
-        help="更新检查冷却秒数 (默认: 300)"
-    )
-    args = parser.parse_args()
-
-    AutoUpdateHandler.CHECK_INTERVAL = args.interval
-
-    server = http.server.HTTPServer(
-        (args.host, args.port), AutoUpdateHandler
-    )
-    addr = args.host if args.host != "0.0.0.0" else "localhost"
-
-    log("")
-    log(f"{'='*50}")
-    log(f"  AutoUpdate 服务器已启动")
-    log(f"  地址: http://{addr}:{args.port}")
-    log(f"  目录: {PROJECT_ROOT}")
-    log(f"  冷却: {args.interval}s（访问时触发）")
-    log(f"{'='*50}")
-    log("")
-
-    # 启动时确保 main.js 有时间戳（尚无则首次注入）
-    # 在 server.py 下运行时由 server.py 注入时间戳
-
-    try:
-        # 后台线程：每 60s 清理残留的空房间与过期 peer
-        def _cleanup_loop():
-            while True:
-                time.sleep(60)
-                try:
-                    now = time.time()
-                    with _p2p_signals_lock:
-                        # 清理超过 15 秒未轮询的 stale peer
-                        stale_rooms = []
-                        for r, rdata in list(_p2p_rooms.items()):
-                            peers = rdata.get("peers", {})
-                            dead = [pid for pid, info in list(peers.items())
-                                    if now - info.get("last_seen", 0) > 15]
-                            for pid in dead:
-                                del peers[pid]
-                            if not peers:
-                                stale_rooms.append(r)
-                        for r in stale_rooms:
-                            del _p2p_rooms[r]
-                            _p2p_signals.pop(r, None)
-                            _p2p_relay_buffers.pop(r, None)
-                except Exception:
-                    pass
-                # 清理过期的匿名短链
-                try:
-                    now = time.time()
-                    links = _sl_load()
-                    changed = False
-                    for code, v in list(links.items()):
-                        if isinstance(v, dict) and v.get('expires_at') and now > v['expires_at']:
-                            del links[code]
-                            changed = True
-                    if changed:
-                        _sl_save(links)
-                except Exception:
-                    pass
-
-        threading.Thread(target=_cleanup_loop, daemon=True).start()
-        server.serve_forever()
-    except KeyboardInterrupt:
-        log("\n服务已停止")
-        server.server_close()
-
-
 # 模块导入时自动执行数据目录初始化和 Token 加载
 _init_data_dirs()
-
-if __name__ == "__main__":
-    main()
 

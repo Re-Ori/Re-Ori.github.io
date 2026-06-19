@@ -25,6 +25,7 @@
       "/s/",
       "/bbs/",
       "/api/bbs/",
+      "/api/invite/",
       "/.server.log",
       "/reori-config.json"
     ],

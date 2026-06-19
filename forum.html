@@ -238,6 +238,17 @@
         <div id="bbs-cc-userlist" style="margin-top:10px;"><div style="color:#999;font-size:13px;">加载中…</div></div>
       </div>
 
+      <!-- 🔗 邀请链接 -->
+      <div class="bbs-cc-section">
+        <div class="bbs-cc-row">
+          <div class="bbs-cc-section-title">邀请链接</div>
+          <div class="bbs-cc-btns">
+            <button class="bbs-cc-btn" onclick="bbsShowInviteForm()">+ 生成邀请</button>
+          </div>
+        </div>
+        <div id="bbs-invite-list" style="margin-top:10px;"><div style="color:#999;font-size:13px;">加载中…</div></div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -269,6 +280,29 @@
     <div class="bbs-modal-actions">
       <button class="bbs-modal-primary" onclick="bbsSaveUser()">保存</button>
       <button class="bbs-modal-secondary" onclick="bbsCloseUserForm()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 邀请链接生成弹窗 -->
+<div id="bbs-invite-form-modal" class="bbs-modal-overlay" style="display:none;">
+  <div class="bbs-modal">
+    <h3>生成邀请链接</h3>
+    <div class="bbs-modal-error" id="bbs-invite-form-error"></div>
+    <div style="font-size:13px;color:#888;margin-bottom:4px;margin-top:4px;">剩余次数：</div>
+    <input type="number" id="bbs-invite-max-uses" value="1" min="1" style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;">
+    <div style="font-size:13px;color:#888;margin-bottom:4px;margin-top:4px;">有效时间：</div>
+    <select id="bbs-invite-expire" style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;background:rgba(255,255,255,0.8);color:#333;">
+      <option value="1">1 小时</option>
+      <option value="24" selected>24 小时</option>
+      <option value="72">3 天</option>
+      <option value="168">7 天</option>
+      <option value="720">30 天</option>
+      <option value="0">永久</option>
+    </select>
+    <div class="bbs-modal-actions" style="margin-top:14px;">
+      <button class="bbs-modal-primary" onclick="bbsCreateInvite()">生成</button>
+      <button class="bbs-modal-secondary" onclick="bbsCloseInviteForm()">取消</button>
     </div>
   </div>
 </div>
@@ -588,6 +622,12 @@
     hideLoginError();
     document.getElementById('bbs-login-user').value = '';
     document.getElementById('bbs-login-pass').value = '';
+    document.getElementById('bbs-login-user').placeholder = '用户名';
+    document.getElementById('bbs-login-pass').placeholder = '密码';
+    document.querySelector('#bbs-login-modal h3').innerHTML = '登录';
+    document.querySelector('#bbs-login-modal .bbs-modal-primary').textContent = '登录';
+    document.querySelector('#bbs-login-modal .bbs-modal-primary').onclick = bbsDoLogin;
+    document.querySelector('#bbs-login-modal .bbs-modal-hint').textContent = '账号需由管理员创建，暂不支持注册';
     document.getElementById('bbs-login-modal').style.display = '';
     setTimeout(function() { document.getElementById('bbs-login-user').focus(); }, 100);
   };
@@ -1638,6 +1678,7 @@
     document.getElementById('bbs-cc-userlist').innerHTML = '<div style="color:#999;font-size:13px;">加载中…</div>';
     bbsLoadUserList();
     bbsLoadMaintenanceStatus();
+    bbsLoadInvites();
   };
 
   window.bbsCloseControlCenter = function() {
@@ -1935,6 +1976,65 @@
     document.getElementById('bbs-delete-confirm-modal').style.display = 'none';
   };
 
+  // ── 邀请链接 ──
+
+  window.bbsShowInviteForm = function() {
+    document.getElementById('bbs-invite-form-error').style.display = 'none';
+    document.getElementById('bbs-invite-form-modal').style.display = '';
+  };
+  window.bbsCloseInviteForm = function() {
+    document.getElementById('bbs-invite-form-modal').style.display = 'none';
+  };
+  window.bbsCreateInvite = function() {
+    var maxUses = parseInt(document.getElementById('bbs-invite-max-uses').value) || 1;
+    var expireHours = parseInt(document.getElementById('bbs-invite-expire').value) || 0;
+    api('POST', '/api/admin/invites', { max_uses: maxUses, expire_hours: expireHours }).then(function(res) {
+      if (res.ok) {
+        showToast('邀请链接已生成');
+        bbsCloseInviteForm();
+        bbsLoadInvites();
+      } else {
+        document.getElementById('bbs-invite-form-error').textContent = res.error || '生成失败';
+        document.getElementById('bbs-invite-form-error').style.display = 'block';
+      }
+    });
+  };
+  function bbsLoadInvites() {
+    api('GET', '/api/admin/invites').then(function(res) {
+      if (!res.ok || !res.invites) return;
+      var now = Math.floor(Date.now() / 1000);
+      var html = '<table class="bbs-cc-users-table"><tr><th>链接</th><th>状态</th><th>使用</th><th>过期</th><th></th></tr>';
+      for (var i = 0; i < res.invites.length; i++) {
+        var inv = res.invites[i];
+        var expired = inv.expires_at && inv.expires_at > 0 && now > inv.expires_at;
+        var full = inv.used >= inv.max_uses;
+        var status = expired ? '已过期' : full ? '已用完' : inv.enabled !== false ? '有效' : '已禁用';
+        var expireStr = inv.expires_at && inv.expires_at > 0 ? new Date(inv.expires_at * 1000).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '永久';
+        html += '<tr><td style="font-size:11px;font-family:monospace;max-width:120px;overflow:hidden;text-overflow:ellipsis;" title="' + escapeHtml(inv.code) + '">' + escapeHtml(inv.code.slice(0, 16)) + '...</td>'
+          + '<td style="font-size:12px;">' + status + '</td>'
+          + '<td style="font-size:12px;">' + inv.used + '/' + inv.max_uses + '</td>'
+          + '<td style="font-size:11px;color:#999;">' + expireStr + '</td>'
+          + '<td class="bbs-cc-users-actions"><button onclick="bbsCopyInvite(\'' + inv.code + '\')">复制</button><button onclick="bbsDeleteInvite(\'' + inv.code + '\')">删除</button></td></tr>';
+      }
+      html += '</table>';
+      document.getElementById('bbs-invite-list').innerHTML = html;
+    });
+  }
+  window.bbsCopyInvite = function(code) {
+    var url = window.location.origin + '/forum.html?invite=' + code;
+    navigator.clipboard.writeText(url).then(function() {
+      showToast('邀请链接已复制');
+    }).catch(function() {
+      showToast('复制失败');
+    });
+  };
+  window.bbsDeleteInvite = function(code) {
+    if (!confirm('确定删除此邀请链接？')) return;
+    api('POST', '/api/admin/invites/' + code + '/delete', {}).then(function(res) {
+      if (res.ok) { showToast('已删除'); bbsLoadInvites(); }
+    });
+  };
+
   // ── 发帖弹窗 ──
 
   window.bbsShowPost = function() {
@@ -1999,11 +2099,66 @@
     }
   });
 
-  // ── 从 URL 参数打开帖子（直接显示加载，不用等列表）──
+  // ── 邀请注册弹窗 ──
+
+  function bbsShowInviteRegister(code) {
+    document.getElementById('bbs-detect').style.display = 'none';
+    document.getElementById('bbs-app').style.display = '';
+    document.getElementById('bbs-login-modal').style.display = '';
+    document.querySelector('#bbs-login-modal h3').innerHTML = '邀请注册';
+    document.getElementById('bbs-login-error').style.display = 'none';
+    document.getElementById('bbs-login-user').placeholder = '设置用户名';
+    document.getElementById('bbs-login-pass').placeholder = '设置密码';
+    var btn = document.querySelector('#bbs-login-modal .bbs-modal-primary');
+    btn.textContent = '注册';
+    btn.onclick = function() { bbsDoInviteRegister(code); };
+    document.querySelector('#bbs-login-modal .bbs-modal-hint').textContent = '通过邀请链接注册';
+  }
+
+  window.bbsDoInviteRegister = function(code) {
+    var username = document.getElementById('bbs-login-user').value.trim();
+    var password = document.getElementById('bbs-login-pass').value.trim();
+    if (!username || !password) {
+      document.getElementById('bbs-login-error').textContent = '请输入用户名和密码';
+      document.getElementById('bbs-login-error').style.display = 'block';
+      return;
+    }
+    api('POST', '/api/invite/' + code + '/register', { username: username, password: password }).then(function(res) {
+      if (res.ok) {
+        showToast('注册成功，请登录');
+        document.querySelector('#bbs-login-modal h3').innerHTML = '登录';
+        document.getElementById('bbs-login-user').value = username;
+        document.getElementById('bbs-login-pass').value = '';
+        document.getElementById('bbs-login-user').placeholder = '用户名';
+        document.getElementById('bbs-login-pass').placeholder = '密码';
+        document.querySelector('#bbs-login-modal .bbs-modal-primary').textContent = '登录';
+        document.querySelector('#bbs-login-modal .bbs-modal-primary').onclick = bbsDoLogin;
+        document.querySelector('#bbs-login-modal .bbs-modal-hint').textContent = '账号需由管理员创建，暂不支持注册';
+      } else {
+        document.getElementById('bbs-login-error').textContent = res.error || '注册失败';
+        document.getElementById('bbs-login-error').style.display = 'block';
+      }
+    });
+  };
+
+  // ── 从 URL 参数打开帖子/邀请注册 ──
   (function() {
     var p = new URLSearchParams(window.location.search);
     var tid = p.get('topic');
     var uid = p.get('user');
+    var inviteCode = p.get('invite');
+    if (inviteCode) {
+      document.getElementById('bbs-detect').style.display = 'none';
+      document.getElementById('bbs-app').style.display = '';
+      var waitInit2 = setInterval(function() {
+        if (window._bbsInited) {
+          clearInterval(waitInit2);
+          document.getElementById('bbs-login-btn').style.display = 'none';
+          bbsShowInviteRegister(inviteCode);
+        }
+      }, 50);
+      return;
+    }
     var target = tid || uid;
     if (target) {
       // 直接显示加载状态
