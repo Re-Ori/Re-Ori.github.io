@@ -2061,17 +2061,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             m['enabled'] = False
             self._save_maintenance(m)
             return False
-        if user and user.get('role') == 'admin':
-            return False
-        # 兼容旧 token 没有 role 字段的情况
-        if user:
-            uid = user.get('user_id', '')
-            try:
-                all_u = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
-                for u in all_u:
-                    if u.get('id') == uid and u.get('role') == 'admin':
-                        return False
-            except: pass
+        # 维护模式禁止一切用户操作（包括管理员）
         self._send_json({'ok': False, 'error': 'maintenance',
                          'message': '论坛维护中，暂时无法操作'})
         return True

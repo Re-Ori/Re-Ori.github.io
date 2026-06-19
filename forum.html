@@ -246,23 +246,25 @@
   <div class="bbs-modal">
     <h3 id="bbs-user-form-title">新建用户</h3>
     <div class="bbs-modal-error" id="bbs-user-form-error"></div>
+    <div style="font-size:13px;color:#888;margin-bottom:4px;">用户名：</div>
     <input type="text" id="bbs-user-form-username" placeholder="用户名" autocomplete="off">
-    <div id="bbs-user-form-id-row" style="font-size:13px;color:#888;margin-bottom:8px;">
-      <span id="bbs-user-form-id-label">ID：</span>
-      <input type="text" id="bbs-user-form-new-id" placeholder="自定义 ID" style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;background:rgba(255,255,255,0.8);color:#333;margin-top:4px;">
-    </div>
+    <div style="font-size:13px;color:#888;margin-bottom:4px;margin-top:4px;">ID：</div>
+    <input type="text" id="bbs-user-form-new-id" placeholder="自定义 ID" autocomplete="off" style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;background:rgba(255,255,255,0.8);color:#333;">
+    <div style="font-size:13px;color:#888;margin-bottom:4px;margin-top:4px;">密码：</div>
     <div style="position:relative;">
-      <input type="password" id="bbs-user-form-password" placeholder="密码（编辑时留空则不修改）" autocomplete="off" style="padding-right:36px;">
+      <input type="password" id="bbs-user-form-password" placeholder="编辑时留空则不修改" autocomplete="off" style="padding-right:36px;">
       <span id="bbs-pw-eye" onclick="bbsTogglePwVis()" style="position:absolute;right:10px;top:10px;cursor:pointer;color:#999;user-select:none;line-height:1;display:flex;">
         <svg id="bbs-eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
         <svg id="bbs-eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
       </span>
     </div>
+    <div style="font-size:13px;color:#888;margin-bottom:4px;">类型：</div>
     <select id="bbs-user-form-role">
       <option value="user">普通用户</option>
       <option value="admin">管理员</option>
     </select>
-    <input type="text" id="bbs-user-form-tags" placeholder="标签（用英文逗号分隔）" autocomplete="off">
+    <div style="font-size:13px;color:#888;margin-bottom:4px;">标签：</div>
+    <input type="text" id="bbs-user-form-tags" placeholder="用英文逗号分隔" autocomplete="off">
     <div class="bbs-modal-actions">
       <button class="bbs-modal-primary" onclick="bbsSaveUser()">保存</button>
       <button class="bbs-modal-secondary" onclick="bbsCloseUserForm()">取消</button>
@@ -1306,7 +1308,7 @@
 
   window.bbsExport = function() {
     bbsCloseControlCenter();
-    showProgress('导出备份', '准备数据中…', 0, '', false);
+    showProgress('导出数据', '准备数据中…', 0, '', false);
     var xhr = new XMLHttpRequest();
     _progressXhr = xhr;
     xhr.open('GET', '/api/bbs/export', true);
@@ -1315,16 +1317,16 @@
     xhr.onprogress = function(e) {
       if (e.lengthComputable) {
         var pct = (e.loaded / e.total) * 100;
-        showProgress('导出备份', '正在下载…', pct, formatSize(e.loaded) + ' / ' + formatSize(e.total), false);
+        showProgress('导出数据', '正在下载…', pct, formatSize(e.loaded) + ' / ' + formatSize(e.total), false);
       } else {
-        showProgress('导出备份', '正在下载…', 0, formatSize(e.loaded), false);
+        showProgress('导出数据', '正在下载…', 0, formatSize(e.loaded), false);
       }
     };
     xhr.onload = function() {
       _progressXhr = null;
       if (xhr.status === 200) {
         var size = xhr.response.size;
-        showProgress('导出备份', '下载完成', 100, formatSize(size), true);
+        showProgress('导出数据', '下载完成', 100, formatSize(size), true);
         var a = document.createElement('a');
         a.href = URL.createObjectURL(xhr.response);
         a.download = 'bbs-backup-' + bbsTimestamp() + '.zip';
@@ -1389,11 +1391,11 @@
     if (!file) return;
     if (!confirm('确定上传 ZIP？这将覆盖服务器上所有源码文件（不含 .data 数据），不可撤销！')) { this.value = ''; return; }
     bbsCloseControlCenter();
-    showProgress('上传更新', '准备中…', 0, '总大小 ' + formatSize(file.size), false);
+    showProgress('上传源码', '准备中…', 0, '总大小 ' + formatSize(file.size), false);
     var reader = new FileReader();
     reader.onload = function(e) {
       // 读取完成，开始上传（真实进度）
-      showProgress('上传更新', '正在上传…', 0, formatSize(file.size), false);
+      showProgress('上传源码', '正在上传…', 0, formatSize(file.size), false);
       var xhr = new XMLHttpRequest();
       _progressXhr = xhr;
       xhr.open('POST', '/api/admin/upload-source', true);
@@ -1403,7 +1405,7 @@
       xhr.upload.onprogress = function(pe) {
         if (pe.lengthComputable) {
           var pct = (pe.loaded / pe.total) * 100;
-          showProgress('上传更新', '正在上传…', pct,
+          showProgress('上传源码', '正在上传…', pct,
             formatSize(pe.loaded) + ' / ' + formatSize(pe.total), false);
         }
       };
@@ -1412,7 +1414,7 @@
         if (xhr.response && xhr.response.ok) {
           var msg = '上传成功，共 ' + xhr.response.files + ' 个文件';
           if (xhr.response.restart) msg += '，服务器正在重启…';
-          showProgress('上传更新', '上传完成', 100, formatSize(file.size), true);
+          showProgress('上传源码', '上传完成', 100, formatSize(file.size), true);
           showToast(msg);
           setTimeout(hideProgress, 2000);
         } else if (xhr.status === 403) {
@@ -1450,11 +1452,11 @@
       return;
     }
     bbsCloseControlCenter();
-    showProgress('导入恢复', '准备中…', 0, '总大小 ' + formatSize(file.size), false);
+    showProgress('导入数据', '准备中…', 0, '总大小 ' + formatSize(file.size), false);
     var reader = new FileReader();
     reader.onload = function(e) {
       // 读取完成，开始上传（真实进度）
-      showProgress('导入恢复', '正在上传…', 0, formatSize(file.size), false);
+      showProgress('导入数据', '正在上传…', 0, formatSize(file.size), false);
       var xhr = new XMLHttpRequest();
       _progressXhr = xhr;
       xhr.open('POST', '/api/bbs/import', true);
@@ -1464,14 +1466,14 @@
       xhr.upload.onprogress = function(pe) {
         if (pe.lengthComputable) {
           var pct = (pe.loaded / pe.total) * 100;
-          showProgress('导入恢复', '正在上传…', pct,
+          showProgress('导入数据', '正在上传…', pct,
             formatSize(pe.loaded) + ' / ' + formatSize(pe.total), false);
         }
       };
       xhr.onload = function() {
         _progressXhr = null;
         if (xhr.response && xhr.response.ok) {
-          showProgress('导入恢复', '导入完成', 100, '总大小 ' + formatSize(file.size), true);
+          showProgress('导入数据', '导入完成', 100, '总大小 ' + formatSize(file.size), true);
           showToast('导入成功');
           setTimeout(function() { hideProgress(); loadTopics(); }, 1500);
         } else if (xhr.status === 403) {
@@ -1685,7 +1687,6 @@
     // ID 输入
     var randId = _randId();
     document.getElementById('bbs-user-form-new-id').value = randId;
-    document.getElementById('bbs-user-form-id-label').textContent = 'ID：';
     document.getElementById('bbs-user-form-password').value = '';
     document.getElementById('bbs-user-form-password').placeholder = '密码';
     document.getElementById('bbs-user-form-modal').style.display = '';
@@ -1709,7 +1710,6 @@
       document.getElementById('bbs-user-form-error').style.display = 'none';
       // ID 行（显示当前 ID，可修改）
       document.getElementById('bbs-user-form-new-id').value = user.id;
-      document.getElementById('bbs-user-form-id-label').textContent = 'ID（改 ID 需先开启维护模式）：';
       document.getElementById('bbs-user-form-modal').style.display = '';
     });
   };
