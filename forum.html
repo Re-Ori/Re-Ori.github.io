@@ -2129,8 +2129,9 @@
         '<div class="bbs-modal-error" id="bbs-register-error" style="display:none;"></div>' +
         '<input type="text" id="bbs-register-user" placeholder="设置用户名" autocomplete="off" style="width:100%;padding:12px 14px;border:1px solid rgba(0,0,0,0.12);border-radius:10px;font-size:15px;box-sizing:border-box;outline:none;background:rgba(255,255,255,0.8);color:#333;margin-bottom:12px;">' +
         '<input type="password" id="bbs-register-pass" placeholder="设置密码" autocomplete="off" style="width:100%;padding:12px 14px;border:1px solid rgba(0,0,0,0.12);border-radius:10px;font-size:15px;box-sizing:border-box;outline:none;background:rgba(255,255,255,0.8);color:#333;margin-bottom:20px;">' +
-        '<button onclick="bbsDoInviteRegister(\\'' + code + '\\')" style="width:100%;padding:12px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;background:var(--theme-color,#399FFF);color:#fff;">注册</button>' +
+        '<button id="bbs-register-btn" style="width:100%;padding:12px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;background:var(--theme-color,#399FFF);color:#fff;">注册</button>' +
         '</div></div>';
+      document.getElementById('bbs-register-btn').onclick = function() { bbsDoInviteRegister(code); };
       document.body.appendChild(overlay);
     } else {
       overlay.style.display = '';
