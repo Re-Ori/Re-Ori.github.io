@@ -291,6 +291,12 @@
 .bbs-reply-del:hover { opacity: 1; background: rgba(255,59,48,0.1); }
 [data-theme="dark"] .bbs-reply-del { opacity: 0.6; }
 [data-theme="dark"] .bbs-reply-del:hover { opacity: 1; }
+.bbs-reply-to-btn {
+  position: absolute; top: 14px; right: 32px;
+  cursor: pointer; font-size: 12px; color: #aaa; opacity: 0.6;
+  transition: opacity 0.15s; user-select: none; padding: 4px 6px; border-radius: 6px;
+}
+.bbs-reply-to-btn:hover { opacity: 1; color: var(--theme-color,#399FFF); background: rgba(57,159,255,0.08); }
 
 /* ── 回复输入区 ── */
 .bbs-reply-input-area {
@@ -652,28 +658,48 @@
 .bbs-maint-end-display { font-size: 13px; color: #c84a1c; margin-bottom: 10px; }
 
 /* ── 通知面板 ── */
-.bbs-notif-item { padding: 10px 12px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; transition: background 0.1s; }
+.bbs-notif-item { padding: 10px 14px; border-radius: 8px; cursor: pointer; margin-bottom: 3px; transition: background 0.1s; }
 .bbs-notif-item:hover { background: rgba(0,0,0,0.03); }
 [data-theme="dark"] .bbs-notif-item:hover { background: rgba(255,255,255,0.04); }
-.bbs-notif-unread { background: rgba(57,159,255,0.06); }
-[data-theme="dark"] .bbs-notif-unread { background: rgba(57,159,255,0.1); }
-.bbs-notif-item-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-.bbs-notif-type { font-weight: 600; font-size: 12px; color: #555; }
-[data-theme="dark"] .bbs-notif-type { color: #aaa; }
+.bbs-notif-unread { background: rgba(57,159,255,0.05); border-left: 3px solid var(--theme-color,#399FFF); }
+[data-theme="dark"] .bbs-notif-unread { background: rgba(57,159,255,0.08); }
+.bbs-notif-row { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
 .bbs-notif-type {
-  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  flex-shrink: 0; padding: 1px 7px; border-radius: 3px;
   background: rgba(57,159,255,0.08); color: var(--theme-color,#399FFF); font-size: 11px; font-weight: 600;
 }
-[data-theme="dark"] .bbs-notif-type { background: rgba(57,159,255,0.12); }
-.bbs-notif-time { font-size: 11px; color: #aaa; }
+[data-theme="dark"] .bbs-notif-type { background: rgba(57,159,255,0.15); }
+.bbs-notif-title { flex: 1; font-size: 13px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-theme="dark"] .bbs-notif-title { color: #ddd; }
+.bbs-notif-time { font-size: 11px; color: #bbb; flex-shrink: 0; }
+.bbs-notif-del { font-size: 13px; color: transparent; cursor: pointer; padding: 2px 4px; border-radius: 4px; flex-shrink: 0; transition: color 0.1s; }
+.bbs-notif-item:hover .bbs-notif-del { color: #ccc; }
+.bbs-notif-del:hover { color: #ff3b30 !important; background: rgba(255,59,48,0.08); }
+.bbs-notif-preview { font-size: 12px; color: #bbb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 4px; }
 .bbs-notif-item-title { font-size: 12px; color: var(--theme-color,#399FFF); margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bbs-notif-item-preview { font-size: 12px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* @提及链接 */
 .bbs-at-link { color: var(--theme-color,#399FFF); text-decoration: none; font-weight: 500; cursor: pointer; }
 .bbs-at-link:hover { text-decoration: underline; }
 /* 回复引用 */
-.bbs-reply-ref { padding: 6px 10px; margin: 4px 0 8px; background: rgba(0,0,0,0.03); border-radius: 6px; font-size: 12px; color: #888; border-left: 3px solid rgba(0,0,0,0.08); }
-[data-theme="dark"] .bbs-reply-ref { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.1); }
+.bbs-reply-ref { font-size: 12px; color: #999; margin-bottom: 4px; padding: 2px 0; }
+[data-theme="dark"] .bbs-reply-ref { color: #777; }
+.bbs-reply-ref::before { content: '↳ '; }
+/* 嵌套回复容器 */
+.bbs-reply-nested { margin-top: 4px; }
+
+/* ── 二级回复缩进 ── */
+.bbs-reply-child {
+  margin-left: 28px; border-left: 2px solid rgba(0,0,0,0.08);
+  padding-left: 14px; padding-top: 8px; margin-top: 4px;
+}
+[data-theme="dark"] .bbs-reply-child { border-color: rgba(255,255,255,0.1); }
+.bbs-reply-more {
+  margin-left: 28px; padding: 8px 14px; font-size: 12px;
+  color: var(--theme-color,#399FFF); cursor: pointer; border-left: 2px solid rgba(0,0,0,0.08);
+}
+[data-theme="dark"] .bbs-reply-more { border-color: rgba(255,255,255,0.1); }
+.bbs-reply-more:hover { text-decoration: underline; }
 
 /* ── 删除用户确认 ── */
 .bbs-delete-data-box {

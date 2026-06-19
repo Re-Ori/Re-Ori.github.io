@@ -816,6 +816,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if req_path == '/api/bbs/notifications/read':
             self._handle_bbs_notifications_read()
             return
+        if req_path == '/api/bbs/notifications/delete':
+            self._handle_bbs_notifications_delete()
+            return
         if req_path == '/api/bbs/import':
             self._handle_bbs_import()
             return
@@ -1781,6 +1784,15 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 r['author_role'] = rinfo['role'] if rinfo else ''
                 r['author_tags'] = rinfo['tags'] if rinfo else []
                 r.pop('author', None)  # 清理旧字段
+            # 构建用户 ID→用户名 映射表（供前端 @ 渲染）
+            user_map = {}
+            user_map[aid] = topic.get('author_name', '')
+            for r in topic.get('replies', []):
+                rid = r.get('author_id', '')
+                if rid and rid not in user_map:
+                    rinfo = _bbs_resolve_author(rid)
+                    user_map[rid] = rinfo['username'] if rinfo else rid
+            topic['user_map'] = user_map
             self._send_json(topic)
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
@@ -1818,24 +1830,28 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             topic.setdefault('replies', []).append(reply)
             topic['updated_at'] = time.time()
             topic_path.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
-            # 创建通知
+            # 创建通知（已通知集合，避免重复）
             author_id = user.get('user_id', '')
             topic_author = topic.get('author_id', '')
             topic_title = topic.get('title', '')
             preview = content[:40].replace('\n', ' ')
-            # 通知帖主（回复者不是帖主本人时）
+            notified = set()
             if topic_author and topic_author != author_id:
                 _create_notification('reply', topic_author, author_id, tid, topic_title, reply_id, preview)
-            # 通知被回复者（二级回复，且不是同一个人）
+                notified.add(topic_author)
+            # 通知被回复者（二级回复）
             if reply_to:
                 for r in topic.get('replies', []):
                     if r.get('id') == reply_to and r.get('author_id') != author_id:
-                        _create_notification('reply_nested', r['author_id'], author_id, tid, topic_title, reply_id, preview)
+                        if r['author_id'] not in notified:
+                            _create_notification('reply_nested', r['author_id'], author_id, tid, topic_title, reply_id, preview)
+                            notified.add(r['author_id'])
                         break
             # 通知 @{id} 提及的用户
             for mentioned_uid in _parse_mentions(content):
-                if mentioned_uid != author_id and mentioned_uid != topic_author:
+                if mentioned_uid != author_id and mentioned_uid not in notified:
                     _create_notification('mention', mentioned_uid, author_id, tid, topic_title, reply_id, preview)
+                    notified.add(mentioned_uid)
             log(f'BBS 回复: {tid} by {author_id}')
             self._send_json({'ok': True, 'reply_id': reply_id})
         except Exception as e:
@@ -2393,6 +2409,30 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                     n['read'] = True
                     changed = True
         if changed:
+            _save_notifications(nd)
+        self._send_json({'ok': True})
+
+    def _handle_bbs_notifications_delete(self):
+        """POST /api/bbs/notifications/delete — 删除通知（单条或全部）"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'})
+            return
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            nid = body.get('id', '')
+            all_flag = body.get('all', False)
+        except:
+            nid = ''
+            all_flag = False
+        uid = user.get('user_id', '')
+        nd = _load_notifications()
+        before = len(nd["notifications"])
+        if all_flag:
+            nd["notifications"] = [n for n in nd["notifications"] if n.get("to_user_id") != uid]
+        elif nid:
+            nd["notifications"] = [n for n in nd["notifications"] if not (n.get("id") == nid and n.get("to_user_id") == uid)]
+        if len(nd["notifications"]) < before:
             _save_notifications(nd)
         self._send_json({'ok': True})
 

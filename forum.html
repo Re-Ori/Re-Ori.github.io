@@ -127,7 +127,8 @@
   <div class="bbs-post-header">
     <div class="bbs-post-header-title">通知</div>
     <div class="bbs-post-header-actions">
-      <span onclick="bbsMarkAllRead()" style="cursor:pointer;font-size:13px;color:var(--theme-color,#399FFF);padding:4px 0;white-space:nowrap;">全部已读</span>
+      <span onclick="bbsMarkAllRead()" style="cursor:pointer;font-size:13px;color:var(--theme-color,#399FFF);padding:4px 6px;white-space:nowrap;">全部已读</span>
+      <span onclick="bbsDeleteAllNotif()" style="cursor:pointer;font-size:13px;color:#999;padding:4px 6px;white-space:nowrap;">清空</span>
       <span onclick="bbsCloseNotifications()" style="cursor:pointer;font-size:22px;color:#999;line-height:1;padding:4px;" title="关闭">✕</span>
     </div>
   </div>
@@ -467,13 +468,14 @@
           var typeLabel = n.type === 'mention' ? '提及' : n.type === 'reply_nested' ? '二级回复' : '回复';
           var timeStr = n.created_at ? new Date(n.created_at * 1000).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
           var preview = n.content_preview || '';
-          html += '<div class="bbs-notif-item' + (n.read ? '' : ' bbs-notif-unread') + '" onclick="bbsOpenNotifTopic(\'' + n.topic_id + '\',' + (n.read ? 'false' : 'true') + ',\'' + n.id + '\')">'
-            + '<div class="bbs-notif-item-top">'
+          html += '<div class="bbs-notif-item' + (n.read ? '' : ' bbs-notif-unread') + '" onclick="bbsOpenNotifTopic(\'' + n.topic_id + '\',' + (n.read ? 'false' : 'true') + ',\'' + n.id + '\',\'' + (n.reply_id || '') + '\')">'
+            + '<div class="bbs-notif-row">'
             + '<span class="bbs-notif-type">' + typeLabel + '</span>'
+            + '<span class="bbs-notif-title">' + escapeHtml(n.topic_title || '') + '</span>'
             + '<span class="bbs-notif-time">' + timeStr + '</span>'
+            + '<span class="bbs-notif-del" onclick="event.stopPropagation();bbsDeleteNotif(\'' + n.id + '\')">✕</span>'
             + '</div>'
-            + '<div class="bbs-notif-item-title">' + escapeHtml(n.topic_title || '') + '</div>'
-            + '<div class="bbs-notif-item-preview">' + escapeHtml(preview) + '</div>'
+            + '<div class="bbs-notif-preview">' + escapeHtml(preview) + '</div>'
             + '</div>';
         }
         list.innerHTML = html;
@@ -493,14 +495,25 @@
       if (res.ok) { bbsLoadNotifs(true); bbsLoadNotifs(false); }
     });
   };
-  window.bbsOpenNotifTopic = function(topicId, markRead, notifId) {
+  window.bbsOpenNotifTopic = function(topicId, markRead, notifId, replyId) {
     if (markRead && notifId) {
       api('POST', '/api/bbs/notifications/read', { ids: [notifId] }).then(function() {
         bbsLoadNotifs(false);
       });
     }
     bbsCloseNotifications();
-    bbsOpenTopic(topicId);
+    bbsOpenTopic(topicId, replyId || '');
+  };
+  window.bbsDeleteNotif = function(nid) {
+    api('POST', '/api/bbs/notifications/delete', { id: nid }).then(function(res) {
+      if (res.ok) { bbsLoadNotifs(true); bbsLoadNotifs(false); }
+    });
+  };
+  window.bbsDeleteAllNotif = function() {
+    if (!confirm('确定清空所有通知？')) return;
+    api('POST', '/api/bbs/notifications/delete', { all: true }).then(function(res) {
+      if (res.ok) { bbsLoadNotifs(true); bbsLoadNotifs(false); }
+    });
   };
 
   // ── 初始化 ──
@@ -755,9 +768,9 @@
 
   // ── 打开帖子详情 ──
 
-  window.bbsOpenTopic = function(id) {
+  window.bbsOpenTopic = function(id, scrollToReplyId) {
+    scrollToReplyId = scrollToReplyId || '';
     history.pushState({ topic: id }, '', '?topic=' + id);
-    // 立即显示加载动画，不用等 API
     var listEl = document.getElementById('bbs-topic-list');
     var detailEl = document.getElementById('bbs-detail');
     listEl.style.display = 'none';
@@ -767,6 +780,32 @@
     api('GET', '/api/bbs/topics/' + id).then(function(topic) {
       if (topic && topic.id) {
         renderDetail(topic);
+        // 跳转到指定回复
+        if (scrollToReplyId) {
+          setTimeout(function() {
+            var el = document.getElementById('r_' + scrollToReplyId);
+            if (el) {
+              // 如果被折叠在展开区域内，自动展开
+              var parent = el.parentNode;
+              while (parent && parent.id !== 'bbs-detail') {
+                if (parent.style && parent.style.display === 'none') {
+                  var prev = parent.previousElementSibling;
+                  if (prev && prev.classList.contains('bbs-reply-more')) {
+                    prev.click();
+                  }
+                  break;
+                }
+                parent = parent.parentNode;
+              }
+              setTimeout(function() {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.style.transition = 'background 0.5s';
+                el.style.background = 'rgba(57,159,255,0.1)';
+                setTimeout(function() { el.style.background = ''; }, 2000);
+              }, 100);
+            }
+          }, 200);
+        }
       } else {
         detailEl.innerHTML = '<div class="bbs-detail"><button class="bbs-detail-back" onclick="bbsCloseDetail()">← 返回列表</button><div style="text-align:center;padding:48px;color:#bbb;">帖子不存在或已被删除</div></div>';
       }
@@ -787,8 +826,31 @@
     var topicBadges = authorBadges(topic.author_id, topic.author_role, topic.author_tags);
     var replies = topic.replies || [];
     var repliesHtml = '';
+  // 两级渲染：一级 + 二级（平行缩进）
+    // 先建立父子映射
+    var childMap = {};
     for (var i = 0; i < replies.length; i++) {
-      var r = replies[i];
+      var ri = replies[i];
+      if (ri.reply_to) {
+        if (!childMap[ri.reply_to]) childMap[ri.reply_to] = [];
+        childMap[ri.reply_to].push(ri);
+      }
+    }
+    // 递归收集所有后代（展平为二级）
+    function _collectAllChildren(pid) {
+      var result = [];
+      var kids = childMap[pid] || [];
+      for (var k = 0; k < kids.length; k++) {
+        result.push(kids[k]);
+        // 如果子回复也有回复，继续收集到同一层
+        var grandKids = childMap[kids[k].id] || [];
+        for (var g = 0; g < grandKids.length; g++) {
+          result.push(grandKids[g]);
+        }
+      }
+      return result;
+    }
+    function _rItem(r, isChild) {
       var rt = new Date(r.created_at * 1000).toLocaleString();
       var rAuthor = r.author_name || '账号不存在';
       var rBadges = authorBadges(r.author_id, r.author_role, r.author_tags);
@@ -796,32 +858,52 @@
         rBadges += '<span class="bbs-role-badge author">贴主</span>';
       }
       var canDelReply = TOKEN && (ROLE === 'admin' || r.author_id === USER_ID);
-      // 引用回复
-      var replyRef = '';
+      var replyBtn = TOKEN ? '<span class="bbs-reply-to-btn" onclick="bbsSetReplyTo(\'' + topic.id + '\',\'' + (r.id || '') + '\',\'' + escapeHtml(rAuthor).replace(/'/g, "\'") + '\')">回复</span>' : '';
+      var delBtn = canDelReply ? '<span class="bbs-reply-del" onclick="bbsDeleteReply(\'' + topic.id + '\',\'' + (r.id || '') + '\')" title="删除"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>' : '';
+      var refHtml = '';
       if (r.reply_to) {
         for (var j = 0; j < replies.length; j++) {
           if (replies[j].id === r.reply_to) {
-            replyRef = '<div class="bbs-reply-ref">回复 ' + (replies[j].author_name || '') + '</div>';
+            refHtml = '<div class="bbs-reply-ref">回复 @' + (replies[j].author_name || '') + '</div>';
             break;
           }
         }
       }
-      var replyBtn = TOKEN ? '<span class="bbs-reply-to-btn" onclick="bbsSetReplyTo(\'' + topic.id + '\',\'' + (r.id || '') + '\',\'' + escapeHtml(rAuthor).replace(/'/g, "\\'") + '\')" title="回复">回复</span>' : '';
-      var delBtn = canDelReply ? '<span class="bbs-reply-del" onclick="bbsDeleteReply(\'' + topic.id + '\',\'' + (r.id || '') + '\')" title="删除"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>' : '';
-      repliesHtml += '<div class="bbs-reply-item">' +
+      var cls = isChild ? ' bbs-reply-child' : '';
+      return '<div class="bbs-reply-item' + cls + '" id="r_' + (r.id || '') + '">' +
         '<div class="bbs-reply-author"><span class="bbs-author-link" onclick="bbsOpenUser(\'' + escapeHtml(r.author_id || '') + '\')">' + escapeHtml(rAuthor) + '</span>' + rBadges + '</div>' +
         delBtn + replyBtn +
-        replyRef +
-        '<div class="bbs-reply-content">' + renderAtMentions(renderMarkdown(r.content)) + '</div>' +
+        (isChild ? refHtml : '') +
+        '<div class="bbs-reply-content">' + renderAtMentions(renderMarkdown(r.content), topic.user_map) + '</div>' +
         '<div class="bbs-reply-time">' + rt + '</div>' +
         '</div>';
     }
-
-    // 回复输入区域（登录后可见）
+    var repliesHtml = '';
+    for (var i = 0; i < replies.length; i++) {
+      var r = replies[i];
+      if (r.reply_to) continue; // 跳过二级，由父级渲染
+      repliesHtml += _rItem(r, false);
+      // 所有后代展平为二级
+      var allKids = _collectAllChildren(r.id);
+      if (allKids.length > 0) {
+        var shown = allKids.slice(0, 2);
+        var hidden = allKids.slice(2);
+        for (var k = 0; k < shown.length; k++) {
+          repliesHtml += _rItem(shown[k], true);
+        }
+        if (hidden.length > 0) {
+          repliesHtml += '<div class="bbs-reply-more" onclick="this.style.display=\'none\';var n=this.nextElementSibling;if(n)n.style.display=\'block\'">展开 ' + hidden.length + ' 条回复</div><div style="display:none;">';
+          for (var k = 0; k < hidden.length; k++) {
+            repliesHtml += _rItem(hidden[k], true);
+          }
+          repliesHtml += '</div>';
+        }
+      }
+    }    // 回复输入区域（登录后可见）
     var replyInputHtml = '';
     if (TOKEN) {
       replyInputHtml =
-        '<div class="bbs-reply-input-area">' +
+        '<div class="bbs-reply-input-area" id="bbs-reply-input-area">' +
         mdRenderToolbar('bbs-reply-content') +
         '<div class="bbs-md-split">' +
         '<textarea id="bbs-reply-content" placeholder="输入回复…（支持 Markdown）" maxlength="1024"></textarea>' +
@@ -945,10 +1027,11 @@
 
   // ── Markdown 渲染 ──
 
-  function renderAtMentions(html) {
-    // 将 @{user_id} 渲染为可点击的用户链接
+  function renderAtMentions(html, userMap) {
+    userMap = userMap || {};
     return html.replace(/@\{([^}]+)\}/g, function(m, uid) {
-      return '<a class="bbs-at-link" href="javascript:bbsOpenUser(\'' + uid.replace(/'/g, "\\'") + '\')">@' + uid + '</a>';
+      var name = userMap[uid] || uid;
+      return '<a class="bbs-at-link" href="javascript:bbsOpenUser(\'' + uid.replace(/'/g, "\\'") + '\')">@' + name + '</a>';
     });
   }
 
@@ -1183,8 +1266,49 @@
   window.bbsSetReplyTo = function(tid, rid, rname) {
     _replyToId = rid;
     _replyToName = rname;
-    var ta = document.getElementById('bbs-reply-content');
-    if (ta) { ta.focus(); ta.placeholder = '回复 ' + rname + '...'; }
+    // 移除已有内联回复框
+    var oldBox = document.getElementById('bbs-inline-reply');
+    if (oldBox) oldBox.remove();
+    // 在对应回复下方插入回复框
+    var replyEl = document.getElementById('r_' + rid);
+    if (!replyEl) return;
+    var sName = escapeHtml(rname);
+    var html = '<div id="bbs-inline-reply" style="margin:8px 0 12px 0;padding:10px 14px;background:rgba(0,0,0,0.02);border-radius:8px;">' +
+      '<div style="font-size:12px;color:#999;margin-bottom:6px;">回复 @' + sName + '</div>' +
+      '<textarea id="bbs-inline-input" style="width:100%;padding:8px 10px;border:1px solid rgba(0,0,0,0.12);border-radius:6px;font-size:13px;resize:none;height:60px;box-sizing:border-box;outline:none;background:rgba(255,255,255,0.8);color:#333;" placeholder="输入回复…" maxlength="1024"></textarea>' +
+      '<div style="display:flex;gap:6px;margin-top:6px;">' +
+      '<button onclick="bbsDoInlineReply(\'' + tid + '\')" style="padding:5px 14px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;background:var(--theme-color,#399FFF);color:#fff;">发送</button>' +
+      '<button onclick="bbsCancelInlineReply()" style="padding:5px 14px;border:none;border-radius:6px;font-size:12px;cursor:pointer;background:rgba(0,0,0,0.05);color:#555;">取消</button>' +
+      '</div></div>';
+    replyEl.insertAdjacentHTML('afterend', html);
+    document.getElementById('bbs-inline-input').focus();
+  };
+  window.bbsCancelInlineReply = function() {
+    _replyToId = ''; _replyToName = '';
+    var box = document.getElementById('bbs-inline-reply');
+    if (box) box.remove();
+  };
+  window.bbsDoInlineReply = function(tid) {
+    var input = document.getElementById('bbs-inline-input');
+    if (!input) return;
+    var content = input.value.trim();
+    if (!content) { showToast('请输入回复内容'); return; }
+    if (content.length > 1024) { showToast('回复不能超过 1024 字'); return; }
+    var body = { content: content };
+    if (_replyToId) body.reply_to = _replyToId;
+    api('POST', '/api/bbs/topics/' + tid + '/reply', body).then(function(res) {
+      if (res.ok) {
+        _replyToId = ''; _replyToName = '';
+        showToast('回复成功');
+        bbsOpenTopic(tid);
+      } else if (res.error === 'unauthorized') {
+        handleUnauthorized();
+      } else if (res.error === 'maintenance') {
+        showToast(res.message || '论坛维护中');
+      } else {
+        showToast('回复失败');
+      }
+    });
   };
 
   window.bbsDoReply = function(topicId) {
