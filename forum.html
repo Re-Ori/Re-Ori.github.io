@@ -43,7 +43,7 @@
 
       <!-- 维护模式公告 -->
       <div id="bbs-maint-banner" style="display:none;background:rgba(255,107,53,0.08);border:1px solid rgba(255,107,53,0.25);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#c84a1c;text-align:center;">
-        🛡 论坛维护中，暂时无法发帖和删除操作
+        论坛维护中，暂时无法发帖和删除操作
       </div>
 
       <!-- 帖子列表 -->
@@ -547,17 +547,19 @@
 
   function bbsCheckMaintenance() {
     api('GET', '/api/admin/maintenance').then(function(res) {
-      if (res.ok && res.maintenance && res.maintenance.enabled && ROLE !== 'admin') {
-        var txt = '🛡 论坛维护中，暂时无法发帖和删除';
+      var banner = document.getElementById('bbs-maint-banner');
+      if (!banner) return;
+      if (res.ok && res.maintenance && res.maintenance.enabled) {
+        var txt = '论坛维护中，暂时无法发帖和删除';
         var ac = res.maintenance.auto_close_at;
         if (ac && ac > 0) {
           var d = new Date(ac * 1000);
           txt += '（预计 ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2) + ' 恢复）';
         }
-        document.getElementById('bbs-maint-banner').textContent = txt;
-        document.getElementById('bbs-maint-banner').style.display = '';
+        banner.textContent = txt;
+        banner.style.display = '';
       } else {
-        document.getElementById('bbs-maint-banner').style.display = 'none';
+        banner.style.display = 'none';
       }
     }).catch(function() {});
   }
