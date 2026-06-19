@@ -830,14 +830,11 @@
           setTimeout(function() {
             var el = document.getElementById('r_' + scrollToReplyId);
             if (el) {
-              // 如果被折叠在展开区域内，自动展开
               var parent = el.parentNode;
               while (parent && parent.id !== 'bbs-detail') {
                 if (parent.style && parent.style.display === 'none') {
                   var prev = parent.previousElementSibling;
-                  if (prev && prev.classList.contains('bbs-reply-more')) {
-                    prev.click();
-                  }
+                  if (prev && prev.classList.contains('bbs-reply-more')) prev.click();
                   break;
                 }
                 parent = parent.parentNode;
@@ -868,6 +865,7 @@
 
     var time = new Date(topic.created_at * 1000).toLocaleString();
     var authorName = topic.author_name || '账号不存在';
+    // 嵌入图片通过 /api/bbs/emb/<tid>/<idx> 端点单独加载
     var topicHiddenTags = (topic.hidden_tags_map && topic.hidden_tags_map[topic.author_id]) || null;
     var topicBadges = authorBadges(topic.author_id, topic.author_role, topic.author_tags, topicHiddenTags);
     var replies = topic.replies || [];
@@ -948,7 +946,7 @@
       }
     }    // 回复输入区域（登录后可见）
     var replyInputHtml = '';
-    if (TOKEN) {
+    if (TOKEN && !topic._hideReplyInput) {
       replyInputHtml =
         '<div class="bbs-reply-input-area" id="bbs-reply-input-area">' +
         mdRenderToolbar('bbs-reply-content') +
@@ -984,6 +982,7 @@
       '</div>' +
       replyInputHtml +
       '</div>';
+    lazyImage(detailEl);
 
     // 键盘：Ctrl+Enter 发送，Enter 换行；字数统计
     var replyInput = document.getElementById('bbs-reply-content');
@@ -1088,6 +1087,54 @@
     });
   }
 
+  function lazyImage(el) {
+    var imgs = el.querySelectorAll('img[data-src]');
+    for (var i = 0; i < imgs.length; i++) {
+      (function(img) {
+        var realSrc = img.getAttribute('data-src');
+        // 显示框架占位（带进度）
+        var wrapper = document.createElement('span');
+        wrapper.className = 'bbs-img-frame';
+        wrapper.innerHTML = '<span class="bbs-img-placeholder"><span class="bbs-img-progress">0%</span></span>';
+        img.parentNode.insertBefore(wrapper, img);
+        wrapper.appendChild(img);
+        // 用 XHR 加载图片带进度
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', realSrc, true);
+        xhr.responseType = 'blob';
+        xhr.onprogress = function(e) {
+          if (e.lengthComputable) {
+            var pct = Math.round(e.loaded / e.total * 100);
+            var pr = wrapper.querySelector('.bbs-img-progress');
+            if (pr) pr.textContent = pct + '%';
+          }
+        };
+        xhr.onload = function() {
+          if (xhr.status === 200) {
+            var blob = xhr.response;
+            img.src = URL.createObjectURL(blob);
+            img.style.display = '';
+            img.removeAttribute('data-src');
+            var ph = wrapper.querySelector('.bbs-img-placeholder');
+            if (ph) ph.remove();
+          } else {
+            img.style.display = '';
+            img.removeAttribute('data-src');
+            var pr = wrapper.querySelector('.bbs-img-progress');
+            if (pr) pr.textContent = '(加载失败)';
+          }
+        };
+        xhr.onerror = function() {
+          img.style.display = '';
+          img.removeAttribute('data-src');
+          var pr = wrapper.querySelector('.bbs-img-progress');
+          if (pr) pr.textContent = '(加载失败)';
+        };
+        xhr.send();
+      })(imgs[i]);
+    }
+  }
+
   function renderMarkdown(text) {
     if (!text) return '';
     var lines = text.split('\n');
@@ -1102,7 +1149,7 @@
       var h = escapeHtml(s);
       // 下划线 <u> →  还原不被 escapeHtml 转义
       h = h.replace(/&lt;u&gt;/g, '<u>').replace(/&lt;\/u&gt;/g, '</u>');
-      h = h.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">');
+      h = h.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img data-src="$2" alt="$1" style="display:none">');
       h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
       h = h.replace(/~~(.+?)~~/g, '<del>$1</del>');
       h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
@@ -2221,14 +2268,23 @@
       document.getElementById('bbs-app').style.display = '';
       document.getElementById('bbs-topic-list').innerHTML = '<div class="bbs-loading"><div class="bbs-loading-spinner"></div>加载中…</div>';
       // 等 init 完成后再打开
+      var _topicOpened = false;
       var waitInit = setInterval(function() {
-        if (window._bbsInited) {
+        if (window._bbsInited && !_topicOpened) {
+          _topicOpened = true;
           clearInterval(waitInit);
           if (tid) bbsOpenTopic(tid);
           else bbsOpenUser(uid);
         }
       }, 50);
-      setTimeout(function() { clearInterval(waitInit); if (tid) bbsOpenTopic(tid); else bbsOpenUser(uid); }, 5000);
+      setTimeout(function() {
+        clearInterval(waitInit);
+        if (!_topicOpened) {
+          _topicOpened = true;
+          if (tid) bbsOpenTopic(tid);
+          else bbsOpenUser(uid);
+        }
+      }, 5000);
     }
   })();
 

@@ -650,6 +650,14 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if len(parts) == 1 and parts[0]:
                 self._handle_bbs_topic_detail(parts[0])
                 return
+            if len(parts) == 2 and parts[1] == 'replies':
+                self._handle_bbs_topic_replies(parts[0])
+                return
+        if req_path.startswith('/api/bbs/emb/'):
+            emb_parts = req_path[13:].split('/')
+            if len(emb_parts) == 2 and emb_parts[0] and emb_parts[1].startswith('image'):
+                self._handle_bbs_emb(emb_parts[0], emb_parts[1][5:])
+                return
         if req_path == '/api/bbs/notifications':
             self._handle_bbs_notifications()
             return
@@ -1830,17 +1838,38 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     def _handle_bbs_topic_detail(self, tid):
         """GET /api/bbs/topics/<id> — 帖子详情（含作者名解析）"""
         try:
+            # 支持 ?content_only=1 跳过回复解析（前端分块加载用）
+            parsed = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(parsed.query)
+            content_only = 'content_only' in params
+
             topic_path = _bbs_find_topic_file(tid)
             if not topic_path or not topic_path.exists():
                 self._send_json({'ok': False, 'error': 'not_found'})
                 return
             topic = json.loads(topic_path.read_text(encoding='utf-8'))
+            # 剥离 base64 图片，替换为占位标记
+            import re as _re
+            emb_counter = [0]
+            def _strip_emb(m):
+                idx = emb_counter[0]
+                emb_counter[0] += 1
+                return f'![_emb_{idx}_](/api/bbs/emb/{tid}/image{idx})'
+            content = topic.get('content', '')
+            has_emb = 'data:image/' in content
+            if has_emb:
+                topic['content'] = _re.sub(r'!\[([^\]]*)\]\(data:image/[^,]+;base64,[^"\')\s]+\)', _strip_emb, content)
+                topic['emb_count'] = emb_counter[0]
             # 解析作者名
             aid = topic.get('author_id', '')
             info = _bbs_resolve_author(aid)
             topic['author_name'] = info['username'] if info else '账号不存在'
             topic['author_role'] = info['role'] if info else ''
             topic['author_tags'] = info['tags'] if info else []
+            if content_only:
+                topic.pop('replies', None)
+                self._send_json(topic)
+                return
             # 解析回复作者名
             for r in topic.get('replies', []):
                 rid = r.get('author_id', '')
@@ -1875,6 +1904,63 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json(topic)
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_topic_replies(self, tid):
+        """GET /api/bbs/topics/<id>/replies — 仅返回帖子回复（分块加载用）"""
+        try:
+            topic_path = _bbs_find_topic_file(tid)
+            if not topic_path or not topic_path.exists():
+                self._send_json({'ok': False, 'error': 'not_found'}); return
+            topic = json.loads(topic_path.read_text(encoding='utf-8'))
+            replies = topic.get('replies', [])
+            for r in replies:
+                rid = r.get('author_id', '')
+                rinfo = _bbs_resolve_author(rid)
+                r['author_name'] = rinfo['username'] if rinfo else '账号不存在'
+                r['author_role'] = rinfo['role'] if rinfo else ''
+                r['author_tags'] = rinfo['tags'] if rinfo else []
+                r.pop('author', None)
+            # 管理员隐藏标签
+            req_user = _bbs_check(self.headers)
+            hidden_map = {}
+            if req_user and req_user.get('role') == 'admin':
+                try:
+                    all_u = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
+                    for u in all_u:
+                        at = u.get('tags', [])
+                        h = [t[1:] for t in at if isinstance(t, str) and t.startswith('_')]
+                        if h: hidden_map[u.get('id', '')] = h
+                except: pass
+            self._send_json({'ok': True, 'replies': replies, 'hidden_tags_map': hidden_map if hidden_map else None})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_emb(self, tid, idx):
+        """GET /api/bbs/emb/<tid>/<idx> — 返回嵌入的 base64 图片"""
+        try:
+            topic_path = _bbs_find_topic_file(tid)
+            if not topic_path or not topic_path.exists():
+                self.send_error(404); return
+            topic = json.loads(topic_path.read_text(encoding='utf-8'))
+            content = topic.get('content', '')
+            import re as _re
+            matches = list(_re.finditer(r'data:image/[^,]+;base64,[^"\')\s]+', content))
+            if int(idx) < len(matches):
+                data_url = matches[int(idx)].group(0)
+                fmt = data_url.split(';')[0].split('/')[1]  # png, jpeg, gif...
+                b64_data = data_url.split(',', 1)[1]
+                import base64
+                raw = base64.b64decode(b64_data)
+                self.send_response(200)
+                self.send_header('Content-Type', f'image/{fmt}')
+                self.send_header('Content-Length', str(len(raw)))
+                self.send_header('Cache-Control', 'public, max-age=86400')
+                self.end_headers()
+                self.wfile.write(raw)
+            else:
+                self.send_error(404)
+        except Exception as e:
+            self.send_error(404)
 
     def _handle_bbs_topic_reply(self, tid):
         """POST /api/bbs/topics/<id>/reply — 回复帖子"""

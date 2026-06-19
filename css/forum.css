@@ -753,3 +753,17 @@
 /* ── 密码框眼睛 ── */
 #bbs-user-form-password::-ms-reveal { display: none; }
 #bbs-user-form-password::-webkit-credentials-auto-fill-button { display: none !important; visibility: hidden; }
+
+/* ── 图片懒加载框架 ── */
+.bbs-img-frame { display: inline-block; vertical-align: bottom; }
+.bbs-img-frame img { max-width: 100%; }
+.bbs-img-placeholder {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 200px; height: 120px; background: rgba(0,0,0,0.04);
+  border-radius: 8px; color: #bbb; font-size: 13px;
+  position: relative;
+}
+[data-theme="dark"] .bbs-img-placeholder { background: rgba(255,255,255,0.04); }
+.bbs-img-progress {
+  font-size: 13px; font-weight: 600; color: var(--theme-color,#399FFF);
+}
