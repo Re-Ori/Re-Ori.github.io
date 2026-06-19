@@ -278,7 +278,17 @@ def _cmp(temp, root):
     return upd, add, rem
 
 def _apply(temp, root, upd, add, rem):
+    # 配置文件优先应用，然后清除缓存，让后续 _is_sync_local 读到新配置
+    cfg_name = CONFIG_PATH.name
     for r in upd + add:
+        if r == cfg_name:
+            s = temp / r; d = root / r
+            d.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(s, d)
+            global _CONFIG_CACHE, _CONFIG_CACHE_AT
+            _CONFIG_CACHE, _CONFIG_CACHE_AT = None, 0
+            break
+    for r in upd + add:
+        if r == cfg_name: continue
         s = temp / r; d = root / r
         d.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(s, d)
     for r in rem:
@@ -431,6 +441,12 @@ def _make_checker():
                 if _RESTART_NEEDED:
                     _log("\n服务器代码已更新，正在重启…"); time.sleep(3)
                     try:
+                        # 重启前保存统计数据
+                        try:
+                            import app as _app
+                            _app._save_stats(force=True)
+                            _app._save_daily(force=True)
+                        except: pass
                         subprocess.Popen([sys.executable] + sys.argv)
                         _log("新进程已启动（端口重试机制将等待旧端口释放）")
                     except Exception as e: _log(f"重启失败: {e}")
