@@ -2542,11 +2542,11 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 if inv.get('expires_at', 0) and time.time() > inv['expires_at']:
                     self._send_json({'ok': False, 'error': '已过期'}); return
                 if inv.get('used', 0) >= inv.get('max_uses', 1):
-                    self._send_json({'ok': False, 'error': '已达最大使用次数'}); return
+                    self._send_json({'ok': False, 'error': '已过期'}); return
                 self._send_json({'ok': True, 'max_uses': inv['max_uses'],
                                  'used': inv['used'], 'expires_at': inv['expires_at']})
                 return
-        self._send_json({'ok': False, 'error': '邀请链接不存在'})
+        self._send_json({'ok': False, 'error': '邀请链接无效'})
 
     def _handle_invite_register(self, code):
         try:
@@ -2560,20 +2560,21 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             for i in data['invites']:
                 if i.get('code') == code: inv = i; break
             if not inv:
-                self._send_json({'ok': False, 'error': '邀请链接不存在'}); return
+                self._send_json({'ok': False, 'error': '邀请链接无效'}); return
             if not inv.get('enabled', True):
                 self._send_json({'ok': False, 'error': '邀请链接已禁用'}); return
             if inv.get('expires_at', 0) and time.time() > inv['expires_at']:
                 self._send_json({'ok': False, 'error': '邀请链接已过期'}); return
             if inv.get('used', 0) >= inv.get('max_uses', 1):
-                self._send_json({'ok': False, 'error': '邀请链接已达最大使用次数'}); return
+                self._send_json({'ok': False, 'error': '已过期'}); return
             users = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
             for u in users:
                 if u.get('username') == username:
                     self._send_json({'ok': False, 'error': '用户名已存在'}); return
             import random, string
+            chars = string.ascii_letters + string.digits
             while True:
-                uid = 'user' + ''.join(random.choices(string.digits, k=3))
+                uid = ''.join(random.choices(chars, k=8))
                 if not any(u.get('id') == uid for u in users): break
             users.append({'id': uid, 'username': username, 'password': password, 'role': 'user'})
             BBS_USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
