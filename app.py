@@ -32,6 +32,7 @@ BBS_USERS_FILE = BBS_DIR / "users.json"
 BBS_TOPICS_FILE = BBS_DIR / "topics.json"
 BBS_TOPICS_DIR = BBS_DIR / "topics"
 BBS_TOKENS_FILE = BBS_DIR / "tokens.json"
+BBS_NOTIFICATIONS_FILE = BBS_DIR / "notifications.json"
 
 # ── 统计追踪 ──
 STATS_DIR = DATA_DIR / "stats"
@@ -494,6 +495,37 @@ def _bbs_resolve_author(author_id):
         pass
     return None
 
+def _load_notifications():
+    try:
+        if BBS_NOTIFICATIONS_FILE.exists():
+            return json.loads(BBS_NOTIFICATIONS_FILE.read_text(encoding='utf-8'))
+    except: pass
+    return {"notifications": []}
+
+def _save_notifications(data):
+    BBS_NOTIFICATIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = BBS_NOTIFICATIONS_FILE.with_suffix(".tmp.json")
+    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+    tmp.replace(BBS_NOTIFICATIONS_FILE)
+
+def _create_notification(typ, to_uid, from_uid, topic_id, topic_title, reply_id, preview):
+    import hashlib, os
+    nid = hashlib.sha256(os.urandom(16)).hexdigest()[:12]
+    nd = _load_notifications()
+    nd["notifications"].append({
+        "id": nid, "type": typ,
+        "to_user_id": to_uid, "from_user_id": from_uid,
+        "topic_id": topic_id, "topic_title": topic_title,
+        "reply_id": reply_id, "content_preview": preview[:80],
+        "created_at": time.time(), "read": False,
+    })
+    _save_notifications(nd)
+    return nid
+
+def _parse_mentions(content):
+    import re
+    return re.findall(r'@\{([^}]+)\}', content)
+
 def user_agent():
     return f"AutoUpdate/2.0 Python/{sys.version_info.major}.{sys.version_info.minor}"
 
@@ -597,6 +629,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if len(parts) == 1 and parts[0]:
                 self._handle_bbs_topic_detail(parts[0])
                 return
+        if req_path == '/api/bbs/notifications':
+            self._handle_bbs_notifications()
+            return
         if req_path.startswith('/api/bbs/user/'):
             uid = req_path[14:]
             if uid:
@@ -607,6 +642,12 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             return
         if req_path == '/api/admin/download-source':
             self._handle_admin_download_source()
+            return
+        if req_path == '/api/admin/maintenance':
+            self._handle_admin_maintenance()
+            return
+        if req_path == '/api/admin/users':
+            self._handle_admin_users()
             return
 
         # 短链跳转 /s/<code>
@@ -772,11 +813,28 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if len(parts) == 2 and parts[1] == 'delete':
                 self._handle_bbs_topic_delete(parts[0])
                 return
+        if req_path == '/api/bbs/notifications/read':
+            self._handle_bbs_notifications_read()
+            return
         if req_path == '/api/bbs/import':
             self._handle_bbs_import()
             return
         if req_path == '/api/admin/upload-source':
             self._handle_admin_upload_source()
+            return
+        if req_path == '/api/admin/maintenance':
+            self._handle_admin_maintenance()
+            return
+        if req_path == '/api/admin/users':
+            self._handle_admin_user_create()
+            return
+        if req_path.startswith('/api/admin/users/') and req_path.endswith('/delete'):
+            uid = req_path[17:-7]
+            self._handle_admin_user_delete(uid)
+            return
+        if req_path.startswith('/api/admin/users/'):
+            uid = req_path[17:]
+            self._handle_admin_user_update(uid)
             return
 
         # OAuth 路径（如 /api/oauth/token）— 服务端代理到 giscus.app（避免 CORS 问题）
@@ -1500,10 +1558,18 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             for u in users:
                 if u.get('username') == username and u.get('password') == password:
                     token = _bbs_token()
-                    BBS_TOKENS[token] = {'user': username, 'at': time.time()}
+                    BBS_TOKENS[token] = {
+                        'user_id': u.get('id', ''),
+                        'username': u.get('username', ''),
+                        'role': u.get('role', 'user'),
+                        'at': time.time(),
+                    }
                     _bbs_save_tokens()
-                    log(f'短链/BBS 登录: {username}')
-                    self._send_json({'ok': True, 'token': token, 'user': username})
+                    log(f'短链/BBS 登录: {u.get("id", "?")}({username})')
+                    self._send_json({'ok': True, 'token': token,
+                                     'user_id': u.get('id', ''),
+                                     'user': u.get('username', ''),
+                                     'role': u.get('role', 'user')})
                     return
             self._send_json({'ok': False, 'error': 'auth_failed'})
         except Exception as e:
@@ -1666,6 +1732,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'})
             return
+        if self._check_maintenance_block(user):
+            return
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
             title = body.get('title', '').strip()
@@ -1723,6 +1791,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'})
             return
+        if self._check_maintenance_block(user):
+            return
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
             content = body.get('content', '').strip()
@@ -1736,16 +1806,37 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             topic = json.loads(topic_path.read_text(encoding='utf-8'))
             import random, string as _s
             reply_id = _bbs_id()
+            reply_to = body.get('reply_to', '')
             reply = {
                 'id': reply_id,
                 'author_id': user.get('user_id', ''),
                 'content': content,
                 'created_at': time.time(),
             }
+            if reply_to:
+                reply['reply_to'] = reply_to
             topic.setdefault('replies', []).append(reply)
             topic['updated_at'] = time.time()
             topic_path.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
-            log(f'BBS 回复: {tid} by {user.get("user_id", "?")}')
+            # 创建通知
+            author_id = user.get('user_id', '')
+            topic_author = topic.get('author_id', '')
+            topic_title = topic.get('title', '')
+            preview = content[:40].replace('\n', ' ')
+            # 通知帖主（回复者不是帖主本人时）
+            if topic_author and topic_author != author_id:
+                _create_notification('reply', topic_author, author_id, tid, topic_title, reply_id, preview)
+            # 通知被回复者（二级回复，且不是同一个人）
+            if reply_to:
+                for r in topic.get('replies', []):
+                    if r.get('id') == reply_to and r.get('author_id') != author_id:
+                        _create_notification('reply_nested', r['author_id'], author_id, tid, topic_title, reply_id, preview)
+                        break
+            # 通知 @{id} 提及的用户
+            for mentioned_uid in _parse_mentions(content):
+                if mentioned_uid != author_id and mentioned_uid != topic_author:
+                    _create_notification('mention', mentioned_uid, author_id, tid, topic_title, reply_id, preview)
+            log(f'BBS 回复: {tid} by {author_id}')
             self._send_json({'ok': True, 'reply_id': reply_id})
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
@@ -1755,6 +1846,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         user = _bbs_check(self.headers)
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'})
+            return
+        if self._check_maintenance_block(user):
             return
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
@@ -1795,6 +1888,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         user = _bbs_check(self.headers)
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'})
+            return
+        if self._check_maintenance_block(user):
             return
         try:
             topic_path = _bbs_find_topic_file(tid)
@@ -1892,6 +1987,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             for name in zf.namelist():
                 if name.endswith('/'):
                     continue
+                # 保护 .data/ 目录不被上传覆盖
+                if name.startswith('.data/') or name.startswith('\\.data\\'):
+                    continue
                 target = root / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(zf.read(name))
@@ -1914,6 +2012,279 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                     os._exit(0)
                 threading.Thread(target=_delayed_restart, daemon=False).start()
         except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+        # ── 管理员：用户管理 ─────────────────────────────────
+
+    MAINTENANCE_FILE = DATA_DIR / "bbs" / "maintenance.json"
+
+    def _load_users(self):
+        try:
+            if BBS_USERS_FILE.exists():
+                return json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
+        except Exception as e:
+            log(f"读取用户列表失败: {e}")
+        return []
+
+    def _save_users(self, users):
+        BBS_USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = BBS_USERS_FILE.with_suffix(".tmp.json")
+        tmp.write_text(json.dumps(users, ensure_ascii=False, indent=2), encoding='utf-8')
+        tmp.replace(BBS_USERS_FILE)
+
+    def _is_admin(self):
+        user = _bbs_check(self.headers)
+        return user and user.get('role') == 'admin'
+
+    # -- 维护状态 --
+
+    def _load_maintenance(self):
+        try:
+            if self.MAINTENANCE_FILE.exists():
+                return json.loads(self.MAINTENANCE_FILE.read_text(encoding='utf-8'))
+        except:
+            pass
+        return {"enabled": False, "started_at": 0, "auto_close_at": 0}
+
+    def _save_maintenance(self, state):
+        self.MAINTENANCE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.MAINTENANCE_FILE.with_suffix(".tmp.json")
+        tmp.write_text(json.dumps(state, ensure_ascii=False), encoding='utf-8')
+        tmp.replace(self.MAINTENANCE_FILE)
+
+    def _check_maintenance_block(self, user) -> bool:
+        m = self._load_maintenance()
+        if not m.get('enabled'):
+            return False
+        auto_close = m.get('auto_close_at', 0)
+        if auto_close and time.time() >= auto_close:
+            m['enabled'] = False
+            self._save_maintenance(m)
+            return False
+        if user and user.get('role') == 'admin':
+            return False
+        # 兼容旧 token 没有 role 字段的情况
+        if user:
+            uid = user.get('user_id', '')
+            try:
+                all_u = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
+                for u in all_u:
+                    if u.get('id') == uid and u.get('role') == 'admin':
+                        return False
+            except: pass
+        self._send_json({'ok': False, 'error': 'maintenance',
+                         'message': '论坛维护中，暂时无法操作'})
+        return True
+
+    def _handle_admin_maintenance(self):
+        if self.command == 'GET':
+            state = self._load_maintenance()
+            if state.get('enabled') and state.get('auto_close_at', 0):
+                if time.time() >= state['auto_close_at']:
+                    state['enabled'] = False
+                    self._save_maintenance(state)
+            self._send_json({'ok': True, 'maintenance': state})
+            return
+        if not self._is_admin():
+            self._send_json({'ok': False, 'error': 'forbidden'})
+            return
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            state = self._load_maintenance()
+            state['enabled'] = bool(body.get('enabled', False))
+            if state['enabled']:
+                state['started_at'] = time.time()
+            else:
+                state['started_at'] = 0
+                state['auto_close_at'] = 0
+            close_min = body.get('auto_close_minutes')
+            if close_min and state['enabled']:
+                state['auto_close_at'] = time.time() + int(close_min) * 60
+            self._save_maintenance(state)
+            en_str = '开启' if state['enabled'] else '关闭'
+            log(f"维护状态: {en_str}" + (f' (自动关闭于 {close_min} 分钟后)' if close_min else ''))
+            self._send_json({'ok': True, 'maintenance': state})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    # -- 用户 CRUD --
+
+    def _handle_admin_users(self):
+        if not self._is_admin():
+            self._send_json({'ok': False, 'error': 'forbidden'})
+            return
+        try:
+            users = self._load_users()
+            self._send_json({'ok': True, 'users': users})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_admin_user_create(self):
+        if not self._is_admin():
+            self._send_json({'ok': False, 'error': 'forbidden'})
+            return
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            username = body.get('username', '').strip()
+            password = body.get('password', '').strip()
+            if not username or not password:
+                self._send_json({'ok': False, 'error': '用户名和密码不能为空'})
+                return
+            users = self._load_users()
+            for u in users:
+                if u.get('username') == username:
+                    self._send_json({'ok': False, 'error': '用户名已存在'})
+                    return
+            # 使用自定义 ID 或自动生成
+            import random, string
+            uid = body.get('new_id', '').strip()
+            if uid:
+                if any(u.get('id') == uid for u in users):
+                    self._send_json({'ok': False, 'error': 'ID 已被占用'})
+                    return
+            else:
+                chars = string.ascii_letters + string.digits
+                while True:
+                    uid = ''.join(random.choices(chars, k=8))
+                    if not any(u.get('id') == uid for u in users):
+                        break
+            new_user = {
+                'id': uid, 'username': username, 'password': password,
+                'role': body.get('role', 'user'),
+            }
+            tags = body.get('tags')
+            if tags:
+                new_user['tags'] = tags if isinstance(tags, list) else [tags]
+            users.append(new_user)
+            self._save_users(users)
+            log(f'管理员创建用户: {uid} ({username})')
+            self._send_json({'ok': True, 'id': uid, 'password': password})
+        except Exception as e:
+            log(f"创建用户失败: {e}")
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_admin_user_update(self, uid):
+        if not self._is_admin():
+            self._send_json({'ok': False, 'error': 'forbidden'})
+            return
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            users = self._load_users()
+            found = None
+            for u in users:
+                if u.get('id') == uid:
+                    found = u
+                    break
+            if not found:
+                self._send_json({'ok': False, 'error': '用户不存在'})
+                return
+
+            new_username = body.get('username', '').strip()
+            if new_username and new_username != found.get('username'):
+                for u in users:
+                    if u.get('username') == new_username:
+                        self._send_json({'ok': False, 'error': '用户名已存在'})
+                        return
+                found['username'] = new_username
+
+            new_id = body.get('new_id', '').strip()
+            if new_id and new_id != uid:
+                m = self._load_maintenance()
+                if not m.get('enabled'):
+                    self._send_json({'ok': False, 'error': '修改 ID 需要先开启维护模式'})
+                    return
+                for u in users:
+                    if u.get('id') == new_id:
+                        self._send_json({'ok': False, 'error': '新 ID 已被占用'})
+                        return
+                old_id = found['id']
+                found['id'] = new_id
+                self._replace_user_id_globally(old_id, new_id)
+                log(f'管理员改 ID: {old_id} -> {new_id}')
+
+            if 'password' in body and body['password']:
+                found['password'] = body['password']
+            if 'role' in body and body['role']:
+                found['role'] = body['role']
+            if 'tags' in body:
+                found['tags'] = body['tags'] if isinstance(body['tags'], list) else [body['tags']]
+            self._save_users(users)
+            log(f'管理员更新用户: {found["id"]}')
+            self._send_json({'ok': True, 'id': found.get('id', uid)})
+        except Exception as e:
+            log(f"更新用户失败: {e}")
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _replace_user_id_globally(self, old_id, new_id):
+        if not BBS_TOPICS_DIR.exists():
+            return
+        replaced_count = 0
+        for fp in BBS_TOPICS_DIR.iterdir():
+            if fp.suffix != '.json':
+                continue
+            try:
+                topic = json.loads(fp.read_text(encoding='utf-8'))
+                changed = False
+                if topic.get('author_id') == old_id:
+                    topic['author_id'] = new_id
+                    changed = True
+                for r in topic.get('replies', []):
+                    if r.get('author_id') == old_id:
+                        r['author_id'] = new_id
+                        changed = True
+                if changed:
+                    fp.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
+                    replaced_count += 1
+            except:
+                pass
+        log(f'全局 ID 替换: {old_id} -> {new_id}, 涉及 {replaced_count} 个帖子')
+
+    def _handle_admin_user_delete(self, uid):
+        if not self._is_admin():
+            self._send_json({'ok': False, 'error': 'forbidden'})
+            return
+        try:
+            delete_data = False
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+                delete_data = body.get('delete_data', False)
+            except: pass
+            if delete_data:
+                m = self._load_maintenance()
+                if not m.get('enabled'):
+                    self._send_json({'ok': False, 'error': '删除用户数据需要先开启维护模式'})
+                    return
+            users = self._load_users()
+            before = len(users)
+            removed = [u for u in users if u.get('id') == uid]
+            users = [u for u in users if u.get('id') != uid]
+            if len(users) == before:
+                self._send_json({'ok': False, 'error': '用户不存在'})
+                return
+            self._save_users(users)
+            uname = removed[0].get("username", "?") if removed else "?"
+            # 删除用户数据
+            deleted_topics = 0
+            if delete_data and BBS_TOPICS_DIR.exists():
+                for fp in list(BBS_TOPICS_DIR.iterdir()):
+                    if fp.suffix != '.json':
+                        continue
+                    try:
+                        topic = json.loads(fp.read_text(encoding='utf-8'))
+                        if topic.get('author_id') == uid:
+                            fp.unlink()
+                            deleted_topics += 1
+                        else:
+                            replies = topic.get('replies', [])
+                            new_replies = [r for r in replies if r.get('author_id') != uid]
+                            if len(new_replies) < len(replies):
+                                topic['replies'] = new_replies
+                                fp.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
+                    except: pass
+            log(f'管理员删除用户: {uid} ({uname})' + (f' 连带删除 {deleted_topics} 个帖子' if delete_data else ''))
+            self._send_json({'ok': True, 'deleted_topics': deleted_topics})
+        except Exception as e:
+            log(f"删除用户失败: {e}")
             self._send_json({'ok': False, 'error': str(e)})
 
     def _handle_bbs_import(self):
@@ -1992,6 +2363,48 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             })
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
+
+    # ── 通知系统 ─────────────────────────────────────────
+
+    def _handle_bbs_notifications(self):
+        """GET /api/bbs/notifications — 获取当前用户通知"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'})
+            return
+        uid = user.get('user_id', '')
+        nd = _load_notifications()
+        items = [n for n in nd["notifications"] if n.get("to_user_id") == uid]
+        items.sort(key=lambda x: x.get('created_at', 0), reverse=True)
+        unread = sum(1 for n in items if not n.get('read'))
+        self._send_json({'ok': True, 'notifications': items[:100], 'unread': unread})
+
+    def _handle_bbs_notifications_read(self):
+        """POST /api/bbs/notifications/read — 标记通知已读"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'})
+            return
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            ids = body.get('ids', [])
+            all_flag = body.get('all', False)
+        except:
+            ids = []
+            all_flag = False
+        uid = user.get('user_id', '')
+        nd = _load_notifications()
+        changed = False
+        for n in nd["notifications"]:
+            if n.get("to_user_id") != uid:
+                continue
+            if all_flag or n.get('id') in ids:
+                if not n.get('read'):
+                    n['read'] = True
+                    changed = True
+        if changed:
+            _save_notifications(nd)
+        self._send_json({'ok': True})
 
 # ── 数据目录初始化 ─────────────────────────────────────
 

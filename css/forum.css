@@ -565,3 +565,164 @@
 /* ── 管理员操作按钮组 ── */
 .bbs-admin-actions { display: inline-flex; gap: 4px; margin: 0 6px; }
 .bbs-admin-actions .bbs-login-btn { font-size: 12px; padding: 4px 10px; }
+
+/* ── 控制中心全屏 ── */
+.bbs-cc-sections { max-width: 640px; margin: 0 auto; width: 100%; }
+.bbs-cc-section {
+  margin-bottom: 24px; padding-bottom: 20px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+[data-theme="dark"] .bbs-cc-section { border-color: rgba(255,255,255,0.06); }
+.bbs-cc-section:last-child { border-bottom: none; margin-bottom: 0; }
+.bbs-cc-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.bbs-cc-section-title { font-size: 15px; font-weight: 600; color: #555; white-space: nowrap; }
+[data-theme="dark"] .bbs-cc-section-title { color: #999; }
+.bbs-cc-btns { display: flex; gap: 8px; flex-shrink: 0; }
+.bbs-cc-btn {
+  padding: 7px 16px; border: 1px solid rgba(0,0,0,0.12); border-radius: 7px;
+  font-size: 13px; background: transparent; cursor: pointer; color: #555;
+  transition: all 0.15s; white-space: nowrap;
+}
+.bbs-cc-btn:hover { border-color: var(--theme-color,#399FFF); color: var(--theme-color,#399FFF); }
+[data-theme="dark"] .bbs-cc-btn { color: #aaa; border-color: rgba(255,255,255,0.15); }
+
+/* ── 维护模式开关 ── */
+.bbs-toggle { position: relative; display: inline-block; width: 40px; height: 22px; cursor: pointer; }
+.bbs-toggle input { opacity: 0; width: 0; height: 0; }
+.bbs-toggle-slider {
+  position: absolute; inset: 0; background: #ccc; border-radius: 22px;
+  transition: 0.25s;
+}
+.bbs-toggle-slider::before {
+  content: ""; position: absolute; left: 3px; bottom: 3px; width: 16px; height: 16px;
+  background: #fff; border-radius: 50%; transition: 0.25s;
+}
+.bbs-toggle input:checked + .bbs-toggle-slider { background: #ff6b35; }
+.bbs-toggle input:checked + .bbs-toggle-slider::before { transform: translateX(18px); }
+[data-theme="dark"] .bbs-toggle-slider { background: #555; }
+[data-theme="dark"] .bbs-toggle input:checked + .bbs-toggle-slider { background: #ff6b35; }
+
+/* ── 维护配置面板 ── */
+.bbs-maint-config {
+  margin-top: 14px; padding: 16px;
+  background: rgba(0,0,0,0.025); border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.06);
+}
+[data-theme="dark"] .bbs-maint-config {
+  background: rgba(255,255,255,0.03) !important;
+  border-color: rgba(255,255,255,0.08);
+}
+.bbs-maint-options { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.bbs-maint-option {
+  display: grid; grid-template-columns: 20px auto 1fr;
+  align-items: center; gap: 8px; padding: 8px 10px;
+  border-radius: 8px; cursor: pointer; transition: background 0.15s;
+}
+.bbs-maint-option:hover { background: rgba(0,0,0,0.03); }
+[data-theme="dark"] .bbs-maint-option:hover { background: rgba(255,255,255,0.04); }
+.bbs-maint-option input[type="radio"] { margin: 0; width: 16px; height: 16px; }
+.bbs-maint-opt-label { font-size: 13px; color: #555; white-space: nowrap; }
+[data-theme="dark"] .bbs-maint-opt-label { color: #aaa; }
+.bbs-maint-option select, .bbs-maint-option input[type="datetime-local"] {
+  justify-self: start; padding: 5px 10px; border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.12); font-size: 13px;
+  background: rgba(255,255,255,0.8); color: #555; outline: none;
+  max-width: 100%; min-width: 140px;
+}
+[data-theme="dark"] .bbs-maint-option select,
+[data-theme="dark"] .bbs-maint-option input[type="datetime-local"] {
+  background: rgba(40,42,65,0.8) !important; border-color: rgba(255,255,255,0.12) !important; color: #ddd !important;
+}
+.bbs-maint-option select:focus,
+.bbs-maint-option input[type="datetime-local"]:focus { border-color: var(--theme-color,#399FFF); }
+.bbs-maint-actions { display: flex; gap: 8px; justify-content: flex-start; }
+.bbs-maint-btn {
+  background: var(--theme-color,#399FFF) !important; color: #fff !important;
+  border-color: var(--theme-color,#399FFF) !important;
+}
+.bbs-maint-btn:hover { opacity: 0.85; }
+.bbs-maint-active {
+  margin-top: 12px; padding: 14px 16px;
+  background: rgba(255,107,53,0.06); border-radius: 10px;
+  border: 1px solid rgba(255,107,53,0.15);
+}
+[data-theme="dark"] .bbs-maint-active { background: rgba(255,107,53,0.1) !important; }
+.bbs-maint-end-display { font-size: 13px; color: #c84a1c; margin-bottom: 10px; }
+
+/* ── 通知面板 ── */
+.bbs-notif-item { padding: 10px 12px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; transition: background 0.1s; }
+.bbs-notif-item:hover { background: rgba(0,0,0,0.03); }
+[data-theme="dark"] .bbs-notif-item:hover { background: rgba(255,255,255,0.04); }
+.bbs-notif-unread { background: rgba(57,159,255,0.06); }
+[data-theme="dark"] .bbs-notif-unread { background: rgba(57,159,255,0.1); }
+.bbs-notif-item-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.bbs-notif-type { font-weight: 600; font-size: 12px; color: #555; }
+[data-theme="dark"] .bbs-notif-type { color: #aaa; }
+.bbs-notif-type {
+  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  background: rgba(57,159,255,0.08); color: var(--theme-color,#399FFF); font-size: 11px; font-weight: 600;
+}
+[data-theme="dark"] .bbs-notif-type { background: rgba(57,159,255,0.12); }
+.bbs-notif-time { font-size: 11px; color: #aaa; }
+.bbs-notif-item-title { font-size: 12px; color: var(--theme-color,#399FFF); margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bbs-notif-item-preview { font-size: 12px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* @提及链接 */
+.bbs-at-link { color: var(--theme-color,#399FFF); text-decoration: none; font-weight: 500; cursor: pointer; }
+.bbs-at-link:hover { text-decoration: underline; }
+/* 回复引用 */
+.bbs-reply-ref { padding: 6px 10px; margin: 4px 0 8px; background: rgba(0,0,0,0.03); border-radius: 6px; font-size: 12px; color: #888; border-left: 3px solid rgba(0,0,0,0.08); }
+[data-theme="dark"] .bbs-reply-ref { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.1); }
+
+/* ── 删除用户确认 ── */
+.bbs-delete-data-box {
+  background: rgba(0,0,0,0.03); border-radius: 8px; padding: 12px; margin-bottom: 16px;
+  border: 1px solid rgba(0,0,0,0.06);
+}
+[data-theme="dark"] .bbs-delete-data-box {
+  background: rgba(255,255,255,0.04) !important; border-color: rgba(255,255,255,0.08);
+}
+.bbs-delete-data-label {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; color: #555; cursor: pointer; line-height: 1.4;
+}
+[data-theme="dark"] .bbs-delete-data-label { color: #aaa; }
+.bbs-delete-data-label input[type="checkbox"] {
+  flex-shrink: 0; width: 16px; height: 16px; margin: 0;
+  accent-color: var(--theme-color,#399FFF);
+}
+
+/* ── 用户管理表格 ── */
+.bbs-cc-users-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.bbs-cc-users-table th {
+  text-align: left; padding: 6px 8px; font-weight: 600; color: #888;
+  border-bottom: 1px solid rgba(0,0,0,0.08); font-size: 12px;
+}
+[data-theme="dark"] .bbs-cc-users-table th { color: #777; border-color: rgba(255,255,255,0.08); }
+.bbs-cc-users-table td { padding: 7px 8px; border-bottom: 1px solid rgba(0,0,0,0.04); }
+[data-theme="dark"] .bbs-cc-users-table td { border-color: rgba(255,255,255,0.04); }
+.bbs-cc-users-table tr:last-child td { border-bottom: none; }
+.bbs-cc-users-actions { white-space: nowrap; text-align: right; }
+.bbs-cc-users-actions button {
+  border: none; background: none; color: var(--theme-color,#399FFF); cursor: pointer;
+  font-size: 12px; padding: 3px 6px;
+}
+.bbs-cc-users-actions button:hover { text-decoration: underline; }
+.bbs-cc-users-actions button:last-child { color: #ff3b30; }
+
+/* ── 用户管理表单（select 统一样式） ── */
+.bbs-modal select {
+  width: 100%; padding: 10px 12px; border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 8px; font-size: 14px; margin-bottom: 12px;
+  background: rgba(255,255,255,0.8); color: #333; outline: none;
+  box-sizing: border-box; appearance: auto;
+}
+[data-theme="dark"] .bbs-modal select {
+  background: rgba(40,42,65,0.8); border-color: rgba(255,255,255,0.1); color: #ddd;
+}
+.bbs-modal select:focus { border-color: var(--theme-color,#399FFF); }
+
+/* ── 密码框眼睛 ── */
+#bbs-user-form-password::-ms-reveal { display: none; }
+#bbs-user-form-password::-webkit-credentials-auto-fill-button { display: none !important; visibility: hidden; }

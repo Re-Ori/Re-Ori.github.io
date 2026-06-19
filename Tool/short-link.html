@@ -292,8 +292,10 @@
 <script>
 (function() {
   window.__navActive = ["工具"];
-  var TOKEN = localStorage.getItem('sl_token') || '';
-  var USER = localStorage.getItem('sl_user') || '';
+  var TOKEN = localStorage.getItem('bbs_token') || '';
+  var USER = localStorage.getItem('bbs_user') || '';
+  var USER_ID = localStorage.getItem('bbs_user_id') || '';
+  var ROLE = localStorage.getItem('bbs_role') || '';
 
   function api(m, p, b) {
     var o = { method: m, headers: { 'Content-Type': 'application/json' } };
@@ -350,11 +352,30 @@
   // 初始化
   function init() {
     if (TOKEN) {
-      $('sl-login-btn').style.display = 'none';
-      $('sl-badge').style.display = '';
-      $('sl-user').textContent = USER;
+      // 用 BBS 验证接口检查 token 是否有效
+      api('POST', '/api/bbs/auth', { verify: true }).then(function(res) {
+        if (res.ok) {
+          $('sl-login-btn').style.display = 'none';
+          $('sl-badge').style.display = '';
+          $('sl-user').textContent = res.user || USER;
+          USER = res.user || USER;
+          ROLE = res.role || '';
+          USER_ID = res.user_id || '';
+        } else {
+          // token 失效，清除登录状态
+          TOKEN = ''; USER = ''; USER_ID = ''; ROLE = '';
+          localStorage.removeItem('bbs_token');
+          localStorage.removeItem('bbs_user');
+          localStorage.removeItem('bbs_user_id');
+          localStorage.removeItem('bbs_role');
+        }
+        render();
+      }).catch(function() {
+        render();
+      });
+    } else {
+      render();
     }
-    render();
     $('sl-gen').addEventListener('click', gen);
     $('sl-input').addEventListener('keydown', function(e) { if (e.key === 'Enter') gen(); });
     $('sl-logout-btn').addEventListener('click', logout);
@@ -377,9 +398,12 @@
     var u = $('sl-login-user').value.trim(), p = $('sl-login-pass').value.trim();
     if (!u || !p) { $('sl-login-err').textContent = '请输入用户名和密码'; $('sl-login-err').style.display = 'block'; return; }
     $('sl-login-err').style.display = 'none';
-    api('POST', '/api/short-link/auth', { username: u, password: p }).then(function(res) {
+    api('POST', '/api/bbs/auth', { username: u, password: p }).then(function(res) {
       if (res.ok) {
-        localStorage.setItem('sl_token', res.token); localStorage.setItem('sl_user', res.user);
+        localStorage.setItem('bbs_token', res.token);
+        localStorage.setItem('bbs_user', res.user || res.user_id);
+        localStorage.setItem('bbs_user_id', res.user_id || '');
+        localStorage.setItem('bbs_role', res.role || 'user');
         location.reload();
       } else {
         $('sl-login-err').textContent = res.error === 'auth_failed' ? '用户名或密码错误' : '登录失败';
@@ -389,7 +413,8 @@
   }
 
   function logout() {
-    localStorage.removeItem('sl_token'); localStorage.removeItem('sl_user');
+    localStorage.removeItem('bbs_token'); localStorage.removeItem('bbs_user');
+    localStorage.removeItem('bbs_user_id'); localStorage.removeItem('bbs_role');
     location.reload();
   }
 

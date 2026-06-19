@@ -4,7 +4,7 @@
     "// local_paths": "本地路径不会被 GitHub 覆盖（黑名单），目录以 / 结尾做前缀匹配",
     "local_paths": [".data/", ".cache/"],
     "// allow_paths": "即使匹配 local_paths 也允许被覆盖的文件（白名单），更精确的路径胜出",
-    "allow_paths": [".data/bbs/users.json"]
+    "allow_paths": []
   },
   "access": {
     "// whitelist": "允许访问的路径，空数组 = 所有路径都允许。目录以 / 结尾做前缀匹配",
@@ -46,6 +46,6 @@
     "// exclude_parts": "路径中包含这些名称的任意部分就会被跳过",
     "exclude_parts": [".claude", ".versions", ".vscode", "__pycache__", ".update_state.json", ".server.log", "AutoUpdate.disabled"],
     "// exclude_paths": "完整路径前缀匹配，目录以 / 结尾",
-    "exclude_paths": [".data/bbs/tokens.json", ".data/bbs/topics/", ".data/short_link/", ".data/stats/"]
+    "exclude_paths": [".data/"]
   }
 }

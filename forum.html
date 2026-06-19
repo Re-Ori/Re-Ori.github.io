@@ -27,19 +27,23 @@
         </div>
         <div class="bbs-user-area">
           <div id="bbs-admin-actions" style="display:none;font-size:12px;">
-            <button class="bbs-login-btn" onclick="bbsExport()" title="导出全部数据">导出</button>
-            <button class="bbs-login-btn" onclick="document.getElementById('bbs-import-input').click()" title="导入数据覆盖全部">导入</button>
-            <input type="file" id="bbs-import-input" accept=".zip" style="display:none">
-            <button class="bbs-login-btn" onclick="bbsDownloadSource()" title="下载网站源码">下载源码</button>
-            <button class="bbs-login-btn" onclick="document.getElementById('bbs-source-input').click()" title="上传 ZIP 更新网站文件">上传源码</button>
-            <input type="file" id="bbs-source-input" accept=".zip" style="display:none">
+            <button class="bbs-login-btn" onclick="bbsOpenControlCenter()" title="控制中心">⚙ 控制中心</button>
           </div>
+          <span id="bbs-notif-bell" style="display:none;position:relative;cursor:pointer;margin:0 4px;padding:4px;" onclick="bbsOpenNotifications()" title="通知">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;color:#888;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span id="bbs-notif-count" style="position:absolute;top:-2px;right:-4px;background:#ff3b30;color:#fff;font-size:10px;min-width:15px;height:15px;border-radius:7px;display:none;align-items:center;justify-content:center;font-weight:600;line-height:1;padding:0 3px;box-sizing:border-box;"></span>
+          </span>
           <div id="bbs-user-badge" class="bbs-user-badge" style="display:none;">
             <span id="bbs-username" style="cursor:pointer" onclick="bbsOpenUser(USER_ID)" title="个人主页"></span>
             <button class="bbs-logout-btn" onclick="bbsLogout()">退出</button>
           </div>
           <button class="bbs-login-btn" id="bbs-login-btn" onclick="bbsShowLogin()">登录</button>
         </div>
+      </div>
+
+      <!-- 维护模式公告 -->
+      <div id="bbs-maint-banner" style="display:none;background:rgba(255,107,53,0.08);border:1px solid rgba(255,107,53,0.25);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#c84a1c;text-align:center;">
+        🛡 论坛维护中，暂时无法发帖和删除操作
       </div>
 
       <!-- 帖子列表 -->
@@ -118,6 +122,174 @@
   </div>
 </div>
 
+<!-- 通知全屏页 -->
+<div id="bbs-notif-overlay" class="bbs-post-overlay" style="display:none;">
+  <div class="bbs-post-header">
+    <div class="bbs-post-header-title">通知</div>
+    <div class="bbs-post-header-actions">
+      <span onclick="bbsMarkAllRead()" style="cursor:pointer;font-size:13px;color:var(--theme-color,#399FFF);padding:4px 0;white-space:nowrap;">全部已读</span>
+      <span onclick="bbsCloseNotifications()" style="cursor:pointer;font-size:22px;color:#999;line-height:1;padding:4px;" title="关闭">✕</span>
+    </div>
+  </div>
+  <div class="bbs-post-body">
+    <div style="max-width:600px;margin:0 auto;width:100%;">
+      <div id="bbs-notif-list" style="font-size:14px;min-height:200px;">
+        <div style="color:#999;text-align:center;padding:60px 0;">加载中…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 控制中心全屏页 -->
+<div id="bbs-cc-overlay" class="bbs-post-overlay" style="display:none;">
+  <div class="bbs-post-header">
+    <div class="bbs-post-header-title">⚙ 控制中心</div>
+    <div class="bbs-post-header-actions">
+      <span onclick="bbsCloseControlCenter()" style="cursor:pointer;font-size:22px;color:#999;line-height:1;padding:4px;border-radius:4px;transition:color 0.15s;" onmouseover="this.style.color='#333'" onmouseout="this.style.color='#999'" title="关闭">✕</span>
+    </div>
+  </div>
+  <div class="bbs-post-body">
+    <div class="bbs-cc-sections">
+
+      <!-- 📦 数据管理 -->
+      <div class="bbs-cc-section">
+        <div class="bbs-cc-row">
+          <div class="bbs-cc-section-title">BBS 数据管理</div>
+          <div class="bbs-cc-btns">
+            <button class="bbs-cc-btn" onclick="bbsExport()">导出数据</button>
+            <button class="bbs-cc-btn" onclick="document.getElementById('bbs-import-input').click()">导入数据</button>
+            <input type="file" id="bbs-import-input" accept=".zip" style="display:none">
+          </div>
+        </div>
+      </div>
+
+      <!-- 🔧 系统维护 -->
+      <div class="bbs-cc-section">
+        <div class="bbs-cc-row">
+          <div class="bbs-cc-section-title">系统维护</div>
+          <div class="bbs-cc-btns">
+            <button class="bbs-cc-btn" onclick="bbsDownloadSource()">下载源码</button>
+            <button class="bbs-cc-btn" onclick="bbsUploadSourceClick()">上传源码</button>
+            <input type="file" id="bbs-source-input" accept=".zip" style="display:none">
+          </div>
+        </div>
+      </div>
+
+      <!-- 🛡 维护模式 -->
+      <div class="bbs-cc-section">
+        <div class="bbs-cc-row">
+          <div class="bbs-cc-section-title">🛡 维护模式</div>
+          <div class="bbs-cc-btns" style="gap:10px;">
+            <label class="bbs-toggle">
+              <input type="checkbox" id="bbs-maint-toggle" onchange="bbsOnToggleMaint(this.checked)">
+              <span class="bbs-toggle-slider"></span>
+            </label>
+            <span id="bbs-maint-status" style="font-size:13px;min-width:36px;">关闭</span>
+          </div>
+        </div>
+        <!-- 时间选择（开启时弹出） -->
+        <div id="bbs-maint-config" class="bbs-maint-config" style="display:none;">
+          <div class="bbs-maint-options">
+            <label class="bbs-maint-option">
+              <input type="radio" name="maint-mode" value="duration" checked>
+              <span class="bbs-maint-opt-label">持续时间</span>
+              <select id="bbs-maint-duration">
+                <option value="5">5 分钟</option>
+                <option value="30" selected>30 分钟</option>
+                <option value="60">1 小时</option>
+                <option value="120">2 小时</option>
+                <option value="360">6 小时</option>
+                <option value="1440">24 小时</option>
+                <option value="4320">3 天</option>
+                <option value="10080">7 天</option>
+              </select>
+            </label>
+            <label class="bbs-maint-option">
+              <input type="radio" name="maint-mode" value="endtime">
+              <span class="bbs-maint-opt-label">结束时间</span>
+              <input type="datetime-local" id="bbs-maint-endtime">
+            </label>
+            <label class="bbs-maint-option">
+              <input type="radio" name="maint-mode" value="none">
+              <span class="bbs-maint-opt-label">不自动结束</span>
+            </label>
+          </div>
+          <div class="bbs-maint-actions">
+            <button class="bbs-cc-btn bbs-maint-btn" onclick="bbsConfirmMaintenance()">开启维护</button>
+            <button class="bbs-cc-btn" onclick="bbsCancelMaintenance()">取消</button>
+          </div>
+        </div>
+        <!-- 维护中状态 -->
+        <div id="bbs-maint-active" class="bbs-maint-active" style="display:none;">
+          <div class="bbs-maint-end-display" id="bbs-maint-end-display">—</div>
+          <button class="bbs-cc-btn" onclick="bbsToggleMaintenance(false)" style="border-color:#ff6b35;color:#ff6b35;">关闭维护</button>
+        </div>
+      </div>
+
+      <!-- 👥 用户管理 -->
+      <div class="bbs-cc-section">
+        <div class="bbs-cc-row">
+          <div class="bbs-cc-section-title">👥 用户管理</div>
+          <div class="bbs-cc-btns">
+            <button class="bbs-cc-btn" onclick="bbsShowUserForm()">+ 新建用户</button>
+          </div>
+        </div>
+        <div id="bbs-cc-userlist" style="margin-top:10px;"><div style="color:#999;font-size:13px;">加载中…</div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- 用户编辑弹窗 -->
+<div id="bbs-user-form-modal" class="bbs-modal-overlay" style="display:none;">
+  <div class="bbs-modal">
+    <h3 id="bbs-user-form-title">新建用户</h3>
+    <div class="bbs-modal-error" id="bbs-user-form-error"></div>
+    <input type="text" id="bbs-user-form-username" placeholder="用户名" autocomplete="off">
+    <div id="bbs-user-form-id-row" style="font-size:13px;color:#888;margin-bottom:8px;">
+      <span id="bbs-user-form-id-label">ID：</span>
+      <input type="text" id="bbs-user-form-new-id" placeholder="自定义 ID" style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;background:rgba(255,255,255,0.8);color:#333;margin-top:4px;">
+    </div>
+    <div style="position:relative;">
+      <input type="password" id="bbs-user-form-password" placeholder="密码（编辑时留空则不修改）" autocomplete="off" style="padding-right:36px;">
+      <span id="bbs-pw-eye" onclick="bbsTogglePwVis()" style="position:absolute;right:10px;top:10px;cursor:pointer;color:#999;user-select:none;line-height:1;display:flex;">
+        <svg id="bbs-eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        <svg id="bbs-eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </span>
+    </div>
+    <select id="bbs-user-form-role">
+      <option value="user">普通用户</option>
+      <option value="admin">管理员</option>
+    </select>
+    <input type="text" id="bbs-user-form-tags" placeholder="标签（用英文逗号分隔）" autocomplete="off">
+    <div class="bbs-modal-actions">
+      <button class="bbs-modal-primary" onclick="bbsSaveUser()">保存</button>
+      <button class="bbs-modal-secondary" onclick="bbsCloseUserForm()">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- 删除用户确认弹窗 -->
+<div id="bbs-delete-confirm-modal" class="bbs-modal-overlay" style="display:none;">
+  <div class="bbs-modal">
+    <h3 style="margin-bottom:6px;">删除用户</h3>
+    <div class="bbs-modal-error" id="bbs-delete-error"></div>
+    <p id="bbs-delete-desc" style="font-size:14px;color:#555;margin-bottom:16px;line-height:1.6;"></p>
+    <div class="bbs-delete-data-box" id="bbs-delete-data-box">
+      <label class="bbs-delete-data-label">
+        <input type="checkbox" id="bbs-delete-data-check">
+        <span>同时删除该用户的所有内容（帖子与回复）</span>
+      </label>
+      <div id="bbs-delete-data-hint" style="display:none;font-size:12px;color:#999;margin-top:6px;">需先开启维护模式才能删除用户数据</div>
+    </div>
+    <div class="bbs-modal-actions">
+      <button class="bbs-modal-secondary" onclick="bbsCloseDeleteConfirm()">取消</button>
+      <button class="bbs-modal-primary" onclick="bbsConfirmDelete()" style="background:#ff3b30;">确认删除</button>
+    </div>
+  </div>
+</div>
+
 <!-- 图片插入对话框 -->
 <div id="bbs-img-dialog" class="bbs-img-dialog" style="display:none;">
   <div class="bbs-img-dialog-inner">
@@ -166,7 +338,11 @@
     var opts = { method: method, headers: { 'Content-Type': 'application/json' } };
     if (TOKEN) opts.headers['X-Auth-Token'] = TOKEN;
     if (body) opts.body = JSON.stringify(body);
-    return fetch(path, opts).then(function(r) { return r.json(); });
+    return fetch(path, opts).then(function(r) {
+      return r.json().catch(function() {
+        return { ok: false, error: 'bad_response' };
+      });
+    });
   }
 
   function handleUnauthorized() {
@@ -178,6 +354,7 @@
     document.getElementById('bbs-login-btn').style.display = '';
     document.getElementById('bbs-user-badge').style.display = 'none';
     document.getElementById('bbs-admin-actions').style.display = 'none';
+    document.getElementById('bbs-notif-bell').style.display = 'none';
     // 关闭已打开的详情/弹窗
     document.getElementById('bbs-detail').style.display = 'none';
     var postModal = document.getElementById('bbs-post-modal');
@@ -263,6 +440,67 @@
       });
   }
 
+  // ── 通知系统 ──
+
+  function bbsLoadNotifs(showPanel) {
+    api('GET', '/api/bbs/notifications').then(function(res) {
+      if (!res.ok) return;
+      // 更新铃铛计数
+      var badge = document.getElementById('bbs-notif-count');
+      if (res.unread > 0) {
+        badge.style.display = 'flex';
+        badge.textContent = res.unread > 99 ? '99+' : res.unread;
+      } else {
+        badge.style.display = 'none';
+      }
+      if (showPanel) {
+        var list = document.getElementById('bbs-notif-list');
+        if (!res.notifications || res.notifications.length === 0) {
+          list.innerHTML = '<div style="color:#999;text-align:center;padding:60px 0;">暂无通知</div>';
+          return;
+        }
+        var html = '';
+        for (var i = 0; i < res.notifications.length; i++) {
+          var n = res.notifications[i];
+          var typeLabel = n.type === 'mention' ? '提及' : n.type === 'reply_nested' ? '二级回复' : '回复';
+          var timeStr = n.created_at ? new Date(n.created_at * 1000).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+          var preview = n.content_preview || '';
+          html += '<div class="bbs-notif-item' + (n.read ? '' : ' bbs-notif-unread') + '" onclick="bbsOpenNotifTopic(\'' + n.topic_id + '\',' + (n.read ? 'false' : 'true') + ',\'' + n.id + '\')">'
+            + '<div class="bbs-notif-item-top">'
+            + '<span class="bbs-notif-type">' + typeLabel + '</span>'
+            + '<span class="bbs-notif-time">' + timeStr + '</span>'
+            + '</div>'
+            + '<div class="bbs-notif-item-title">' + escapeHtml(n.topic_title || '') + '</div>'
+            + '<div class="bbs-notif-item-preview">' + escapeHtml(preview) + '</div>'
+            + '</div>';
+        }
+        list.innerHTML = html;
+      }
+    }).catch(function() {});
+  }
+
+  window.bbsOpenNotifications = function() {
+    document.getElementById('bbs-notif-overlay').style.display = '';
+    bbsLoadNotifs(true);
+  };
+  window.bbsCloseNotifications = function() {
+    document.getElementById('bbs-notif-overlay').style.display = 'none';
+  };
+  window.bbsMarkAllRead = function() {
+    api('POST', '/api/bbs/notifications/read', { all: true }).then(function(res) {
+      if (res.ok) { bbsLoadNotifs(true); bbsLoadNotifs(false); }
+    });
+  };
+  window.bbsOpenNotifTopic = function(topicId, markRead, notifId) {
+    if (markRead && notifId) {
+      api('POST', '/api/bbs/notifications/read', { ids: [notifId] }).then(function() {
+        bbsLoadNotifs(false);
+      });
+    }
+    bbsCloseNotifications();
+    bbsOpenTopic(topicId);
+  };
+
   // ── 初始化 ──
 
   function initBBS() {
@@ -282,6 +520,8 @@
           if (ROLE === 'admin') {
             document.getElementById('bbs-admin-actions').style.display = '';
           }
+          document.getElementById('bbs-notif-bell').style.display = '';
+          bbsLoadNotifs(false);
         } else {
           // token 无效，清理登录状态
           TOKEN = ''; USER = ''; USER_ID = ''; ROLE = '';
@@ -297,7 +537,33 @@
     } else {
       loadTopics();
     }
+    // 检查维护状态
+    bbsCheckMaintenance();
   }
+
+  // ── 维护状态轮询 ──
+
+  function bbsCheckMaintenance() {
+    api('GET', '/api/admin/maintenance').then(function(res) {
+      if (res.ok && res.maintenance && res.maintenance.enabled && ROLE !== 'admin') {
+        var txt = '🛡 论坛维护中，暂时无法发帖和删除';
+        var ac = res.maintenance.auto_close_at;
+        if (ac && ac > 0) {
+          var d = new Date(ac * 1000);
+          txt += '（预计 ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2) + ' 恢复）';
+        }
+        document.getElementById('bbs-maint-banner').textContent = txt;
+        document.getElementById('bbs-maint-banner').style.display = '';
+      } else {
+        document.getElementById('bbs-maint-banner').style.display = 'none';
+      }
+    }).catch(function() {});
+  }
+
+  // 每 60 秒检查一次维护状态
+  setInterval(bbsCheckMaintenance, 60000);
+  // 通知轮询
+  setInterval(function() { bbsLoadNotifs(false); }, 60000);
 
   // ── 登录 ──
 
@@ -526,11 +792,23 @@
         rBadges += '<span class="bbs-role-badge author">贴主</span>';
       }
       var canDelReply = TOKEN && (ROLE === 'admin' || r.author_id === USER_ID);
+      // 引用回复
+      var replyRef = '';
+      if (r.reply_to) {
+        for (var j = 0; j < replies.length; j++) {
+          if (replies[j].id === r.reply_to) {
+            replyRef = '<div class="bbs-reply-ref">回复 ' + (replies[j].author_name || '') + '</div>';
+            break;
+          }
+        }
+      }
+      var replyBtn = TOKEN ? '<span class="bbs-reply-to-btn" onclick="bbsSetReplyTo(\'' + topic.id + '\',\'' + (r.id || '') + '\',\'' + escapeHtml(rAuthor).replace(/'/g, "\\'") + '\')" title="回复">回复</span>' : '';
       var delBtn = canDelReply ? '<span class="bbs-reply-del" onclick="bbsDeleteReply(\'' + topic.id + '\',\'' + (r.id || '') + '\')" title="删除"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>' : '';
       repliesHtml += '<div class="bbs-reply-item">' +
         '<div class="bbs-reply-author"><span class="bbs-author-link" onclick="bbsOpenUser(\'' + escapeHtml(r.author_id || '') + '\')">' + escapeHtml(rAuthor) + '</span>' + rBadges + '</div>' +
-        delBtn +
-        '<div class="bbs-reply-content">' + renderMarkdown(r.content) + '</div>' +
+        delBtn + replyBtn +
+        replyRef +
+        '<div class="bbs-reply-content">' + renderAtMentions(renderMarkdown(r.content)) + '</div>' +
         '<div class="bbs-reply-time">' + rt + '</div>' +
         '</div>';
     }
@@ -662,6 +940,13 @@
   };
 
   // ── Markdown 渲染 ──
+
+  function renderAtMentions(html) {
+    // 将 @{user_id} 渲染为可点击的用户链接
+    return html.replace(/@\{([^}]+)\}/g, function(m, uid) {
+      return '<a class="bbs-at-link" href="javascript:bbsOpenUser(\'' + uid.replace(/'/g, "\\'") + '\')">@' + uid + '</a>';
+    });
+  }
 
   function renderMarkdown(text) {
     if (!text) return '';
@@ -888,6 +1173,16 @@
 
   // ── 回复 ──
 
+  var _replyToId = '';
+  var _replyToName = '';
+
+  window.bbsSetReplyTo = function(tid, rid, rname) {
+    _replyToId = rid;
+    _replyToName = rname;
+    var ta = document.getElementById('bbs-reply-content');
+    if (ta) { ta.focus(); ta.placeholder = '回复 ' + rname + '...'; }
+  };
+
   window.bbsDoReply = function(topicId) {
     var input = document.getElementById('bbs-reply-content');
     var content = input.value.trim();
@@ -895,14 +1190,21 @@
     if (content.length > 1024) { showToast('回复不能超过 1024 字'); return; }
     var btn = document.querySelector('.bbs-reply-submit');
     btn.disabled = true; btn.textContent = '提交中…';
-    api('POST', '/api/bbs/topics/' + topicId + '/reply', { content: content })
+    var replyBody = { content: content };
+      if (_replyToId) { replyBody.reply_to = _replyToId; }
+      api('POST', '/api/bbs/topics/' + topicId + '/reply', replyBody)
       .then(function(res) {
         if (res.ok) {
           input.value = '';
+          _replyToId = ''; _replyToName = '';
+          var ta2 = document.getElementById('bbs-reply-content');
+          if (ta2) ta2.placeholder = '输入回复...（支持 Markdown）';
           showToast('回复成功');
           bbsOpenTopic(topicId);
         } else if (res.error === 'unauthorized') {
           handleUnauthorized();
+        } else if (res.error === 'maintenance') {
+          showToast(res.message || '论坛维护中');
         } else {
           showToast('回复失败');
         }
@@ -924,6 +1226,8 @@
           handleUnauthorized();
         } else if (res.error === 'forbidden') {
           showToast('无权删除');
+        } else if (res.error === 'maintenance') {
+          showToast(res.message || '论坛维护中');
         } else {
           showToast('删除失败');
         }
@@ -941,13 +1245,13 @@
           handleUnauthorized();
         } else if (res.error === 'forbidden') {
           showToast('无权删除此帖子');
+        } else if (res.error === 'maintenance') {
+          showToast(res.message || '论坛维护中');
         } else {
           showToast('删除失败');
         }
       });
   };
-
-  // ── 数据导入导出 ──
 
   // ── 进度弹窗辅助 ──
 
@@ -959,6 +1263,16 @@
     var units = ['B', 'KB', 'MB', 'GB'];
     var i = Math.floor(Math.log(bytes) / Math.log(1024));
     return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+  }
+
+  function bbsTimestamp() {
+    var d = new Date();
+    return d.getFullYear()
+      + ('0'+(d.getMonth()+1)).slice(-2)
+      + ('0'+d.getDate()).slice(-2)
+      + '-' + ('0'+d.getHours()).slice(-2)
+      + ('0'+d.getMinutes()).slice(-2)
+      + ('0'+d.getSeconds()).slice(-2);
   }
 
   function showProgress(title, status, pct, sizeText, closable) {
@@ -988,82 +1302,83 @@
     showToast('已取消');
   };
 
-  window.bbsExport = function() {
-    showProgress('导出数据', '正在生成 ZIP 压缩包…', 0, '', false);
-    // 模拟进度
-    var simPct = 0;
-    var simTimer = setInterval(function() {
-      if (simPct < 30) {
-        simPct += 1.5;
-        showProgress('导出数据', '正在生成 ZIP 压缩包…', simPct, '', false);
-      } else {
-        clearInterval(simTimer);
-      }
-    }, 100);
-    setTimeout(function() {
-      var xhr = new XMLHttpRequest();
-      _progressXhr = xhr;
-      xhr.open('GET', '/api/bbs/export', true);
-      xhr.setRequestHeader('X-Auth-Token', TOKEN);
-      xhr.responseType = 'blob';
-      xhr.onprogress = function(e) {
-        clearInterval(simTimer);
-        if (e.lengthComputable) {
-          var pct = 30 + (e.loaded / e.total) * 65;
-          showProgress('导出数据', '正在下载 ZIP…', pct, formatSize(e.loaded) + ' / ' + formatSize(e.total), false);
-        } else {
-          showProgress('导出数据', '正在下载 ZIP…', 50, formatSize(e.loaded), false);
-        }
-      };
-      xhr.onload = function() {
-        _progressXhr = null;
-        clearInterval(simTimer);
-        if (xhr.status === 200) {
-          var size = xhr.response.size;
-          showProgress('导出数据', '下载完成', 100, formatSize(size), true);
-          var a = document.createElement('a');
-          a.href = URL.createObjectURL(xhr.response);
-          a.download = 'bbs-backup.zip';
-          a.click();
-          showToast('导出成功（' + formatSize(size) + '）');
-          setTimeout(hideProgress, 2000);
-        } else {
-          hideProgress();
-          showToast('导出失败：' + (xhr.status === 403 ? '无权限' : '服务器错误'));
-        }
-      };
-      xhr.onerror = function() {
-        _progressXhr = null;
-        clearInterval(simTimer);
-        hideProgress();
-        showToast('导出失败');
-      };
-      xhr.send();
-    }, 200);
-  };
+  // ── 数据操作：真实进度（打包/读取不计入） ──
 
-  window.bbsDownloadSource = function() {
-    var toast = showToast('下载中…', 0);
+  window.bbsExport = function() {
+    bbsCloseControlCenter();
+    showProgress('导出备份', '准备数据中…', 0, '', false);
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/api/admin/download-source', true);
+    _progressXhr = xhr;
+    xhr.open('GET', '/api/bbs/export', true);
     xhr.setRequestHeader('X-Auth-Token', TOKEN);
     xhr.responseType = 'blob';
+    xhr.onprogress = function(e) {
+      if (e.lengthComputable) {
+        var pct = (e.loaded / e.total) * 100;
+        showProgress('导出备份', '正在下载…', pct, formatSize(e.loaded) + ' / ' + formatSize(e.total), false);
+      } else {
+        showProgress('导出备份', '正在下载…', 0, formatSize(e.loaded), false);
+      }
+    };
     xhr.onload = function() {
-      if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+      _progressXhr = null;
       if (xhr.status === 200) {
+        var size = xhr.response.size;
+        showProgress('导出备份', '下载完成', 100, formatSize(size), true);
         var a = document.createElement('a');
         a.href = URL.createObjectURL(xhr.response);
-        a.download = 'reori-source.zip';
+        a.download = 'bbs-backup-' + bbsTimestamp() + '.zip';
         a.click();
-        showToast('源码下载成功');
-      } else if (xhr.status === 403) {
-        showToast('无权限');
+        showToast('导出成功（' + formatSize(size) + '）');
+        setTimeout(hideProgress, 2000);
       } else {
-        showToast('下载失败');
+        hideProgress();
+        showToast('导出失败：' + (xhr.status === 403 ? '无权限' : '服务器错误'));
       }
     };
     xhr.onerror = function() {
-      if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+      _progressXhr = null;
+      hideProgress();
+      showToast('导出失败');
+    };
+    xhr.send();
+  };
+
+  window.bbsDownloadSource = function() {
+    bbsCloseControlCenter();
+    showProgress('下载源码', '准备数据中…', 0, '', false);
+    var xhr = new XMLHttpRequest();
+    _progressXhr = xhr;
+    xhr.open('GET', '/api/admin/download-source', true);
+    xhr.setRequestHeader('X-Auth-Token', TOKEN);
+    xhr.responseType = 'blob';
+    xhr.onprogress = function(e) {
+      if (e.lengthComputable) {
+        var pct = (e.loaded / e.total) * 100;
+        showProgress('下载源码', '正在下载…', pct, formatSize(e.loaded) + ' / ' + formatSize(e.total), false);
+      } else {
+        showProgress('下载源码', '正在下载…', 0, formatSize(e.loaded), false);
+      }
+    };
+    xhr.onload = function() {
+      _progressXhr = null;
+      if (xhr.status === 200) {
+        var size = xhr.response.size;
+        showProgress('下载源码', '下载完成', 100, formatSize(size), true);
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(xhr.response);
+        a.download = 'reori-source-' + bbsTimestamp() + '.zip';
+        a.click();
+        showToast('源码下载成功');
+        setTimeout(hideProgress, 2000);
+      } else {
+        hideProgress();
+        showToast(xhr.status === 403 ? '无权限' : '下载失败');
+      }
+    };
+    xhr.onerror = function() {
+      _progressXhr = null;
+      hideProgress();
       showToast('下载失败');
     };
     xhr.send();
@@ -1072,36 +1387,54 @@
   document.getElementById('bbs-source-input').addEventListener('change', function() {
     var file = this.files[0];
     if (!file) return;
-    if (!confirm('确定上传 ZIP？这将覆盖服务器上所有文件（含数据），不可撤销！')) { this.value = ''; return; }
-    var toast = showToast('上传中…', 0);
+    if (!confirm('确定上传 ZIP？这将覆盖服务器上所有源码文件（不含 .data 数据），不可撤销！')) { this.value = ''; return; }
+    bbsCloseControlCenter();
+    showProgress('上传更新', '准备中…', 0, '总大小 ' + formatSize(file.size), false);
     var reader = new FileReader();
     reader.onload = function(e) {
+      // 读取完成，开始上传（真实进度）
+      showProgress('上传更新', '正在上传…', 0, formatSize(file.size), false);
       var xhr = new XMLHttpRequest();
+      _progressXhr = xhr;
       xhr.open('POST', '/api/admin/upload-source', true);
       xhr.setRequestHeader('Content-Type', 'application/octet-stream');
       xhr.setRequestHeader('X-Auth-Token', TOKEN);
       xhr.responseType = 'json';
+      xhr.upload.onprogress = function(pe) {
+        if (pe.lengthComputable) {
+          var pct = (pe.loaded / pe.total) * 100;
+          showProgress('上传更新', '正在上传…', pct,
+            formatSize(pe.loaded) + ' / ' + formatSize(pe.total), false);
+        }
+      };
       xhr.onload = function() {
-        if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+        _progressXhr = null;
         if (xhr.response && xhr.response.ok) {
           var msg = '上传成功，共 ' + xhr.response.files + ' 个文件';
           if (xhr.response.restart) msg += '，服务器正在重启…';
+          showProgress('上传更新', '上传完成', 100, formatSize(file.size), true);
           showToast(msg);
+          setTimeout(hideProgress, 2000);
         } else if (xhr.status === 403) {
+          hideProgress();
           showToast('无权限');
         } else if (xhr.response && xhr.response.error) {
+          hideProgress();
           showToast('上传失败: ' + xhr.response.error);
         } else {
+          hideProgress();
           showToast('上传失败');
         }
       };
       xhr.onerror = function() {
-        if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+        _progressXhr = null;
+        hideProgress();
         showToast('上传失败: 网络错误');
       };
       xhr.send(e.target.result);
     };
     reader.readAsArrayBuffer(file);
+    this.value = '';
   });
 
   document.getElementById('bbs-import-input').addEventListener('change', function() {
@@ -1116,23 +1449,12 @@
       this.value = '';
       return;
     }
-    // 阶段1: 读取文件（模拟进度 0→50%）
-    showProgress('导入数据', '正在读取文件…', 0, '总大小 ' + formatSize(file.size), false);
-    var simPct = 0;
-    var simTimer = setInterval(function() {
-      if (simPct < 50) {
-        simPct += Math.random() * 3 + 1;
-        if (simPct > 50) simPct = 50;
-        showProgress('导入数据', '正在读取文件…', simPct, '', false);
-      } else {
-        clearInterval(simTimer);
-      }
-    }, 150);
+    bbsCloseControlCenter();
+    showProgress('导入恢复', '准备中…', 0, '总大小 ' + formatSize(file.size), false);
     var reader = new FileReader();
     reader.onload = function(e) {
-      clearInterval(simTimer);
-      // 阶段2: 上传文件（真实进度 50→95%）
-      showProgress('导入数据', '正在上传…', 50, '总大小 ' + formatSize(file.size), false);
+      // 读取完成，开始上传（真实进度）
+      showProgress('导入恢复', '正在上传…', 0, formatSize(file.size), false);
       var xhr = new XMLHttpRequest();
       _progressXhr = xhr;
       xhr.open('POST', '/api/bbs/import', true);
@@ -1141,15 +1463,15 @@
       xhr.responseType = 'json';
       xhr.upload.onprogress = function(pe) {
         if (pe.lengthComputable) {
-          var pct = 50 + (pe.loaded / pe.total) * 45;
-          showProgress('导入数据', '正在上传…', pct,
+          var pct = (pe.loaded / pe.total) * 100;
+          showProgress('导入恢复', '正在上传…', pct,
             formatSize(pe.loaded) + ' / ' + formatSize(pe.total), false);
         }
       };
       xhr.onload = function() {
         _progressXhr = null;
         if (xhr.response && xhr.response.ok) {
-          showProgress('导入数据', '导入完成', 100, '总大小 ' + formatSize(file.size), true);
+          showProgress('导入恢复', '导入完成', 100, '总大小 ' + formatSize(file.size), true);
           showToast('导入成功');
           setTimeout(function() { hideProgress(); loadTopics(); }, 1500);
         } else if (xhr.status === 403) {
@@ -1173,6 +1495,319 @@
     reader.readAsArrayBuffer(file);
     this.value = '';
   });
+
+  // ── 控制中心 ──
+
+  var _editingUserId = null;
+  var _changeIdMode = false;
+  var _deleteTargetUid = null;
+  var _deleteTargetName = '';
+  var _maintEnabled = false;
+
+  window.bbsOpenControlCenter = function() {
+    _editingUserId = null;
+    document.getElementById('bbs-cc-overlay').style.display = '';
+    document.getElementById('bbs-cc-userlist').innerHTML = '<div style="color:#999;font-size:13px;">加载中…</div>';
+    bbsLoadUserList();
+    bbsLoadMaintenanceStatus();
+  };
+
+  window.bbsCloseControlCenter = function() {
+    document.getElementById('bbs-cc-overlay').style.display = 'none';
+  };
+
+  // ── 维护模式 ──
+
+  function bbsLoadMaintenanceStatus() {
+    api('GET', '/api/admin/maintenance').then(function(res) {
+      if (!res.ok || !res.maintenance) return;
+      _maintEnabled = res.maintenance.enabled;
+      document.getElementById('bbs-maint-toggle').checked = _maintEnabled;
+      document.getElementById('bbs-maint-status').textContent = _maintEnabled ? '开启中' : '关闭';
+      document.getElementById('bbs-maint-status').style.color = _maintEnabled ? '#ff6b35' : '#999';
+      if (_maintEnabled) {
+        document.getElementById('bbs-maint-config').style.display = 'none';
+        document.getElementById('bbs-maint-active').style.display = '';
+        var autoClose = res.maintenance.auto_close_at;
+        if (autoClose && autoClose > 0) {
+          var d = new Date(autoClose * 1000);
+          document.getElementById('bbs-maint-end-display').textContent = '预计结束：'
+            + d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2)
+            + ' ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
+        } else {
+          document.getElementById('bbs-maint-end-display').textContent = '不自动结束';
+        }
+      } else {
+        document.getElementById('bbs-maint-config').style.display = 'none';
+        document.getElementById('bbs-maint-active').style.display = 'none';
+      }
+    });
+  }
+
+  window.bbsOnToggleMaint = function(checked) {
+    if (checked) {
+      // 显示时间配置
+      document.getElementById('bbs-maint-config').style.display = '';
+      // 默认选中持续时间
+      document.querySelector('input[name="maint-mode"][value="duration"]').checked = true;
+      // 设置默认结束时间为1小时后（本地时间）
+      var now = new Date(Date.now() + 3600000);
+      var y = now.getFullYear();
+      var mo = ('0'+(now.getMonth()+1)).slice(-2);
+      var d = ('0'+now.getDate()).slice(-2);
+      var h = ('0'+now.getHours()).slice(-2);
+      var mi = ('0'+now.getMinutes()).slice(-2);
+      document.getElementById('bbs-maint-endtime').value = y + '-' + mo + '-' + d + 'T' + h + ':' + mi;
+    } else {
+      // 关闭维护
+      bbsToggleMaintenance(false);
+    }
+  };
+
+  window.bbsCancelMaintenance = function() {
+    document.getElementById('bbs-maint-config').style.display = 'none';
+    document.getElementById('bbs-maint-toggle').checked = false;
+  };
+
+  window.bbsConfirmMaintenance = function() {
+    var mode = document.querySelector('input[name="maint-mode"]:checked');
+    if (!mode) return;
+    var autoCloseMinutes = 0;
+    if (mode.value === 'duration') {
+      autoCloseMinutes = parseInt(document.getElementById('bbs-maint-duration').value) || 0;
+    } else if (mode.value === 'endtime') {
+      var endtimeStr = document.getElementById('bbs-maint-endtime').value;
+      if (!endtimeStr) { showToast('请选择结束时间'); return; }
+      var endtime = new Date(endtimeStr + ':00').getTime();
+      var now = Date.now();
+      if (endtime <= now) { showToast('结束时间必须在当前时间之后'); return; }
+      autoCloseMinutes = Math.round((endtime - now) / 60000);
+    }
+    bbsToggleMaintenance(true, autoCloseMinutes);
+  };
+
+  window.bbsToggleMaintenance = function(enabled, autoCloseMinutes) {
+    autoCloseMinutes = autoCloseMinutes || 0;
+    api('POST', '/api/admin/maintenance', { enabled: enabled, auto_close_minutes: autoCloseMinutes }).then(function(res) {
+      if (res.ok) {
+        _maintEnabled = res.maintenance.enabled;
+        document.getElementById('bbs-maint-toggle').checked = _maintEnabled;
+        document.getElementById('bbs-maint-status').textContent = _maintEnabled ? '开启中' : '关闭';
+        document.getElementById('bbs-maint-status').style.color = _maintEnabled ? '#ff6b35' : '#999';
+        document.getElementById('bbs-maint-config').style.display = 'none';
+        if (_maintEnabled) {
+          document.getElementById('bbs-maint-active').style.display = '';
+          var ac = res.maintenance.auto_close_at;
+          if (ac && ac > 0) {
+            var d = new Date(ac * 1000);
+            document.getElementById('bbs-maint-end-display').textContent = '预计结束：'
+              + d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2)
+              + ' ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
+          } else {
+            document.getElementById('bbs-maint-end-display').textContent = '不自动结束';
+          }
+          showToast('维护模式已开启');
+        } else {
+          document.getElementById('bbs-maint-active').style.display = 'none';
+          showToast('维护模式已关闭');
+        }
+      } else {
+        document.getElementById('bbs-maint-toggle').checked = !enabled;
+        showToast(res.error || '操作失败');
+      }
+    });
+  };
+
+  // ── 密码显隐切换 ──
+
+  window.bbsTogglePwVis = function() {
+    var pw = document.getElementById('bbs-user-form-password');
+    var open = document.getElementById('bbs-eye-open');
+    var closed = document.getElementById('bbs-eye-closed');
+    if (pw.type === 'password') {
+      pw.type = 'text';
+      closed.style.display = 'none';
+      open.style.display = '';
+    } else {
+      pw.type = 'password';
+      closed.style.display = '';
+      open.style.display = 'none';
+    }
+  };
+
+  // ── 应急上传确认 ──
+
+  window.bbsUploadSourceClick = function() {
+    if (!confirm('⚠️ 注意\n\n此功能仅供紧急情况下使用。\n上传的源码文件会被自动更新覆盖，\n请优先通过 GitHub 推送代码。\n\n确定继续？')) return;
+    document.getElementById('bbs-source-input').click();
+  };
+
+  // ── 用户管理 ──
+
+  function _randId() {
+    var chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    var id = '';
+    for (var i = 0; i < 8; i++) id += chars.charAt(Math.floor(Math.random() * chars.length));
+    return id;
+  }
+
+  function bbsLoadUserList() {
+    api('GET', '/api/admin/users').then(function(res) {
+      if (!res.ok || !res.users) { showToast('加载用户列表失败'); return; }
+      var html = '<table class="bbs-cc-users-table">'
+        + '<tr><th>用户名</th><th>ID</th><th>角色</th><th>标签</th><th></th></tr>';
+      for (var i = 0; i < res.users.length; i++) {
+        var u = res.users[i];
+        var tags = (u.tags || []).join(', ');
+        var roleLabel = u.role === 'admin' ? '管理员' : '用户';
+        html += '<tr><td>' + escapeHtml(u.username) + '</td><td style="font-size:11px;color:#999;">'
+          + escapeHtml(u.id) + '</td><td>' + roleLabel + '</td>'
+          + '<td>' + escapeHtml(tags) + '</td>'
+          + '<td class="bbs-cc-users-actions">'
+          + '<button onclick="bbsEditUser(\'' + u.id + '\')">编辑</button>'
+          + '<button onclick="bbsDeleteUser(\'' + u.id + '\',\'' + escapeHtml(u.username).replace(/'/g, "\\'") + '\')">删除</button>'
+          + '</td></tr>';
+      }
+      html += '</table>';
+      document.getElementById('bbs-cc-userlist').innerHTML = html;
+    });
+  }
+
+  window.bbsShowUserForm = function() {
+    _editingUserId = null;
+    document.getElementById('bbs-user-form-title').textContent = '新建用户';
+    document.getElementById('bbs-user-form-username').value = '';
+    document.getElementById('bbs-user-form-password').value = '';
+    document.getElementById('bbs-user-form-password').placeholder = '密码';
+    document.getElementById('bbs-user-form-role').value = 'user';
+    document.getElementById('bbs-user-form-tags').value = '';
+    document.getElementById('bbs-user-form-error').style.display = 'none';
+    // ID 输入
+    var randId = _randId();
+    document.getElementById('bbs-user-form-new-id').value = randId;
+    document.getElementById('bbs-user-form-id-label').textContent = 'ID：';
+    document.getElementById('bbs-user-form-password').value = '';
+    document.getElementById('bbs-user-form-password').placeholder = '密码';
+    document.getElementById('bbs-user-form-modal').style.display = '';
+  };
+
+  window.bbsEditUser = function(uid) {
+    _editingUserId = uid;
+    api('GET', '/api/admin/users').then(function(res) {
+      if (!res.ok || !res.users) return;
+      var user = null;
+      for (var i = 0; i < res.users.length; i++) {
+        if (res.users[i].id === uid) { user = res.users[i]; break; }
+      }
+      if (!user) { showToast('用户不存在'); return; }
+      document.getElementById('bbs-user-form-title').textContent = '编辑用户 — ' + user.username;
+      document.getElementById('bbs-user-form-username').value = user.username;
+      document.getElementById('bbs-user-form-password').value = user.password || '';
+      document.getElementById('bbs-user-form-password').placeholder = '留空则不修改密码';
+      document.getElementById('bbs-user-form-role').value = user.role || 'user';
+      document.getElementById('bbs-user-form-tags').value = (user.tags || []).join(', ');
+      document.getElementById('bbs-user-form-error').style.display = 'none';
+      // ID 行（显示当前 ID，可修改）
+      document.getElementById('bbs-user-form-new-id').value = user.id;
+      document.getElementById('bbs-user-form-id-label').textContent = 'ID（改 ID 需先开启维护模式）：';
+      document.getElementById('bbs-user-form-modal').style.display = '';
+    });
+  };
+
+  window.bbsSaveUser = function() {
+    var elErr = document.getElementById('bbs-user-form-error');
+    var username = document.getElementById('bbs-user-form-username').value.trim();
+    var password = document.getElementById('bbs-user-form-password').value;
+    var role = document.getElementById('bbs-user-form-role').value;
+    var tagsStr = document.getElementById('bbs-user-form-tags').value.trim();
+    var tags = tagsStr ? tagsStr.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+
+    if (!username) {
+      elErr.textContent = '请输入用户名'; elErr.style.display = 'block'; return;
+    }
+    if (!_editingUserId && !password) {
+      elErr.textContent = '请输入密码'; elErr.style.display = 'block'; return;
+    }
+
+    var body = { username: username, role: role, tags: tags };
+    if (password) body.password = password;
+
+    if (_editingUserId) {
+      var newId = document.getElementById('bbs-user-form-new-id').value.trim();
+      if (newId && newId !== _editingUserId) body.new_id = newId;
+      api('POST', '/api/admin/users/' + _editingUserId, body).then(function(res) {
+        if (res.ok) {
+          showToast('用户已更新'); bbsCloseUserForm(); bbsLoadUserList();
+        } else {
+          elErr.textContent = res.error || '保存失败'; elErr.style.display = 'block';
+        }
+      });
+    } else {
+      var cid = document.getElementById('bbs-user-form-new-id').value.trim();
+      if (cid) body.new_id = cid;
+      api('POST', '/api/admin/users', body).then(function(res) {
+        if (res.ok) {
+          var msg = '用户已创建' + (res.password ? '（密码：' + res.password + '）' : '');
+          showToast(msg); bbsCloseUserForm(); bbsLoadUserList();
+        } else {
+          elErr.textContent = res.error || '创建失败'; elErr.style.display = 'block';
+        }
+      });
+    }
+  };
+
+  window.bbsCloseUserForm = function() {
+    document.getElementById('bbs-user-form-modal').style.display = 'none';
+  };
+
+  // ── 删除用户确认 ──
+
+  window.bbsDeleteUser = function(uid, username) {
+    _deleteTargetUid = uid;
+    _deleteTargetName = username;
+    document.getElementById('bbs-delete-desc').textContent = '确定删除用户 "' + username + '"？此操作不可撤销。';
+    document.getElementById('bbs-delete-error').style.display = 'none';
+    document.getElementById('bbs-delete-data-check').checked = false;
+    // 如果没开维护模式，禁用"删除数据"选项并提示
+    var chk = document.getElementById('bbs-delete-data-check');
+    var err = document.getElementById('bbs-delete-error');
+    if (_maintEnabled) {
+      chk.disabled = false;
+      document.getElementById('bbs-delete-data-box').style.opacity = '1';
+      document.getElementById('bbs-delete-data-hint').style.display = 'none';
+      err.style.display = 'none';
+    } else {
+      chk.disabled = true;
+      document.getElementById('bbs-delete-data-box').style.opacity = '0.5';
+      document.getElementById('bbs-delete-data-hint').style.display = '';
+    }
+    document.getElementById('bbs-delete-confirm-modal').style.display = '';
+  };
+
+  window.bbsConfirmDelete = function() {
+    var deleteData = document.getElementById('bbs-delete-data-check').checked;
+    api('POST', '/api/admin/users/' + _deleteTargetUid + '/delete', { delete_data: deleteData }).then(function(res) {
+      if (res.ok) {
+        var msg = '用户已删除';
+        if (res.deleted_topics) msg += '，连带 ' + res.deleted_topics + ' 篇帖子及其回复';
+        showToast(msg);
+        bbsCloseDeleteConfirm();
+        bbsLoadUserList();
+      } else {
+        if (res.error) {
+          document.getElementById('bbs-delete-error').textContent = res.error;
+          document.getElementById('bbs-delete-error').style.display = '';
+        } else {
+          showToast('删除失败');
+          bbsCloseDeleteConfirm();
+        }
+      }
+    });
+  };
+
+  window.bbsCloseDeleteConfirm = function() {
+    document.getElementById('bbs-delete-confirm-modal').style.display = 'none';
+  };
 
   // ── 发帖弹窗 ──
 
@@ -1207,6 +1842,9 @@
           loadTopics();
         } else if (res.error === 'unauthorized') {
           handleUnauthorized();
+        } else if (res.error === 'maintenance') {
+          showToast(res.message || '论坛维护中');
+          document.getElementById('bbs-post-modal').style.display = 'none';
         } else {
           showToast('发布失败');
         }
