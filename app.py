@@ -1770,12 +1770,27 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             start = (page - 1) * limit
             end = start + limit
             page_items = topics[start:end] if start < len(topics) else []
-            self._send_json({
+            resp = {
                 'topics': page_items,
                 'total': len(topics),
                 'page': page,
                 'limit': limit,
-            })
+            }
+            # 管理员查看时附带隐藏标签映射
+            req_user = _bbs_check(self.headers)
+            if req_user and req_user.get('role') == 'admin':
+                try:
+                    all_u = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
+                    hidden_map = {}
+                    for u in all_u:
+                        all_tags = u.get('tags', [])
+                        h = [t[1:] for t in all_tags if isinstance(t, str) and t.startswith('_')]
+                        if h:
+                            hidden_map[u.get('id', '')] = h
+                    if hidden_map:
+                        resp['hidden_tags_map'] = hidden_map
+                except: pass
+            self._send_json(resp)
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
 

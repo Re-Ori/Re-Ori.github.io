@@ -706,7 +706,7 @@
           loadTopics(1);
           return;
         }
-        renderTopicList(res.topics);
+        renderTopicList(res.topics, res.hidden_tags_map);
       } else {
         container.innerHTML = '<div class="bbs-empty">加载失败</div>';
       }
@@ -715,7 +715,7 @@
     });
   }
 
-  function renderTopicList(topics) {
+  function renderTopicList(topics, hiddenTagsMap) {
     var container = document.getElementById('bbs-topic-list');
     var html = '';
 
@@ -734,7 +734,8 @@
         var t = topics[i];
         var time = new Date(t.created_at * 1000).toLocaleString();
         var aname = t.author_name || '账号不存在';
-        var badges = authorBadges(t.author_id, t.author_role, t.author_tags);
+        var tHidden = (hiddenTagsMap && hiddenTagsMap[t.author_id]) || null;
+        var badges = authorBadges(t.author_id, t.author_role, t.author_tags, tHidden);
         var preview = t.content_preview ? highlightText(t.content_preview, SEARCH_QUERY) : '';
         html += '<div class="bbs-topic-item" onclick="bbsOpenTopic(\'' + t.id + '\')">' +
           '<div class="bbs-topic-main">' +
