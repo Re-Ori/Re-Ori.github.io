@@ -491,6 +491,7 @@ def _bbs_resolve_author(author_id):
                     'username': u.get('username', ''),
                     'role': u.get('role', 'user'),
                     'tags': u.get('tags', []),
+                    'last_login': u.get('last_login', 0),
                 }
     except:
         pass
@@ -1732,6 +1733,11 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                         'role': u.get('role', 'user'),
                         'at': time.time(),
                     }
+                    # 更新上次登录时间
+                    u['last_login'] = time.time()
+                    tmp = BBS_USERS_FILE.with_suffix(".tmp.json")
+                    tmp.write_text(json.dumps(users, ensure_ascii=False, indent=2), encoding='utf-8')
+                    tmp.replace(BBS_USERS_FILE)
                     _bbs_save_tokens()
                     log(f'BBS 登录: {u.get("id", "?")}({username})')
                     self._send_json({'ok': True, 'token': token,
@@ -2422,6 +2428,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 'username': info['username'],
                 'role': info['role'],
                 'tags': info.get('tags', []),
+                'last_login': info.get('last_login', 0),
                 'topics': user_topics,
                 'topic_count': len(user_topics),
             })

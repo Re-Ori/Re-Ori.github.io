@@ -439,18 +439,29 @@ def _make_checker():
                     _log("更新完成，刷新浏览器即可生效")
 
                 if _RESTART_NEEDED:
-                    _log("\n服务器代码已更新，正在重启…"); time.sleep(3)
+                    _log("检测到代码更新，准备重启服务器"); time.sleep(2)
                     try:
-                        # 重启前保存统计数据
                         try:
                             import app as _app
                             _app._save_stats(force=True)
                             _app._save_daily(force=True)
+                        except Exception as e: _log(f"保存统计(忽略): {e}")
+                        # 记录重启到状态文件，新进程启动时检查
+                        try:
+                            st = _load_state()
+                            st["restart_needed"] = True
+                            st["restart_at"] = datetime.now().isoformat()
+                            _save_state(st)
                         except: pass
-                        subprocess.Popen([sys.executable] + sys.argv)
-                        _log("新进程已启动（端口重试机制将等待旧端口释放）")
+                        _log(f"启动新进程: {sys.executable} {' '.join(sys.argv)}")
+                        subprocess.Popen(
+                            [sys.executable] + sys.argv,
+                            cwd=str(PROJECT_ROOT),
+                        )
+                        _log("新进程已启动，旧进程即将退出")
                     except Exception as e: _log(f"重启失败: {e}")
-                    os._exit(0)
+                    time.sleep(1)
+                    _log("旧进程退出"); os._exit(0)
             except Exception as e: _log(f"更新异常: {e}")
             finally: updating = False
 

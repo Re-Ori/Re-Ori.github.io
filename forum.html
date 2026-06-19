@@ -1035,6 +1035,7 @@
           '<div class="bbs-detail-meta">' +
           '<span>ID ' + escapeHtml(res.user_id) + '</span>' +
           '<span>' + res.topic_count + ' 个帖子</span>' +
+          (res.last_login ? '<span>上次登录 ' + new Date(res.last_login * 1000).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) + '</span>' : '') +
           '</div></div>';
         // 帖子列表
         if (res.topics && res.topics.length > 0) {
@@ -2120,7 +2121,7 @@
     // 先查询邀请信息
     api('GET', '/api/invite/' + code).then(function(info) {
       if (!info.ok) {
-        document.getElementById('bbs-app').innerHTML = '<div style="text-align:center;padding:80px 20px;"><div style="font-size:16px;color:#ff3b30;margin-bottom:12px;">' + (info.error || '邀请链接无效') + '</div><button class="bbs-detect-btn" onclick="location.reload()">返回</button></div>';
+        document.getElementById('bbs-app').innerHTML = '<div style="text-align:center;padding:80px 20px;"><div style="font-size:16px;color:#ff3b30;margin-bottom:12px;">邀请链接无效或已过期</div><button class="bbs-detect-btn" onclick="location.reload()">返回</button></div>';
         return;
       }
       var expireStr = '永久有效';
