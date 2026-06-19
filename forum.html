@@ -171,6 +171,7 @@
           <div class="bbs-cc-btns">
             <button class="bbs-cc-btn" onclick="bbsDownloadSource()">下载源码</button>
             <button class="bbs-cc-btn" onclick="bbsUploadSourceClick()">上传源码</button>
+            <button class="bbs-cc-btn" onclick="bbsRestartServer()" style="border-color:#ff6b35;color:#ff6b35;">重启服务器</button>
             <input type="file" id="bbs-source-input" accept=".zip" style="display:none">
           </div>
         </div>
@@ -1807,8 +1808,20 @@
   // ── 应急上传确认 ──
 
   window.bbsUploadSourceClick = function() {
-    if (!confirm('⚠️ 注意\n\n此功能仅供紧急情况下使用。\n上传的源码文件会被自动更新覆盖，\n请优先通过 GitHub 推送代码。\n\n确定继续？')) return;
+    if (!confirm('此功能仅供紧急情况下使用。\n上传的源码文件会被自动更新覆盖，\n请优先通过 GitHub 推送代码。\n\n确定继续？')) return;
     document.getElementById('bbs-source-input').click();
+  };
+
+  window.bbsRestartServer = function() {
+    if (!confirm('确定重启服务器？\n正在进行的操作将中断。')) return;
+    api('POST', '/api/admin/restart').then(function(res) {
+      if (res.ok) {
+        showToast('服务器正在重启…');
+        setTimeout(function() { location.reload(); }, 3000);
+      } else {
+        showToast(res.error || '重启失败');
+      }
+    });
   };
 
   // ── 用户管理 ──
@@ -2099,44 +2112,56 @@
     }
   });
 
-  // ── 邀请注册弹窗 ──
+  // ── 邀请注册全屏页 ──
 
   function bbsShowInviteRegister(code) {
     document.getElementById('bbs-detect').style.display = 'none';
     document.getElementById('bbs-app').style.display = '';
-    document.getElementById('bbs-login-modal').style.display = '';
-    document.querySelector('#bbs-login-modal h3').innerHTML = '邀请注册';
-    document.getElementById('bbs-login-error').style.display = 'none';
-    document.getElementById('bbs-login-user').placeholder = '设置用户名';
-    document.getElementById('bbs-login-pass').placeholder = '设置密码';
-    var btn = document.querySelector('#bbs-login-modal .bbs-modal-primary');
-    btn.textContent = '注册';
-    btn.onclick = function() { bbsDoInviteRegister(code); };
-    document.querySelector('#bbs-login-modal .bbs-modal-hint').textContent = '通过邀请链接注册';
+    var overlay = document.getElementById('bbs-register-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'bbs-register-overlay';
+      overlay.className = 'bbs-post-overlay';
+      overlay.innerHTML = '<div class="bbs-post-header"><div class="bbs-post-header-title">邀请注册</div></div>' +
+        '<div class="bbs-post-body" style="align-items:center;justify-content:center;padding:40px;">' +
+        '<div style="max-width:360px;width:100%;">' +
+        '<div style="font-size:14px;color:#666;margin-bottom:24px;text-align:center;">通过邀请链接创建账号</div>' +
+        '<div class="bbs-modal-error" id="bbs-register-error" style="display:none;"></div>' +
+        '<input type="text" id="bbs-register-user" placeholder="设置用户名" autocomplete="off" style="width:100%;padding:12px 14px;border:1px solid rgba(0,0,0,0.12);border-radius:10px;font-size:15px;box-sizing:border-box;outline:none;background:rgba(255,255,255,0.8);color:#333;margin-bottom:12px;">' +
+        '<input type="password" id="bbs-register-pass" placeholder="设置密码" autocomplete="off" style="width:100%;padding:12px 14px;border:1px solid rgba(0,0,0,0.12);border-radius:10px;font-size:15px;box-sizing:border-box;outline:none;background:rgba(255,255,255,0.8);color:#333;margin-bottom:20px;">' +
+        '<button onclick="bbsDoInviteRegister(\\'' + code + '\\')" style="width:100%;padding:12px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;background:var(--theme-color,#399FFF);color:#fff;">注册</button>' +
+        '</div></div>';
+      document.body.appendChild(overlay);
+    } else {
+      overlay.style.display = '';
+      document.getElementById('bbs-register-user').value = '';
+      document.getElementById('bbs-register-pass').value = '';
+      document.getElementById('bbs-register-error').style.display = 'none';
+    }
   }
 
   window.bbsDoInviteRegister = function(code) {
-    var username = document.getElementById('bbs-login-user').value.trim();
-    var password = document.getElementById('bbs-login-pass').value.trim();
+    var username = document.getElementById('bbs-register-user').value.trim();
+    var password = document.getElementById('bbs-register-pass').value.trim();
     if (!username || !password) {
-      document.getElementById('bbs-login-error').textContent = '请输入用户名和密码';
-      document.getElementById('bbs-login-error').style.display = 'block';
+      document.getElementById('bbs-register-error').textContent = '请输入用户名和密码';
+      document.getElementById('bbs-register-error').style.display = 'block';
       return;
     }
     api('POST', '/api/invite/' + code + '/register', { username: username, password: password }).then(function(res) {
       if (res.ok) {
+        // 清除 URL 中的邀请参数
+        var url = new URL(window.location);
+        url.searchParams.delete('invite');
+        history.replaceState(null, '', url);
+        // 关闭注册页，显示登录
+        document.getElementById('bbs-register-overlay').style.display = 'none';
         showToast('注册成功，请登录');
-        document.querySelector('#bbs-login-modal h3').innerHTML = '登录';
         document.getElementById('bbs-login-user').value = username;
-        document.getElementById('bbs-login-pass').value = '';
-        document.getElementById('bbs-login-user').placeholder = '用户名';
-        document.getElementById('bbs-login-pass').placeholder = '密码';
-        document.querySelector('#bbs-login-modal .bbs-modal-primary').textContent = '登录';
-        document.querySelector('#bbs-login-modal .bbs-modal-primary').onclick = bbsDoLogin;
-        document.querySelector('#bbs-login-modal .bbs-modal-hint').textContent = '账号需由管理员创建，暂不支持注册';
+        bbsShowLogin();
       } else {
-        document.getElementById('bbs-login-error').textContent = res.error || '注册失败';
-        document.getElementById('bbs-login-error').style.display = 'block';
+        document.getElementById('bbs-register-error').textContent = res.error || '注册失败';
+        document.getElementById('bbs-register-error').style.display = 'block';
       }
     });
   };

@@ -854,6 +854,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if req_path == '/api/admin/maintenance':
             self._handle_admin_maintenance()
             return
+        if req_path == '/api/admin/restart':
+            self._handle_admin_restart()
+            return
         if req_path == '/api/admin/users':
             self._handle_admin_user_create()
             return
@@ -2151,6 +2154,22 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({'ok': True, 'maintenance': state})
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_admin_restart(self):
+        if not self._is_admin():
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        self._send_json({'ok': True, 'msg': '服务器即将重启'})
+        import threading, os, sys, time
+        def _restart():
+            time.sleep(1)
+            _save_stats(force=True)
+            _save_daily(force=True)
+            try:
+                import subprocess
+                subprocess.Popen([sys.executable] + sys.argv)
+            except: pass
+            os._exit(0)
+        threading.Thread(target=_restart, daemon=False).start()
 
     # -- 用户 CRUD --
 
