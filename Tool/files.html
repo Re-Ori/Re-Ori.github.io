@@ -216,6 +216,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 <p style="font-size:12px;color:#bbb;margin-top:12px;cursor:pointer" onclick="fsEditShareFiles(window._fsEditCode)" id="fs-edit-filepwd-link">管理文件密码</p>
 </div></div>
 
+</div><!-- /.container -->
 <div id="fs-filepwd-overlay" class="fp-overlay fp-hidden">
 <div class="fp-header">
   <div class="fp-header-title">管理文件密码</div>
@@ -518,17 +519,23 @@ html+='<div class="fs-share-item">'+
 '<div class="info"><div class="name">'+pwd+esc(s.name)+'</div><div class="meta">'+fmtTime(s.created_at)+exp+'</div></div>'+
 '<a class="fs-btn" href="'+url+'" target="_blank">打开</a>'+
 '<button class="fs-btn" onclick="navigator.clipboard.writeText(\''+url+'\');toast(\'已复制\')">复制</button>'+
-'<button class="fs-btn" onclick="fsEditShare(\''+s.code+'\',\''+esc(s.name)+'\','+(s.has_password?'true':'false')+')">编辑</button>'+
+'<button class="fs-btn" onclick="fsEditShare(\''+s.code+'\',\''+esc(s.name)+'\','+(s.has_password?'true':'false')+',\''+esc(s.password||'')+'\',\''+esc(s.default_password||'')+'\',\''+s.type+'\')">编辑</button>'+
 '<button class="fs-btn danger" onclick="fsDeleteShare(\''+s.code+'\')">删除</button></div>';}
 c.innerHTML=html})}
 
 window.fsDeleteShare=function(code){
 if(!confirm('确定删除此分享链接？'))return;
 api('POST','/api/bbs/files/share/'+code+'/delete').then(function(r){if(r.ok){toast('已删除');loadShares()}else toast('删除失败')})};
-window.fsEditShare=function(code,name,hasPwd){
+window.fsEditShare=function(code,name,hasPwd,curPwd,curDefPwd,shareType){
 window._fsEditCode=code;$('fs-edit-share-name').textContent='编辑: '+name;
-$('fs-edit-share-pwd').value='';$('fs-edit-share-expire').value='-1';
+window._fsEditShareType=shareType;
+$('fs-edit-share-pwd').value=curPwd||'';
+$('fs-edit-share-pwd').style.display=hasPwd?'':'none';
+window._fsEditHasPwd=hasPwd;
 fsEditPwdToggle(hasPwd?true:false);
+$('fs-edit-share-expire').value='-1';
+var link=$('fs-edit-filepwd-link');
+if(link)link.style.display=(shareType==='folder')?'':'none';
 $('fs-edit-share-modal').classList.add('show')};
 window.fsEditPwdToggle=function(on){
 $('fs-edit-pwd-on').style.borderColor=on?'var(--theme-color,#399FFF)':'rgba(0,0,0,0.12)';
@@ -537,6 +544,7 @@ $('fs-edit-pwd-on').style.color=on?'var(--theme-color,#399FFF)':'#999';
 $('fs-edit-pwd-off').style.color=on?'#999':'var(--theme-color,#399FFF)';
 $('fs-edit-share-pwd').style.display=on?'':'none';window._fsEditHasPwd=on};
 window.fsEditShareFiles=function(code){
+if(window._fsEditShareType&&window._fsEditShareType!=='folder')return;
 var ov=$('fs-filepwd-overlay');ov.classList.remove('fp-hidden');
 $('fs-edit-filepwd-hint').textContent='加载中…';$('fs-edit-filepwd-list').innerHTML='';$('fs-edit-filepwd-default').value='';
 window._fsEditFilePwdCode=code;

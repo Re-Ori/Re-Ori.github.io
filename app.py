@@ -3160,6 +3160,8 @@ document.getElementById("pwd").addEventListener("keydown",function(e){{if(e.key=
                 'code': s['code'], 'name': s['name'], 'type': s.get('type', 'file'),
                 'has_password': 'password' in s,
                 'has_default_password': 'default_password' in s,
+                'password': s.get('password', ''),
+                'default_password': s.get('default_password', ''),
                 'created_at': s.get('created_at', 0),
                 'expires_at': s.get('expires_at', 0),
             })
@@ -3276,11 +3278,12 @@ else{ld(_root)}
                 elif ext in ('mp3','wav','ogg'): svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#af52de" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
                 elif ext in ('mp4','avi','mkv'): svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ff2d55" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>'
                 elif ext in ('pdf'): svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'
+                qv = ('?v=' + share.get('password', '') if share.get('password') else '')
                 body = f'''<div class="card"><div class="file-icon">{svg_icon}</div>
   <h2>{name}</h2>
   {meta_html}
   <p style="color:#999;font-size:13px">{self._fmt_size_share(info.get('size',0))}</p>
-  <a class="dl-btn primary" href="/api/bbs/files/share/{code}/download" style="margin-top:16px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 下载文件</a>
+  <a class="dl-btn primary" href="/api/bbs/files/share/{code}/download{qv}" style="margin-top:16px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 下载文件</a>
 </div>'''
         page_css = '''
 *{margin:0;padding:0;box-sizing:border-box}
