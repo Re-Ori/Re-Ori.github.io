@@ -34,9 +34,52 @@ BBS_TOPICS_DIR = BBS_DIR / "topics"
 BBS_TOKENS_FILE = BBS_DIR / "tokens.json"
 BBS_NOTIFICATIONS_FILE = BBS_DIR / "notifications.json"
 BBS_INVITES_FILE = BBS_DIR / "invites.json"
-BBS_FILES_DIR = BBS_DIR / "files"
-BBS_FILES_META_FILE = BBS_DIR / "files_meta.json"
+BBS_FILES_DIR = DATA_DIR / "files"
+BBS_FILES_META_FILE = DATA_DIR / "files_meta.json"
 STORAGE_DEFAULT_QUOTA = 256 * 1024 * 1024  # 256MB
+
+def _get_file_path(file_id, filename=None):
+    """获取文件存储路径，支持新旧两种命名格式"""
+    # 新格式：{file_id}__{sanitized_name}
+    if filename:
+        safe_name = "".join(c if c.isalnum() or c in '.-_ ' else '_' for c in filename).strip()
+        safe_name = safe_name[:80]  # 限制长度
+        return BBS_FILES_DIR / f"{file_id}__{safe_name}"
+    # 精确匹配（旧格式）
+    fp = BBS_FILES_DIR / file_id
+    if fp.exists():
+        return fp
+    # 前缀匹配（新格式）
+    if BBS_FILES_DIR.exists():
+        for f in BBS_FILES_DIR.iterdir():
+            if f.name.startswith(file_id + "__"):
+                return f
+    return fp  # 返回原路径，调用方会处理不存在的情况
+
+def _migrate_files_dir():
+    """将文件从旧目录 (.data/bbs/files) 迁移到新目录 (.data/files)"""
+    import shutil
+    old_dir = BBS_DIR / "files"
+    new_dir = BBS_FILES_DIR
+    if old_dir.exists() and old_dir.is_dir():
+        new_dir.mkdir(parents=True, exist_ok=True)
+        count = 0
+        for f in old_dir.iterdir():
+            if f.is_file():
+                dest = new_dir / f.name
+                if not dest.exists():
+                    shutil.move(str(f), str(dest))
+                    count += 1
+        # 尝试删除旧目录
+        try:
+            remaining = list(old_dir.iterdir())
+            if not remaining:
+                old_dir.rmdir()
+        except: pass
+        return count
+    return 0
+
+
 
 # ── 统计追踪 ──
 STATS_DIR = DATA_DIR / "stats"
@@ -837,6 +880,13 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         # /manifest.json — 浏览器自动请求，返回最小响应避免 404
+        
+        if req_path.startswith('/Tool/files.html/'):
+            # 保留原始路径供前端 JS 读取 location.pathname
+            # 但服务器只提供 files.html 文件
+            self.path = '/Tool/files.html'
+            super().do_GET()
+            return
         if req_path == '/manifest.json':
             self._send_json({
                 "name": "Origin Base",
@@ -1606,6 +1656,20 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
 
         bw = dict(_stats.get("bandwidth", {}))
 
+        # 云文件系统统计
+        try:
+            _fs_meta = _bbs_load_files_meta()
+            _fs_files = [f for f in _fs_meta if f.get('type') == 'file']
+            _fs_folders = [f for f in _fs_meta if f.get('type') == 'folder']
+            _fs_users = set(f.get('user_id') for f in _fs_meta if f.get('user_id'))
+            _fs_total_size = sum(f.get('size', 0) for f in _fs_files)
+            _fs_all_shares = self._load_shares()
+            _fs_active_shares = [s for s in _fs_all_shares if not (s.get('expires_at') and now_ts > s['expires_at'])]
+        except:
+            _fs_files = []; _fs_folders = []; _fs_users = set()
+            _fs_total_size = 0; _fs_all_shares = []; _fs_active_shares = []
+
+
         self._send_json({
             "uptime": round(uptime),
             "requests": r,
@@ -1626,6 +1690,14 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 "expired": sl_expired,
                 "created": sl.get("created", 0),
                 "redirects": sl.get("redirects", 0),
+            },
+            "filesystem": {
+                "files": len(_fs_files),
+                "folders": len(_fs_folders),
+                "total_size": _fs_total_size,
+                "users": len(_fs_users),
+                "shares": len(_fs_all_shares),
+                "active_shares": len(_fs_active_shares),
             },
         })
 
@@ -2897,8 +2969,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         try:
             ctype = self.headers.get('Content-Type', '')
             clen = int(self.headers.get('Content-Length', 0))
-            body = self.rfile.read(clen)
-            import re
+            import re, tempfile, os as _os
             boundary = ''
             if 'boundary=' in ctype:
                 boundary = ctype.split('boundary=', 1)[1].split(';')[0].strip()
@@ -2906,7 +2977,16 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                     boundary = boundary[1:-1]
             if not boundary:
                 self._send_json({'ok': False, 'error': 'invalid_content_type'}); return
-            parts = body.split(('--' + boundary).encode())
+            # 将请求体写入临时文件再解析，避免大文件撑爆内存
+            raw = b''
+            remaining = clen
+            while remaining > 0:
+                chunk = self.rfile.read(min(remaining, 65536))
+                if not chunk: break
+                raw += chunk
+                remaining -= len(chunk)
+            
+            parts = raw.split(('--' + boundary).encode())
             file_data = None; filename = 'untitled'; mime_type = 'application/octet-stream'; parent_id = None
             for part in parts:
                 if b'Content-Disposition' not in part:
@@ -2946,7 +3026,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                                  'used': used, 'quota': quota, 'file_size': file_size}); return
             file_id = uuid.uuid4().hex[:16]
             BBS_FILES_DIR.mkdir(parents=True, exist_ok=True)
-            (BBS_FILES_DIR / file_id).write_bytes(file_data)
+            _get_file_path(file_id, filename).write_bytes(file_data)
             meta.append({
                 'id': file_id, 'name': filename, 'size': file_size, 'mime': mime_type,
                 'type': 'file', 'parent_id': parent_id,
@@ -2997,7 +3077,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                             if f.get('type') == 'folder':
                                 _add_to_zip(f['id'], rel, depth + 1)
                             else:
-                                fp = BBS_FILES_DIR / f['id']
+                                fp = _get_file_path(f['id'])
                                 if fp.exists():
                                     zf.writestr(rel.lstrip('/'), fp.read_bytes())
                     _add_to_zip(file_id, info['name'])
@@ -3013,7 +3093,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 log(f"文件夹下载失败: {e}")
                 self.send_error(500, f"下载失败: {e}")
             return
-        file_path = BBS_FILES_DIR / file_id
+        file_path = _get_file_path(file_id)
         if not file_path.exists():
             self.send_error(404, "File not found"); return
         data = file_path.read_bytes()
@@ -3050,7 +3130,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                             stack.append(f['id'])
         # 删除文件实体 + 元数据
         for fid in to_delete:
-            fp = BBS_FILES_DIR / fid
+            fp = _get_file_path(fid)
             if fp.exists():
                 fp.unlink()
         meta = [f for f in meta if f['id'] not in to_delete]
@@ -3168,6 +3248,7 @@ document.getElementById("pwd").addEventListener("keydown",function(e){{if(e.key=
         self._send_json({'ok': True, 'shares': safe})
 
     def _handle_bbs_share_access(self, code):
+        log("[ACCESS] called code=" + str(code))
         """GET /api/bbs/files/share/<code> — 访问分享页面"""
         shares = self._load_shares()
         share = None
@@ -3178,12 +3259,13 @@ document.getElementById("pwd").addEventListener("keydown",function(e){{if(e.key=
             self._send_share_page('分享链接无效', '该分享链接不存在或已被删除', None); return
         if share.get('expires_at') and time.time() > share['expires_at']:
             self._send_share_page('分享已过期', '该分享链接已过期', None); return
-        if share.get('password'):
+        need_pwd = share.get('password') or share.get('default_password')
+        if need_pwd:
             owner = _bbs_check(self.headers)
             is_owner = owner and owner.get('user_id') == share.get('owner_id')
             if not is_owner:
                 vp = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('v', [None])[0]
-                if vp and vp == share['password']:
+                if vp and (vp == share.get('password') or vp == share.get('default_password')):
                     pass
                 else:
                     self._send_share_password_page(share['code']); return
@@ -3265,7 +3347,7 @@ else{ld(_root)}
   <h2 id="folder-name">''' + name + '''</h2>
   ''' + meta_html + '''
   <div id="folder-actions" style="margin-bottom:12px">
-    <a class="dl-btn primary" href="/api/bbs/files/share/''' + code + '''/download''' + ('?v=' + data['share'].get('password', '') if data and data['share'].get('password') else '') + '''" id="zip-dl-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> 下载全部 ZIP</a>
+    <a class="dl-btn primary" href="/api/bbs/files/share/''' + code + '''/download''' + ('?v=' + (data['share'].get('password') or data['share'].get('default_password','')) if data and (data['share'].get('password') or data['share'].get('default_password')) else '') + '''" id="zip-dl-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> 下载全部 ZIP</a>
   </div>
   <div id="file-list" class="file-list"></div>
   <div id="fl-loading" style="color:#999;font-size:13px;padding:12px">加载中&hellip;</div>
@@ -3278,7 +3360,7 @@ else{ld(_root)}
                 elif ext in ('mp3','wav','ogg'): svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#af52de" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
                 elif ext in ('mp4','avi','mkv'): svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ff2d55" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>'
                 elif ext in ('pdf'): svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'
-                qv = ('?v=' + share.get('password', '') if share.get('password') else '')
+                qv = ('?v=' + (share.get('password') or share.get('default_password', '')) if (share.get('password') or share.get('default_password')) else '')
                 body = f'''<div class="card"><div class="file-icon">{svg_icon}</div>
   <h2>{name}</h2>
   {meta_html}
@@ -3330,8 +3412,12 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
                 self._send_json({'ok': False, 'error': 'not_found'}); return
             if share.get('expires_at') and time.time() > share['expires_at']:
                 self._send_json({'ok': False, 'error': 'expired'}); return
-            if 'password' not in share or password == share['password']:
-                self._send_json({'ok': True, 'token': share.get('password', '')}); return
+            # 接受访问密码或文件默认密码
+            if password == share.get('password') or password == share.get('default_password'):
+                self._send_json({'ok': True, 'token': password}); return
+            # 如果两者都未设置，返回空令牌（不应到达这里）
+            if not share.get('password') and not share.get('default_password'):
+                self._send_json({'ok': True, 'token': ''}); return
             self._send_json({'ok': False, 'error': 'wrong_password'}); return
             self._return_share_content(share)
         except Exception as e:
@@ -3403,7 +3489,7 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
         if share.get('expires_at') and time.time() > share['expires_at']:
             self.send_error(410, "Expired"); return
         params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-        log(f"[DL] code={code}")
+        log(f"[DL] code={code} params={params}")
         # 单一密码检查：解析出最终密码值，与分享的各级密码比对
         NOPASS = '__NOPASS__'
         owner = _bbs_check(self.headers)
@@ -3425,7 +3511,7 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
             # 分享密码（v 令牌直接比对）
             if not password_ok and share.get('password'):
                 password_ok = (pwd_val == share['password'])
-            log(f"[DL] password_ok={password_ok}")
+            log(f"[DL] password_ok={password_ok} pwd_val={pwd_val!r} target_id={target_id} is_owner={is_owner} item_id={item_id}")
         if not password_ok:
             self.send_error(403, "Password required"); return
         log(f"[DL] password ok")
@@ -3474,7 +3560,7 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
                             r = zp + '/' + f['name']
                             if f.get('type') == 'folder': _add(f['id'], r, depth+1)
                             else:
-                                fp = BBS_FILES_DIR / f['id']
+                                fp = _get_file_path(f['id'])
                                 if fp.exists(): zf.writestr(r.lstrip('/'), fp.read_bytes())
                     _add(target_id, info['name'])
                 data = buf.getvalue()
@@ -3809,6 +3895,14 @@ def _init_data_dirs():
     BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
     BBS_FILES_DIR.mkdir(parents=True, exist_ok=True)
     SHORT_LINKS_DIR.mkdir(parents=True, exist_ok=True)
+    # 迁移 files_meta.json 到新位置
+    _old_meta = BBS_DIR / "files_meta.json"
+    if _old_meta.exists() and not BBS_FILES_META_FILE.exists():
+        _old_meta.rename(BBS_FILES_META_FILE)
+        log("files_meta.json 已迁移至 .data/")
+    migrated = _migrate_files_dir()
+    if migrated:
+        log(f"文件存储迁移完成: {migrated} 个文件移至 .data/files")
     _bbs_load_tokens()
     # 恢复：如果 users.json 丢失则重建默认管理员
     if not BBS_USERS_FILE.exists():
@@ -3826,4 +3920,5 @@ def _init_data_dirs():
 
 # 模块导入时自动执行数据目录初始化和 Token 加载
 _init_data_dirs()
+
 

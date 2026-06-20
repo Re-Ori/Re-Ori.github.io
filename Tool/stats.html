@@ -243,7 +243,7 @@
     var html = '';
     var daily = d.daily_7d || [];
     _dailyCache = daily;
-    var r = d.requests, p2p = d.p2p || {}, sl = d.short_links || {};
+    var r = d.requests, p2p = d.p2p || {}, sl = d.short_links || {}, fs = d.filesystem || {};
     var totalReqs = r.total || 0;
     var uptimeStr = d.uptime ? fmtTime(d.uptime) : '未知';
 
@@ -359,6 +359,19 @@
       '<div class="st-total-row"><span class="st-total-label">总链接</span><span class="st-total-val">' + (sl.total || 0) + '</span></div>' +
       '<div class="st-total-row"><span class="st-total-label">跳转次数</span><span class="st-total-val">' + (sl.redirects || 0) + '</span></div>' +
       '<div class="st-total-row"><span class="st-total-label">已过期</span><span class="st-total-val">' + (sl.expired || 0) + '</span></div>' +
+      '</div>' +
+    // 云文件系统
+    '<div class="st-card">' +
+      '<div class="st-card-title">' +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
+        '云文件 总计' +
+      '</div>' +
+      '<div class="st-total-row"><span class="st-total-label">文件数</span><span class="st-total-val">' + (fs.files || 0) + '</span></div>' +
+      '<div class="st-total-row"><span class="st-total-label">文件夹数</span><span class="st-total-val">' + (fs.folders || 0) + '</span></div>' +
+      '<div class="st-total-row"><span class="st-total-label">占用空间</span><span class="st-total-val">' + fmtBytes(fs.total_size || 0) + '</span></div>' +
+      '<div class="st-total-row"><span class="st-total-label">使用用户</span><span class="st-total-val">' + (fs.users || 0) + '</span></div>' +
+      '<div class="st-total-row"><span class="st-total-label">分享链接</span><span class="st-total-val">' + (fs.shares || 0) + '</span></div>' +
+      '<div class="st-total-row"><span class="st-total-label">活跃分享</span><span class="st-total-val">' + (fs.active_shares || 0) + '</span></div>' +
       '</div>';
 
     html += '</div>'; // /st-grid

@@ -716,7 +716,9 @@
           localStorage.setItem('bbs_token', TOKEN);
           localStorage.setItem('bbs_user', res.user);
           localStorage.setItem('bbs_user_id', res.user_id || '');
-          location.reload();
+          var _rd = new URLSearchParams(location.search).get('redirect');
+          if (_rd) { location.href = _rd; }
+          else { location.reload(); }
         } else if (res.error === 'auth_failed') {
           showLoginError('用户名或密码错误');
         } else {

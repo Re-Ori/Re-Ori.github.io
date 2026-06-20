@@ -411,17 +411,28 @@ def _make_checker():
     """返回注入到 app._on_access_check 的回调函数"""
     last_check, updating = 0.0, False
     lock, interval = threading.Lock(), 60
+    # 记录 app.py 修改时间，用于检测本地变更
+    _app_mtime = os.path.getmtime(str(PROJECT_ROOT / 'app.py')) if (PROJECT_ROOT / 'app.py').exists() else 0
 
     def checker(cls):
-        nonlocal last_check, updating
+        nonlocal last_check, updating, _app_mtime
         now = time.time()
         with lock:
             if now - last_check < interval or updating: return
             last_check, updating = now, True
 
         def do():
-            nonlocal updating
+            nonlocal updating, _app_mtime
             try:
+                # 检测本地 app.py 是否被手动修改
+                app_path = PROJECT_ROOT / 'app.py'
+                if app_path.exists():
+                    cur_mtime = os.path.getmtime(str(app_path))
+                    if cur_mtime != _app_mtime:
+                        _app_mtime = cur_mtime
+                        _log('检测到 app.py 已修改，准备重启服务器')
+                        _RESTART_NEEDED = True
+                
                 _log("检查 GitHub 更新…")
                 status = _run_update()
                 st = _load_state()

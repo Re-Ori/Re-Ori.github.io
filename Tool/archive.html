@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文件存档 — Origin Base</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f5f7}
+[data-theme="dark"] body{background:#13141f}
+.ar-body{max-width:680px;margin:0 auto;padding:0 12px 80px}
+.ar-header{display:flex;align-items:center;justify-content:space-between;padding:20px 0 16px;border-bottom:1px solid rgba(0,0,0,0.06);margin-bottom:16px}
+[data-theme="dark"] .ar-header{border-color:rgba(255,255,255,0.06)}
+.ar-header h1{font-size:20px;font-weight:700;color:#1a1a1a;display:flex;align-items:center;gap:8px}
+[data-theme="dark"] .ar-header h1{color:#e0e0e0}
+.ar-user{font-size:12px;color:#8e8e93;display:flex;align-items:center;gap:8px}
+.ar-user .name{color:var(--theme-color,#399FFF);font-weight:600}
+.ar-btn{padding:8px 16px;border:1px solid rgba(0,0,0,0.1);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:#555;transition:all .15s;display:inline-flex;align-items:center;gap:4px;text-decoration:none}
+.ar-btn:hover{border-color:var(--theme-color,#399FFF);color:var(--theme-color,#399FFF)}
+.ar-btn.primary{background:var(--theme-color,#399FFF);color:#fff;border-color:var(--theme-color,#399FFF)}
+.ar-btn.primary:hover{opacity:.85}
+.ar-btn.danger:hover{border-color:#ff3b30;color:#ff3b30}
+.ar-btn:disabled{opacity:.4;cursor:default;pointer-events:none}
+[data-theme="dark"] .ar-btn{color:#aaa;border-color:rgba(255,255,255,0.12)}
+
+/* 上传区 */
+.ar-upload{border:2px dashed rgba(0,0,0,0.15);border-radius:12px;padding:36px;text-align:center;cursor:pointer;transition:all .15s;margin-bottom:14px;background:rgba(57,159,255,0.02)}
+[data-theme="dark"] .ar-upload{border-color:rgba(255,255,255,0.12)}
+.ar-upload:hover,.ar-upload.dragover{border-color:var(--theme-color,#399FFF);background:rgba(57,159,255,0.06)}
+.ar-upload svg{color:#bbb;margin-bottom:6px}
+.ar-upload .hint{font-size:13px;color:#999}
+.ar-upload .hint strong{color:var(--theme-color,#399FFF)}
+
+/* 进度条 */
+.ar-upbar{display:none;margin-top:12px}
+.ar-upbar.show{display:block}
+.ar-upbar .track{width:100%;height:4px;background:rgba(0,0,0,0.06);border-radius:2px;overflow:hidden;margin-bottom:4px}
+.ar-upbar .track .fill{height:100%;background:var(--theme-color,#399FFF);width:0;transition:width .2s}
+.ar-upbar .pct{font-size:11px;color:#999}
+
+/* 文件列表 */
+.ar-empty{text-align:center;padding:48px 16px;color:#bbb;font-size:14px}
+.ar-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:10px;margin-bottom:6px;box-shadow:0 1px 4px rgba(0,0,0,0.03)}
+[data-theme="dark"] .ar-item{background:#1c1c1e;border-color:rgba(255,255,255,0.06)}
+.ar-item .ico{flex-shrink:0;width:32px;height:32px;background:rgba(57,159,255,0.08);border-radius:8px;display:flex;align-items:center;justify-content:center}
+.ar-item .ico svg{color:var(--theme-color,#399FFF)}
+.ar-item .info{flex:1;min-width:0}
+.ar-item .info .name{font-size:14px;font-weight:600;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+[data-theme="dark"] .ar-item .info .name{color:#e0e0e0}
+.ar-item .info .meta{font-size:11px;color:#999;margin-top:2px}
+.ar-item .acts{display:flex;gap:4px;flex-shrink:0}
+
+/* 工具栏 */
+.ar-toolbar{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+.ar-toolbar .spacer{flex:1}
+
+/* 登录覆盖层 */
+.ar-login{position:fixed;inset:0;z-index:150;background:rgba(255,255,255,0.95);backdrop-filter:blur(12px);display:none;align-items:center;justify-content:center}
+[data-theme="dark"] .ar-login{background:rgba(26,27,46,0.95)}
+.ar-login.show{display:flex}
+.ar-login-box{text-align:center;padding:40px;max-width:340px;width:90%}
+.ar-login-box h2{font-size:22px;margin-bottom:4px;color:#1a1a1a}
+[data-theme="dark"] .ar-login-box h2{color:#e0e0e0}
+.ar-login-box p{font-size:13px;color:#8e8e93;margin-bottom:16px}
+.ar-login-box input{width:100%;padding:12px 14px;border:1px solid rgba(0,0,0,0.12);border-radius:10px;font-size:15px;outline:none;margin-bottom:10px;box-sizing:border-box}
+[data-theme="dark"] .ar-login-box input{background:rgba(255,255,255,0.06);color:#e0e0e0;border-color:rgba(255,255,255,0.15)}
+.ar-login-box .err{color:#ff3b30;font-size:13px;margin-bottom:8px;display:none}
+.ar-login-box button{width:100%;padding:12px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;background:var(--theme-color,#399FFF);color:#fff}
+
+/* Toast */
+.ar-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none}
+.ar-toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- 检测覆盖层 -->
+<div id="ar-detect" style="position:fixed;inset:0;background:rgba(255,255,255,0.95);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;z-index:200">
+  <div style="text-align:center;padding:40px;max-width:400px">
+    <div style="width:40px;height:40px;border:3px solid rgba(57,159,255,0.2);border-top-color:var(--theme-color,#399FFF);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px"></div>
+    <h2 style="font-size:22px;margin-bottom:8px;color:#1a1a1a">正在连接</h2>
+    <p style="font-size:14px;color:#8e8e93">获取文件存档服务…</p>
+  </div>
+</div>
+
+<!-- 登录覆盖层 -->
+<div class="ar-login" id="ar-login">
+  <div class="ar-login-box">
+    <h2>登录</h2>
+    <p>使用 BBS 账号登录</p>
+    <div class="err" id="ar-login-err"></div>
+    <input type="text" id="ar-login-user" placeholder="用户名" autocomplete="off">
+    <input type="password" id="ar-login-pass" placeholder="密码" autocomplete="off">
+    <button id="ar-login-btn" onclick="arLogin()">登录</button>
+  </div>
+</div>
+
+<div id="ar-app" style="display:none">
+<div class="ar-body">
+<div class="ar-header">
+  <h1><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> 文件存档</h1>
+  <div class="ar-user">
+    <span>欢迎，<span class="name" id="ar-uname"></span></span>
+    <button class="ar-btn" onclick="arLogout()">退出</button>
+  </div>
+</div>
+
+<!-- 上传区 -->
+<div class="ar-upload" id="ar-upload">
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+  <div class="hint">点击或拖拽文件上传，支持多选</div>
+  <div class="ar-upbar" id="ar-upbar">
+    <div class="track"><div class="fill" id="ar-upfill"></div></div>
+    <div class="pct" id="ar-uppct">0%</div>
+  </div>
+</div>
+
+<!-- 工具栏 -->
+<div class="ar-toolbar">
+  <span style="font-size:13px;color:#555;font-weight:600" id="ar-count">加载中…</span>
+  <div class="spacer"></div>
+  <button class="ar-btn" onclick="arExport()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 导出全部存档</button>
+</div>
+
+<!-- 文件列表 -->
+<div id="ar-list"></div>
+</div></div>
+
+<div class="ar-toast" id="ar-toast"></div>
+</div><!-- /.container -->
+
+<script src="/js/navbar.js"></script>
+<script>window.showFooter=false;</script>
+<script src="/js/main.js"></script>
+<script>
+(function(){
+window.__navActive=["工具"];
+var T=localStorage.getItem('bbs_token')||'', U=localStorage.getItem('bbs_user')||'', UI=localStorage.getItem('bbs_user_id')||'';
+
+function $(id){return document.getElementById(id)}
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function toast(m){var t=$('ar-toast');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show')},2500)}
+function fmtSize(b){if(b<=0)return'0 B';var u=['B','KB','MB','GB'],i=0,s=b;while(s>=1024&&i<u.length-1){s/=1024;i++}return(i===0?s:s.toFixed(1))+' '+u[i]}
+function fmtTime(ts){if(!ts)return'';return new Date(ts*1e3).toLocaleString()}
+function api(m,p,b){var o={method:m,headers:{}};if(T)o.headers['X-Auth-Token']=T;if(b)o.body=b;return fetch(p,o).then(function(r){return r.json().catch(function(){return{ok:false,error:'bad_response'}})})}
+
+function arLogin(){
+var u=$('ar-login-user').value.trim(),p=$('ar-login-pass').value.trim();
+if(!u||!p){$('ar-login-err').textContent='请输入用户名和密码';$('ar-login-err').style.display='';return}
+$('ar-login-err').style.display='none';$('ar-login-btn').disabled=true;
+api('POST','/api/bbs/auth',JSON.stringify({username:u,password:p})).then(function(r){
+if(r.ok){T=r.token;U=r.user;UI=r.user_id||'';
+localStorage.setItem('bbs_token',T);localStorage.setItem('bbs_user',U);localStorage.setItem('bbs_user_id',UI);
+$('ar-login').classList.remove('show');$('ar-uname').textContent=U;arLoad()}
+else{$('ar-login-err').textContent='用户名或密码错误';$('ar-login-err').style.display=''}
+}).catch(function(){$('ar-login-err').textContent='网络错误';$('ar-login-err').style.display=''})
+.finally(function(){$('ar-login-btn').disabled=false})};
+$('ar-login-pass').addEventListener('keydown',function(e){if(e.key==='Enter')arLogin()});
+
+function arLogout(){T='';U='';UI='';localStorage.removeItem('bbs_token');localStorage.removeItem('bbs_user');localStorage.removeItem('bbs_user_id');arShowLogin()}
+function arShowLogin(){$('ar-login').classList.add('show')}
+
+// 检测
+fetch('/api/ping',{cache:'no-store'}).then(function(r){
+if(!r.ok)throw Error();
+$('ar-detect').style.display='none';$('ar-app').style.display='';
+if(T){api('POST','/api/bbs/auth',JSON.stringify({verify:true})).then(function(r){
+if(r.ok){U=r.user||U;UI=r.user_id||UI;$('ar-uname').textContent=U;arLoad()}
+else{T='';localStorage.removeItem('bbs_token');arShowLogin()}
+}).catch(function(){arShowLogin()})}else arShowLogin()
+}).catch(function(){$('ar-detect').style.display='none';$('ar-unavailable').style.display=''});
+
+// 加载文件列表
+function arLoad(){
+$('ar-count').textContent='加载中…';
+api('GET','/api/bbs/files').then(function(r){
+if(!r.ok){$('ar-count').textContent='加载失败';return}
+var files=(r.files||[]).filter(function(f){return f.type!=='folder'});
+$('ar-count').textContent='共 '+files.length+' 个文件';
+if(files.length===0){$('ar-list').innerHTML='<div class="ar-empty">暂无存档文件</div>';return}
+var html='';
+for(var i=files.length-1;i>=0;i--){
+var f=files[i];
+html+='<div class="ar-item"><div class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>'+
+'<div class="info"><div class="name">'+esc(f.name)+'</div><div class="meta">'+fmtSize(f.size)+' · '+fmtTime(f.uploaded_at)+'</div></div>'+
+'<div class="acts"><button class="ar-btn" onclick="arDl(\''+f.id+'\',\''+esc(f.name)+'\')">下载</button>'+
+'<button class="ar-btn danger" onclick="arDel(\''+f.id+'\',\''+esc(f.name)+'\')">删除</button></div></div>';}
+$('ar-list').innerHTML=html})
+}
+
+// 下载文件
+window.arDl=function(id,name){
+var a=document.createElement('a');a.style.display='none';document.body.appendChild(a);
+fetch('/api/bbs/files/'+id+'/download',{headers:T?{'X-Auth-Token':T}:{}}).then(function(r){
+if(!r.ok){toast('下载失败');return}
+r.blob().then(function(blob){a.href=URL.createObjectURL(blob);a.download=name||'download';a.click();setTimeout(function(){URL.revokeObjectURL(a.href);document.body.removeChild(a)},1000)})}).catch(function(){toast('下载失败');document.body.removeChild(a)})};
+
+// 删除文件
+window.arDel=function(id,name){
+if(!confirm('确定删除 "'+name+'" 吗？'))return;
+api('POST','/api/bbs/files/'+id+'/delete').then(function(r){if(r.ok){toast('已删除');arLoad()}else toast('删除失败')})};
+
+// 导出全部存档
+window.arExport=function(){
+var a=document.createElement('a');a.style.display='none';document.body.appendChild(a);
+fetch('/api/bbs/export',{headers:T?{'X-Auth-Token':T}:{}}).then(function(r){
+if(!r.ok){toast('导出失败');return}
+r.blob().then(function(blob){a.href=URL.createObjectURL(blob);a.download='archive-'+new Date().toISOString().slice(0,10)+'.zip';a.click();setTimeout(function(){URL.revokeObjectURL(a.href);document.body.removeChild(a)},1000);toast('存档已导出')})}).catch(function(){toast('导出失败');document.body.removeChild(a)})};
+
+// 上传
+var uploadZone=$('ar-upload');
+var fileInput=document.createElement('input');fileInput.type='file';fileInput.multiple=true;fileInput.style.display='none';uploadZone.appendChild(fileInput);
+uploadZone.onclick=function(){fileInput.click()};
+fileInput.addEventListener('change',function(){if(fileInput.files)for(var i=0;i<fileInput.files.length;i++)doUpload(fileInput.files[i]);fileInput.value=''});
+uploadZone.addEventListener('dragover',function(e){e.preventDefault();uploadZone.classList.add('dragover')});
+uploadZone.addEventListener('dragleave',function(){uploadZone.classList.remove('dragover')});
+uploadZone.addEventListener('drop',function(e){e.preventDefault();uploadZone.classList.remove('dragover');if(e.dataTransfer.files)for(var i=0;i<e.dataTransfer.files.length;i++)doUpload(e.dataTransfer.files[i])});
+
+function doUpload(file){
+$('ar-upbar').classList.add('show');$('ar-upfill').style.width='0%';$('ar-uppct').textContent='0%';
+var fd=new FormData();fd.append('file',file);
+var xhr=new XMLHttpRequest();
+xhr.open('POST','/api/bbs/files/upload',true);if(T)xhr.setRequestHeader('X-Auth-Token',T);
+xhr.upload.onprogress=function(e){if(e.lengthComputable){var p=Math.round(e.loaded/e.total*100);$('ar-upfill').style.width=p+'%';$('ar-uppct').textContent=p+'%'}};
+xhr.onload=function(){try{
+var r=JSON.parse(xhr.responseText);
+if(r.ok){toast('上传成功: '+file.name);arLoad()}
+else toast('上传失败: '+(r.error||'未知'))
+}catch(e){toast('上传失败')}$('ar-upbar').classList.remove('show')};
+xhr.onerror=function(){toast('上传失败');$('ar-upbar').classList.remove('show')};
+xhr.send(fd)}
+
+})();
+</script>
+</body>
+</html>
