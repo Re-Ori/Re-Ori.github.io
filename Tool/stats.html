@@ -461,8 +461,8 @@
     var currentSlot = Math.floor((now.getHours() * 60 + now.getMinutes()) / 10);
     if (currentSlot > 143) currentSlot = 143;
 
-    // 昨天需要补充的 slot 数：144 - currentSlot
-    var needFromYesterday = 144 - currentSlot;
+    // 昨天需要补充的 slot 数：144 - (currentSlot + 1)
+    var needFromYesterday = 144 - (currentSlot + 1);
     var result = [];
 
     function getSlot(src, i) {
@@ -479,7 +479,7 @@
     }
 
     if (yesterday && yesterday.slots && yesterday.slots.total) {
-      var yStart = Math.max(0, 143 - needFromYesterday);
+      var yStart = Math.max(0, 143 - needFromYesterday + 1);
       for (var i = yStart; i < 144; i++) {
         var s = getSlot(yesterday.slots, i);
         s.slot = result.length; s._hour = 0;
@@ -508,11 +508,11 @@
     var now = new Date();
     var currentSlot = Math.floor((now.getHours() * 60 + now.getMinutes()) / 10);
     if (currentSlot > 143) currentSlot = 143;
-    var needFromYesterday = 144 - currentSlot;
+    var needFromYesterday = 144 - (currentSlot + 1);
     var result = [];
 
     if (yesterday && yesterday.bw_slots && yesterday.bw_slots.sent) {
-      var yStart = Math.max(0, 143 - needFromYesterday);
+      var yStart = Math.max(0, 143 - needFromYesterday + 1);
       for (var i = yStart; i < 144; i++) {
         result.push({ slot: result.length, sent: yesterday.bw_slots.sent[i] || 0, recv: yesterday.bw_slots.recv[i] || 0 });
       }
@@ -592,14 +592,17 @@
       svg += '<polyline points="' + pts_r + '" fill="none" stroke="#FF6B35" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5,3"/>';
     }
 
-    // X轴标签（每2小时，含末端）
-    var labelCount = 13; // 0,2,4,...,24
-    for (var hi = 0; hi < labelCount; hi++) {
+    // X轴标签（每2小时，根据实际数据窗口计算时间）
+    var nowX = new Date();
+    for (var hi = 0; ; hi++) {
       var hour = hi * 2;
-      var idx = Math.round(hour * 6); // 每小时6个点
+      var idx = Math.round(hour * 6);
       if (idx >= len) break;
+      // 计算该时隙的实际时间：最后一个时隙对应当前时间
+      var d = new Date(nowX.getTime() - (len - 1 - idx) * 10 * 60000);
+      var label = pad2(d.getHours()) + ':' + pad2(Math.floor(d.getMinutes() / 10) * 10);
       var x = PAD.left + idx * stepX;
-      svg += '<text class="st-chart-x-label" x="' + x + '" y="' + (H - 5) + '" text-anchor="middle" font-size="8">' + pad2(hour) + ':00</text>';
+      svg += '<text class="st-chart-x-label" x="' + x + '" y="' + (H - 5) + '" text-anchor="middle" font-size="8">' + label + '</text>';
     }
 
     // 悬停触点
@@ -611,7 +614,7 @@
         var sentB = (bwSlots && bwSlots[i]) ? (bwSlots[i].sent || 0) : 0;
         var recvB = (bwSlots && bwSlots[i]) ? (bwSlots[i].recv || 0) : 0;
         svg += '<rect x="' + x + '" y="0" width="' + hoverW + '" height="' + H + '" fill="transparent" pointer-events="all"';
-        svg += ' onmousemove="showCombinedTip(event,\'' + ttId + '\',' + i + ',' + total + ',' + sentB + ',' + recvB + ')"';
+        svg += ' onmousemove="showCombinedTip(event,\'' + ttId + '\',' + i + ',' + total + ',' + sentB + ',' + recvB + ',' + len + ')"';
         svg += ' onmouseleave="hideTip(\'' + ttId + '\')"/>';
       }
     }
@@ -620,18 +623,17 @@
   }
 
   // ── 合并悬停提示（挂到 window 上供 SVG 内联事件调用） ──
-  window.showCombinedTip = function(e, id, idx, total, sentB, recvB) {
+  window.showCombinedTip = function(e, id, idx, total, sentB, recvB, totalLen) {
     var tip = document.getElementById(id);
     if (!tip) return;
     var parentRect = tip.parentElement.getBoundingClientRect();
-    var timeH = Math.floor(idx / 6);
-    var timeM = (idx % 6) * 10;
-    var endH = timeH;
-    var endM = timeM + 10;
-    if (endM >= 60) { endM -= 60; endH += 1; }
-    var nextDay = endH >= 24 ? '次日' : '';
-    if (endH >= 24) endH -= 24;
-    var time = pad2(timeH) + ':' + pad2(timeM) + '-' + (nextDay || '') + pad2(endH) + ':' + pad2(endM);
+    // 根据时隙索引计算实际时间：最后一个时隙(totalLen-1)对应当前时间
+    var now = new Date();
+    var offsetFromEnd = (totalLen - 1 - idx) * 10;
+    var start = new Date(now.getTime() - offsetFromEnd * 60000);
+    var end = new Date(start.getTime() + 10 * 60000);
+    var time = pad2(start.getHours()) + ':' + pad2(Math.floor(start.getMinutes() / 10) * 10) + '-' +
+               pad2(end.getHours()) + ':' + pad2(Math.floor(end.getMinutes() / 10) * 10);
     tip.innerHTML = '<b>' + time + '</b><br>请求: ' + total + ' 次 &nbsp;|&nbsp; 发送: ' + fmtBytes(sentB) + ' 接收: ' + fmtBytes(recvB);
     tip.style.display = '';
     var x = (e.clientX || e.pageX || 0) - parentRect.left;
