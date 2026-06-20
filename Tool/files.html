@@ -727,13 +727,17 @@ return h}
 var html='<div style="margin-bottom:10px"><button class="fs-btn" onclick="loadAdmin()">← 返回</button> <strong>'+esc(uname)+'</strong> 的文件</div><div class="fs-list" id="adm-tree-root">'+_admTree('',0)+'</div>';
 var c=$('fs-tab-admin');if(c)c.innerHTML=html})};
 // 管理员文件树点击事件
-document.getElementById('fs-tab-admin').addEventListener('click',function(e){
+document.addEventListener('click',function(e){
 var btn=e.target.closest('[data-act]');if(!btn)return;
 var id=btn.dataset.fid;var fn=btn.dataset.fn||'';
 if(btn.dataset.act==='dl'){fsDownload(id,fn);}
 else if(btn.dataset.act==='dlzip'){fsDownload(id,fn+'.zip');}
-else if(btn.dataset.act==='del'){if(confirm(“确定删除 "'+fn+'" 吗？”))fsDeleteItem(id,fn);}
+else if(btn.dataset.act==='del'){if(confirm('确定删除 "'+fn+'" 吗？'))fsDeleteItem(id,fn);}
 });;
+
+// ── 启动 ──
+detect();
+})();
 </script>
 </body>
 </html>
