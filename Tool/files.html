@@ -706,6 +706,7 @@ if(r.ok){toast('配额已更新');loadAdmin()}else toast('设置失败: '+(r.err
 window.fsShowUserFiles=function(uid,uname){
 api('GET','/api/bbs/files/admin/files?user_id='+uid).then(function(r){
 if(!r.ok||!r.files){toast('加载失败');return}
+// 构建文件夹树
 var cmap={};
 for(var i=0;i<r.files.length;i++){var f=r.files[i];var pid=f.parent_id||'';if(!cmap[pid])cmap[pid]=[];cmap[pid].push(f);}
 if(!cmap[''])cmap['']=[];
@@ -717,24 +718,14 @@ var h='';
 for(var i=0;i<kids.length;i++){
 var f=kids[i];var pad='padding-left:'+(level*20+12)+'px';
 var ico=f.type==='folder'?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>':'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#399FFF" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-var fid=f.id;var fname=esc(f.name);
 if(f.type==='folder'){
-h+='<div class="fs-item" style="'+pad+'"><div class="ico folder">'+ico+'</div><div class="info"><div class="name">'+fname+'</div><div class="meta">文件夹</div></div><div class="acts"><button class="fs-btn" data-fid="'+fid+'" data-act="dlzip">下载ZIP</button><button class="fs-btn danger" data-fid="'+fid+'" data-act="del" data-fn="'+fname+'">删除</button></div></div>';
+h+='<div class="fs-item" style="'+pad+'"><div class="ico folder">'+ico+'</div><div class="info"><div class="name">'+esc(f.name)+'</div><div class="meta">文件夹</div></div><div class="acts"><button class="fs-btn" onclick="fsDownload(''+f.id+'',''+esc(f.name)+'.zip')">下载ZIP</button><button class="fs-btn danger" onclick="fsDeleteItem(''+f.id+'',''+esc(f.name)+'')">删除</button></div></div>';
 h+=_admTree(f.id,level+1);}
 else{
-h+='<div class="fs-item" style="'+pad+'"><div class="ico">'+ico+'</div><div class="info"><div class="name">'+fname+'</div><div class="meta">'+fmtSize(f.size)+' · '+fmtTime(f.uploaded_at)+'</div></div><div class="acts"><button class="fs-btn" data-fid="'+fid+'" data-act="dl">下载</button><button class="fs-btn danger" data-fid="'+fid+'" data-act="del" data-fn="'+fname+'">删除</button></div></div>';}}
+h+='<div class="fs-item" style="'+pad+'"><div class="ico">'+ico+'</div><div class="info"><div class="name">'+esc(f.name)+'</div><div class="meta">'+fmtSize(f.size)+' . '+fmtTime(f.uploaded_at)+'</div></div><div class="acts"><button class="fs-btn" onclick="fsDownload(''+f.id+'',''+esc(f.name)+'')">下载</button><button class="fs-btn danger" onclick="fsDeleteItem(''+f.id+'',''+esc(f.name)+'')">删除</button></div></div>';}}
 return h}
-var html='<div style="margin-bottom:10px"><button class="fs-btn" onclick="loadAdmin()">← 返回</button> <strong>'+esc(uname)+'</strong> 的文件</div><div class="fs-list" id="adm-tree-root">'+_admTree('',0)+'</div>';
-var c=$('fs-tab-admin');if(c){c.innerHTML=html;
-// 事件委托
-var root=c.querySelector('#adm-tree-root');
-if(root)root.onclick=function(e){
-var btn=e.target.closest('[data-act]');if(!btn)return;
-var id=btn.dataset.fid;var fn=btn.dataset.fn||'';
-if(btn.dataset.act==='dl'){fsDownload(id,fn);}
-else if(btn.dataset.act==='dlzip'){fsDownload(id,fn+'.zip');}
-else if(btn.dataset.act==='del'){if(confirm('确定删除 \"'+fn+'\" 吗？'))fsDeleteItem(id,fn);}
-};}});
+var html='<div style="margin-bottom:10px"><button class="fs-btn" onclick="loadAdmin()">← 返回</button> <strong>'+esc(uname)+'</strong> 的文件</div><div class="fs-list">'+_admTree('',0)+'</div>';
+var c=$('fs-tab-admin');if(c)c.innerHTML=html})};
 
 
 // ── 启动 ──
