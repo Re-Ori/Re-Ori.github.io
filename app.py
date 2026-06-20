@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """AutoUpdate Web Server -- 服务模块"""
 from __future__ import annotations
-import os, sys, json, time, ssl, threading, http.server, uuid, io, zipfile
+import os, sys, json, time, ssl, threading, http.server, uuid, io, zipfile, socket, select, struct
 import urllib.parse, urllib.request, urllib.error
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -305,6 +305,154 @@ threading.Thread(target=_stats_flusher, daemon=True).start()
 # 注册退出钩子，确保进程正常退出时统计数据和 daily 数据落盘
 atexit.register(_save_stats, force=True)
 atexit.register(_save_daily, force=True)
+
+# ═══════════════════════════════════════════════
+# SOCKS5 代理 — 可作为 Clash for Windows 节点
+# ═══════════════════════════════════════════════
+
+_SOCKS5_PROXY_INSTANCE = None
+
+class _Socks5Proxy:
+    """SOCKS5 代理服务器，用于 Clash for Windows 自定义节点"""
+
+    def __init__(self, bind_host='127.0.0.1', bind_port=9877):
+        self._host = bind_host
+        self._port = bind_port
+        self._server = None
+        self._running = False
+
+    def start(self):
+        self._server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._server.bind((self._host, self._port))
+        self._server.listen(50)
+        self._server.settimeout(1.0)
+        self._running = True
+        log(f"SOCKS5 代理已启动: {self._host}:{self._port}")
+
+        while self._running:
+            try:
+                client, addr = self._server.accept()
+                threading.Thread(target=self._handle, args=(client,), daemon=True).start()
+            except socket.timeout:
+                continue
+            except Exception as e:
+                if self._running:
+                    log(f"SOCKS5 accept 错误: {e}")
+
+    def stop(self):
+        self._running = False
+        if self._server:
+            try: self._server.close()
+            except: pass
+
+    def _handle(self, client):
+        try:
+            client.settimeout(30)
+            # ── 协商阶段 ──
+            data = client.recv(2)
+            if not data or data[0] != 0x05:
+                return
+            nmethods = data[1]
+            if nmethods:
+                client.recv(nmethods)
+            client.sendall(b'\x05\x00')  # 无认证
+
+            # ── 请求阶段 ──
+            data = client.recv(4)
+            if not data or data[0] != 0x05:
+                return
+            cmd = data[1]
+            if cmd != 0x01:  # 仅支持 CONNECT
+                self._reply(client, 0x07)
+                return
+            atyp = data[3]
+
+            if atyp == 0x01:  # IPv4
+                dst_host = socket.inet_ntoa(client.recv(4))
+            elif atyp == 0x03:  # 域名
+                dlen = client.recv(1)[0]
+                dst_host = client.recv(dlen).decode()
+            elif atyp == 0x04:  # IPv6
+                dst_host = socket.inet_ntop(socket.AF_INET6, client.recv(16))
+            else:
+                self._reply(client, 0x08)
+                return
+
+            dst_port = struct.unpack('>H', client.recv(2))[0]
+
+            # ── 连接目标 ──
+            remote = socket.socket(
+                socket.AF_INET6 if atyp == 0x04 else socket.AF_INET,
+                socket.SOCK_STREAM
+            )
+            remote.settimeout(30)
+            try:
+                remote.connect((dst_host, dst_port))
+            except Exception as e:
+                log(f"SOCKS5 连接失败 {dst_host}:{dst_port} — {e}")
+                self._reply(client, 0x04)
+                try: remote.close()
+                except: pass
+                return
+
+            bind_addr = remote.getsockname()
+            self._reply(client, 0x00, bind_addr)
+
+            # ── 双向转发 ──
+            self._relay(client, remote)
+
+        except Exception as e:
+            log(f"SOCKS5 处理错误: {e}")
+        finally:
+            try: client.close()
+            except: pass
+
+    def _reply(self, client, code, bind_addr=('0.0.0.0', 0)):
+        reply = b'\x05' + bytes([code]) + b'\x00\x01'
+        reply += socket.inet_aton(bind_addr[0]) if bind_addr[0] != '0.0.0.0' else b'\x00\x00\x00\x00'
+        reply += struct.pack('>H', bind_addr[1])
+        client.sendall(reply)
+
+    def _relay(self, client, remote):
+        sockets = [client, remote]
+        try:
+            while True:
+                r, _, _ = select.select(sockets, [], [], 60)
+                if not r:
+                    break
+                for sock in r:
+                    data = sock.recv(65536)
+                    if not data:
+                        return
+                    if sock is client:
+                        remote.sendall(data)
+                    else:
+                        client.sendall(data)
+        except:
+            pass
+
+
+def _ensure_socks5_proxy():
+    """从配置读取参数，启动 SOCKS5 代理（模块导入时自动调用）"""
+    global _SOCKS5_PROXY_INSTANCE
+    if _SOCKS5_PROXY_INSTANCE is not None:
+        return
+    # 直接读配置文件，不依赖 _load_config_direct（它定义在后面）
+    try:
+        cfg_path = PROJECT_ROOT / "reori-config.json"
+        cfg_ = json.loads(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
+    except:
+        cfg_ = {}
+    pc = cfg_.get("socks5_proxy", {})
+    if not pc.get("enabled", True):
+        return
+    host = pc.get("bind", "127.0.0.1")
+    port = pc.get("port", 9877)
+    _SOCKS5_PROXY_INSTANCE = _Socks5Proxy(host, port)
+    threading.Thread(target=_SOCKS5_PROXY_INSTANCE.start, daemon=True).start()
+
+_ensure_socks5_proxy()
 
 BBS_TOKENS: dict[str, dict] = {}
 BBS_TOKEN_TTL = 86400  # 24h

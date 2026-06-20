@@ -42,6 +42,14 @@
     "// check_interval": "GitHub 更新检查冷却秒数",
     "check_interval": 60
   },
+  "socks5_proxy": {
+    "// enabled": "是否启动 SOCKS5 代理（设为 false 可关闭）",
+    "enabled": true,
+    "// bind": "监听地址，0.0.0.0 所有网卡（reori.cn 可用），127.0.0.1 仅本机",
+    "bind": "0.0.0.0",
+    "// port": "SOCKS5 代理端口",
+    "port": 9877
+  },
   "push": {
     "// 说明": "本项配置仅影响编辑时传到GitHub的文件内容，不影响服务器运行",
     "// exclude_parts": "路径中包含这些名称的任意部分就会被跳过",
