@@ -38,6 +38,15 @@
       "themeColor": "#8e8e93",
       "date": "2026-06-14",
       "url": "/Tool/stats.html"
+    },
+    {
+      "id": "files",
+      "priority": 10,
+      "title": "云文件存储",
+      "description": "在线文件管理，支持文件夹、分享链接和密码保护",
+      "themeColor": "#D4A800",
+      "date": "2026-06-20",
+      "url": "/Tool/files.html"
     }
   ]
 }

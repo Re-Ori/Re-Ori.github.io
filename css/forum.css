@@ -767,3 +767,14 @@
 .bbs-img-progress {
   font-size: 13px; font-weight: 600; color: var(--theme-color,#399FFF);
 }
+
+/* ── 暗色模式：覆盖内联样式输入框 ── */
+[data-theme="dark"] #bbs-user-form-new-id,
+[data-theme="dark"] #bbs-invite-expire,
+[data-theme="dark"] #bbs-inline-input,
+[data-theme="dark"] #bbs-register-user,
+[data-theme="dark"] #bbs-register-pass {
+  background: rgba(40,42,65,0.8) !important;
+  border-color: rgba(255,255,255,0.1) !important;
+  color: #ddd !important;
+}

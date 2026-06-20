@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """AutoUpdate Web Server -- 服务模块"""
 from __future__ import annotations
-import os, sys, json, time, ssl, threading, http.server
+import os, sys, json, time, ssl, threading, http.server, uuid, io, zipfile
 import urllib.parse, urllib.request, urllib.error
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -34,6 +34,9 @@ BBS_TOPICS_DIR = BBS_DIR / "topics"
 BBS_TOKENS_FILE = BBS_DIR / "tokens.json"
 BBS_NOTIFICATIONS_FILE = BBS_DIR / "notifications.json"
 BBS_INVITES_FILE = BBS_DIR / "invites.json"
+BBS_FILES_DIR = BBS_DIR / "files"
+BBS_FILES_META_FILE = BBS_DIR / "files_meta.json"
+STORAGE_DEFAULT_QUOTA = 256 * 1024 * 1024  # 256MB
 
 # ── 统计追踪 ──
 STATS_DIR = DATA_DIR / "stats"
@@ -372,6 +375,28 @@ def _bbs_check(headers):
         _bbs_save_tokens()
     return None
 
+def _bbs_load_files_meta():
+    try:
+        if BBS_FILES_META_FILE.exists():
+            return json.loads(BBS_FILES_META_FILE.read_text(encoding='utf-8'))
+    except: pass
+    return []
+
+def _bbs_save_files_meta(meta):
+    BBS_FILES_META_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = BBS_FILES_META_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(meta, ensure_ascii=False), encoding='utf-8')
+    tmp.replace(BBS_FILES_META_FILE)
+
+def _bbs_ensure_storage_quota(users):
+    """确保所有用户有 storage_quota 字段"""
+    changed = False
+    for u in users:
+        if 'storage_quota' not in u:
+            u['storage_quota'] = STORAGE_DEFAULT_QUOTA
+            changed = True
+    return changed
+
 def _sl_load():
     try:
         if SHORT_LINKS_FILE.exists():
@@ -666,6 +691,45 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if uid:
                 self._handle_bbs_user_profile(uid)
                 return
+        if req_path == '/api/bbs/files':
+            self._handle_bbs_files_list()
+            return
+        if req_path == '/api/bbs/files/tree':
+            self._handle_bbs_files_tree()
+            return
+        if req_path == '/api/bbs/files/share/list':
+            self._handle_bbs_share_list()
+            return
+        if req_path.startswith('/api/bbs/files/share/'):
+            share_parts = req_path[21:].split('/')
+            if len(share_parts) == 2 and share_parts[1] == 'download':
+                self._handle_bbs_share_download(share_parts[0])
+                return
+            if len(share_parts) == 2 and share_parts[1] == 'list':
+                self._handle_bbs_share_list_folder(share_parts[0])
+                return
+            if len(share_parts) == 1 and share_parts[0]:
+                self._handle_bbs_share_access(share_parts[0])
+                return
+        if req_path.startswith('/api/bbs/files/admin/'):
+            admin_parts = req_path[21:]
+            if admin_parts == 'users':
+                self._handle_bbs_files_admin_users()
+                return
+            if admin_parts == 'files':
+                self._handle_bbs_files_admin_user_files()
+                return
+            if admin_parts == 'shares':
+                self._handle_bbs_files_admin_share_list()
+                return
+            if admin_parts == 'tree':
+                self._handle_bbs_files_admin_tree()
+                return
+        if req_path.startswith('/api/bbs/files/'):
+            file_parts = req_path[15:].split('/')
+            if len(file_parts) == 2 and file_parts[1] == 'download':
+                self._handle_bbs_file_download(file_parts[0])
+                return
         if req_path == '/api/bbs/export':
             self._handle_bbs_export()
             return
@@ -856,6 +920,38 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if req_path == '/api/bbs/notifications/delete':
             self._handle_bbs_notifications_delete()
             return
+        if req_path == '/api/bbs/files/upload':
+            self._handle_bbs_file_upload()
+            return
+        if req_path == '/api/bbs/files/folder':
+            self._handle_bbs_folder_create()
+            return
+        if req_path == '/api/bbs/files/share':
+            self._handle_bbs_share_create()
+            return
+        if req_path.startswith('/api/bbs/files/share/') and req_path.endswith('/verify'):
+            code = req_path[21:-7]
+            if code:
+                self._handle_bbs_share_verify(code)
+                return
+        if req_path.startswith('/api/bbs/files/share/') and req_path.endswith('/update'):
+            code = req_path[21:-7]
+            if code:
+                self._handle_bbs_share_update(code)
+                return
+        if req_path.startswith('/api/bbs/files/share/') and req_path.endswith('/delete'):
+            code = req_path[21:-7]
+            if code:
+                self._handle_bbs_share_delete(code)
+                return
+        if req_path.startswith('/api/bbs/files/admin/') and req_path.endswith('/quota'):
+            self._handle_bbs_files_admin_set_quota()
+            return
+        if req_path.startswith('/api/bbs/files/'):
+            file_parts = req_path[15:].split('/')
+            if len(file_parts) == 2 and file_parts[1] == 'delete':
+                self._handle_bbs_file_delete(file_parts[0])
+                return
         if req_path == '/api/bbs/import':
             self._handle_bbs_import()
             return
@@ -1611,6 +1707,11 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 log(f"短链登录失败: 读取用户文件出错 {BBS_USERS_FILE} — {e}")
                 self._send_json({'ok': False, 'error': 'server_error', 'detail': str(e)})
                 return
+            # 迁移：确保所有用户有存储配额字段
+            if _bbs_ensure_storage_quota(users):
+                tmp = BBS_USERS_FILE.with_suffix(".tmp.json")
+                tmp.write_text(json.dumps(users, ensure_ascii=False, indent=2), encoding='utf-8')
+                tmp.replace(BBS_USERS_FILE)
             for u in users:
                 if u.get('username') == username and u.get('password') == password:
                     token = _bbs_token()
@@ -1734,6 +1835,11 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 log(f"BBS 登录失败: 读取用户文件出错 {BBS_USERS_FILE} — {e}")
                 self._send_json({'ok': False, 'error': 'server_error', 'detail': str(e)})
                 return
+            # 迁移：确保所有用户有存储配额字段
+            if _bbs_ensure_storage_quota(users):
+                tmp = BBS_USERS_FILE.with_suffix(".tmp.json")
+                tmp.write_text(json.dumps(users, ensure_ascii=False, indent=2), encoding='utf-8')
+                tmp.replace(BBS_USERS_FILE)
             for u in users:
                 if u.get('username') == username and u.get('password') == password:
                     token = _bbs_token()
@@ -2357,6 +2463,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             new_user = {
                 'id': uid, 'username': username, 'password': password,
                 'role': body.get('role', 'user'),
+                'storage_quota': body.get('storage_quota', STORAGE_DEFAULT_QUOTA),
             }
             tags = body.get('tags')
             if tags:
@@ -2414,6 +2521,10 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 found['role'] = body['role']
             if 'tags' in body:
                 found['tags'] = body['tags'] if isinstance(body['tags'], list) else [body['tags']]
+            if 'storage_quota' in body:
+                try:
+                    found['storage_quota'] = max(0, int(body['storage_quota']))
+                except: pass
             self._save_users(users)
             log(f'管理员更新用户: {found["id"]}')
             self._send_json({'ok': True, 'id': found.get('id', uid)})
@@ -2588,7 +2699,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     # ── 通知系统 ─────────────────────────────────────────
 
     def _handle_bbs_notifications(self):
-        """GET /api/bbs/notifications — 获取当前用户通知"""
+        """GET /api/bbs/notifications — 获取当前用户通知（?count_only=1 仅返回未读数）"""
         user = _bbs_check(self.headers)
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'})
@@ -2598,6 +2709,10 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         items = [n for n in nd["notifications"] if n.get("to_user_id") == uid]
         items.sort(key=lambda x: x.get('created_at', 0), reverse=True)
         unread = sum(1 for n in items if not n.get('read'))
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        if params.get('count_only', [None])[0]:
+            self._send_json({'ok': True, 'unread': unread})
+            return
         self._send_json({'ok': True, 'notifications': items[:100], 'unread': unread})
 
     def _handle_bbs_notifications_read(self):
@@ -2650,6 +2765,944 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if len(nd["notifications"]) < before:
             _save_notifications(nd)
         self._send_json({'ok': True})
+
+    # ── 云文件存储 ──────────────────────────────────────────
+
+    # ── 分享链接存储 ──
+    BBS_SHARES_FILE = BBS_DIR / "shares.json"
+
+    def _load_shares(self):
+        try:
+            if self.BBS_SHARES_FILE.exists():
+                return json.loads(self.BBS_SHARES_FILE.read_text(encoding='utf-8'))
+        except: pass
+        return []
+
+    def _save_shares(self, shares):
+        self.BBS_SHARES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.BBS_SHARES_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(shares, ensure_ascii=False), encoding='utf-8')
+        tmp.replace(self.BBS_SHARES_FILE)
+
+    def _share_code(self):
+        import random, string
+        chars = string.ascii_letters + string.digits
+        shares = self._load_shares()
+        existing = {s['code'] for s in shares}
+        while True:
+            code = ''.join(random.choice(chars) for _ in range(12))
+            if code not in existing:
+                return code
+
+    def _get_file_meta(self, file_id):
+        meta = _bbs_load_files_meta()
+        for f in meta:
+            if f['id'] == file_id:
+                return f
+        return None
+
+    def _get_user_quota(self, uid):
+        users = self._load_users()
+        for u in users:
+            if u.get('id') == uid:
+                return u.get('storage_quota', STORAGE_DEFAULT_QUOTA)
+        return STORAGE_DEFAULT_QUOTA
+
+    def _get_username(self, uid):
+        users = self._load_users()
+        for u in users:
+            if u.get('id') == uid:
+                return u.get('username', uid)
+        return uid
+
+    # ── 文件 & 文件夹操作 ──
+
+    def _handle_bbs_files_tree(self):
+        """GET /api/bbs/files/tree — 返回用户的文件夹树（含文件数和大小）"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        meta = [f for f in _bbs_load_files_meta() if f.get('user_id') == uid]
+        # 先构建文件夹列表
+        folders = []
+        for f in meta:
+            if f.get('type') == 'folder':
+                folders.append({'id': f['id'], 'name': f['name'], 'parent_id': f.get('parent_id'),
+                                'file_count': 0, 'total_size': 0})
+        # 统计每个文件夹的直接文件数和大小，同时收集子文件夹ID用于递归
+        folder_map = {f['id']: f for f in folders}
+        child_map = {}
+        for f in meta:
+            pid = f.get('parent_id')
+            if pid and pid in folder_map and f.get('type') != 'folder':
+                folder_map[pid]['file_count'] += 1
+                folder_map[pid]['total_size'] += f.get('size', 0)
+        self._send_json({'ok': True, 'folders': folders})
+
+    def _handle_bbs_files_list(self):
+        """GET /api/bbs/files — 列出文件/文件夹（支持 folder_id 参数）"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        parent_id = params.get('folder_id', [None])[0]
+
+        meta = _bbs_load_files_meta()
+        files = [f for f in meta if f.get('user_id') == uid and f.get('parent_id') == parent_id]
+        used = sum(f.get('size', 0) for f in meta if f.get('user_id') == uid and f.get('type') != 'folder')
+        quota = self._get_user_quota(uid)
+
+        safe = []
+        for f in sorted(files, key=lambda x: (0 if x.get('type') == 'folder' else 1, x.get('name', '').lower())):
+            entry = {'id': f['id'], 'name': f['name'], 'type': f.get('type', 'file'), 'size': f.get('size', 0)}
+            if f.get('type') == 'file':
+                entry['mime'] = f.get('mime', 'application/octet-stream')
+                entry['uploaded_at'] = f.get('uploaded_at', 0)
+            safe.append(entry)
+        self._send_json({'ok': True, 'files': safe, 'quota': quota, 'used': used})
+
+    def _handle_bbs_folder_create(self):
+        """POST /api/bbs/files/folder — 创建文件夹"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            name = (body.get('name') or '').strip()
+            parent_id = body.get('parent_id') or None
+            if not name:
+                self._send_json({'ok': False, 'error': 'name_required'}); return
+            if '/' in name or '\\' in name:
+                self._send_json({'ok': False, 'error': 'invalid_name'}); return
+            meta = _bbs_load_files_meta()
+            folder_id = uuid.uuid4().hex[:16]
+            meta.append({
+                'id': folder_id, 'name': name, 'type': 'folder',
+                'parent_id': parent_id, 'user_id': uid, 'created_at': time.time(),
+            })
+            _bbs_save_files_meta(meta)
+            self._send_json({'ok': True, 'folder_id': folder_id, 'name': name})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_file_upload(self):
+        """POST /api/bbs/files/upload — 上传文件（multipart/form-data）"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        try:
+            ctype = self.headers.get('Content-Type', '')
+            clen = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(clen)
+            import re
+            boundary = ''
+            if 'boundary=' in ctype:
+                boundary = ctype.split('boundary=', 1)[1].split(';')[0].strip()
+                if boundary.startswith('"') and boundary.endswith('"'):
+                    boundary = boundary[1:-1]
+            if not boundary:
+                self._send_json({'ok': False, 'error': 'invalid_content_type'}); return
+            parts = body.split(('--' + boundary).encode())
+            file_data = None; filename = 'untitled'; mime_type = 'application/octet-stream'; parent_id = None
+            for part in parts:
+                if b'Content-Disposition' not in part:
+                    continue
+                # 提取 field name
+                fn_match = re.search(rb'name="([^"]*)"', part)
+                if not fn_match:
+                    continue
+                field_name = fn_match.group(1).decode()
+                header_end = part.find(b'\r\n\r\n')
+                if header_end < 0:
+                    continue
+                field_value = part[header_end + 4:]
+                if field_value.endswith(b'\r\n'):
+                    field_value = field_value[:-2]
+                if field_name == 'folder_id':
+                    val = field_value.decode().strip()
+                    if val: parent_id = val
+                elif b'filename=' in part:
+                    fname_match = re.search(rb'filename="([^"]*)"', part)
+                    if fname_match:
+                        filename = fname_match.group(1).decode('utf-8', errors='replace')
+                    ct_match = re.search(rb'Content-Type:\s*(\S+)', part, re.IGNORECASE)
+                    if ct_match:
+                        mime_type = ct_match.group(1).decode()
+                    file_data = field_value
+            if file_data is None:
+                self._send_json({'ok': False, 'error': 'no_file_found'}); return
+            file_size = len(file_data)
+            if file_size == 0:
+                self._send_json({'ok': False, 'error': 'empty_file'}); return
+            quota = self._get_user_quota(uid)
+            meta = _bbs_load_files_meta()
+            used = sum(f.get('size', 0) for f in meta if f.get('user_id') == uid and f.get('type') != 'folder')
+            if used + file_size > quota:
+                self._send_json({'ok': False, 'error': 'quota_exceeded',
+                                 'used': used, 'quota': quota, 'file_size': file_size}); return
+            file_id = uuid.uuid4().hex[:16]
+            BBS_FILES_DIR.mkdir(parents=True, exist_ok=True)
+            (BBS_FILES_DIR / file_id).write_bytes(file_data)
+            meta.append({
+                'id': file_id, 'name': filename, 'size': file_size, 'mime': mime_type,
+                'type': 'file', 'parent_id': parent_id,
+                'user_id': uid, 'uploaded_at': time.time(),
+            })
+            _bbs_save_files_meta(meta)
+            log(f"文件上传: {filename} ({file_size}B) by {uid}")
+            self._send_json({'ok': True, 'file_id': file_id, 'name': filename, 'size': file_size})
+        except Exception as e:
+            log(f"文件上传失败: {e}")
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_file_download(self, file_id):
+        """GET /api/bbs/files/<id>/download — 下载文件"""
+        # 支持 ?token=xxx 参数（前端直链下载时用）
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        token_param = params.get('token', [None])[0]
+        if token_param:
+            self.headers['X-Auth-Token'] = token_param
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        info = self._get_file_meta(file_id)
+        if not info:
+            self.send_error(404, "File not found"); return
+        if info.get('user_id') != uid and user.get('role') != 'admin':
+            self.send_error(403, "Forbidden"); return
+        if info.get('type') == 'folder':
+            try:
+                # 递归收集文件夹内所有文件，打包为 ZIP
+                meta = _bbs_load_files_meta()
+                children_map = {}
+                for f in meta:
+                    pid = f.get('parent_id')
+                    if pid not in children_map:
+                        children_map[pid] = []
+                    children_map[pid].append(f)
+                buf = io.BytesIO()
+                visited = set()
+                with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    def _add_to_zip(folder_id, zip_path, depth=0):
+                        if depth > 20 or folder_id in visited:
+                            return
+                        visited.add(folder_id)
+                        for f in children_map.get(folder_id, []):
+                            rel = zip_path + '/' + f['name']
+                            if f.get('type') == 'folder':
+                                _add_to_zip(f['id'], rel, depth + 1)
+                            else:
+                                fp = BBS_FILES_DIR / f['id']
+                                if fp.exists():
+                                    zf.writestr(rel.lstrip('/'), fp.read_bytes())
+                    _add_to_zip(file_id, info['name'])
+                data = buf.getvalue()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/zip')
+                self.send_header('Content-Disposition', f'attachment; filename="download.zip"; filename*=UTF-8\'\'{urllib.parse.quote(info["name"] + ".zip")}')
+                self.send_header('Content-Length', str(len(data)))
+                self.send_header('Cache-Control', 'no-store')
+                self.end_headers()
+                self.wfile.write(data)
+            except Exception as e:
+                log(f"文件夹下载失败: {e}")
+                self.send_error(500, f"下载失败: {e}")
+            return
+        file_path = BBS_FILES_DIR / file_id
+        if not file_path.exists():
+            self.send_error(404, "File not found"); return
+        data = file_path.read_bytes()
+        self.send_response(200)
+        self.send_header('Content-Type', info.get('mime', 'application/octet-stream'))
+        self.send_header('Content-Disposition', f'attachment; filename="download"; filename*=UTF-8\'\'{urllib.parse.quote(info["name"])}')
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _handle_bbs_file_delete(self, file_id):
+        """POST /api/bbs/files/<id>/delete — 删除文件或文件夹（递归删除子项）"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        meta = _bbs_load_files_meta()
+        info = self._get_file_meta(file_id)
+        if not info:
+            self._send_json({'ok': False, 'error': 'not_found'}); return
+        if info.get('user_id') != uid and user.get('role') != 'admin':
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        # 收集所有要删除的 ID（递归）
+        to_delete = {file_id}
+        if info.get('type') == 'folder':
+            stack = [file_id]
+            while stack:
+                pid = stack.pop()
+                for f in meta:
+                    if f.get('parent_id') == pid and f['id'] not in to_delete:
+                        to_delete.add(f['id'])
+                        if f.get('type') == 'folder':
+                            stack.append(f['id'])
+        # 删除文件实体 + 元数据
+        for fid in to_delete:
+            fp = BBS_FILES_DIR / fid
+            if fp.exists():
+                fp.unlink()
+        meta = [f for f in meta if f['id'] not in to_delete]
+        _bbs_save_files_meta(meta)
+        # 同时删除相关分享链接
+        shares = self._load_shares()
+        shares = [s for s in shares if s.get('item_id') not in to_delete]
+        self._save_shares(shares)
+        log(f"删除: {info['name']} by {uid} ({len(to_delete)}项)")
+        self._send_json({'ok': True})
+
+    # ── 分享链接 ──
+
+    def _handle_bbs_share_create(self):
+        """POST /api/bbs/files/share — 创建分享链接"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            item_id = (body.get('item_id') or '').strip()
+            password = (body.get('password') or '').strip() or None
+            expires_in = body.get('expires_in', 0)
+            if not item_id:
+                self._send_json({'ok': False, 'error': 'item_id_required'}); return
+            info = self._get_file_meta(item_id)
+            if not info:
+                self._send_json({'ok': False, 'error': 'not_found'}); return
+            if info.get('user_id') != uid and user.get('role') != 'admin':
+                self._send_json({'ok': False, 'error': 'forbidden'}); return
+            code = self._share_code()
+            expires_at = (time.time() + expires_in) if expires_in > 0 else 0
+            shares = self._load_shares()
+            share_name = (body.get('name') or '').strip() or info['name']
+            share = {
+                'code': code, 'item_id': item_id, 'type': info.get('type', 'file'),
+                'name': share_name, 'owner_id': uid, 'owner_name': user.get('username', uid),
+                'created_at': time.time(), 'expires_at': expires_at,
+            }
+            if password:
+                share['password'] = password
+            default_pwd = (body.get('default_password') or '').strip()
+            if default_pwd:
+                share['default_password'] = default_pwd
+            shares.append(share)
+            self._save_shares(shares)
+            log(f"创建分享: {code} → {info['name']} by {uid}")
+            self._send_json({'ok': True, 'code': code, 'url': f'/Tool/files.html?share={code}'})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _send_share_password_page(self, code):
+        import html as _html
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.end_headers()
+        self.wfile.write(f'''<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>输入密码 — Origin 云文件</title>
+<style>
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f5f5f7;padding:20px}}
+.card{{background:#fff;border-radius:16px;padding:40px;max-width:380px;width:100%;box-shadow:0 4px 24px rgba(0,0,0,0.06);text-align:center}}
+h2{{font-size:20px;margin-bottom:6px}}
+p{{font-size:13px;color:#999;margin-bottom:20px}}
+input{{width:100%;padding:12px 14px;border:1px solid rgba(0,0,0,0.12);border-radius:10px;font-size:15px;outline:none;margin-bottom:12px;box-sizing:border-box;background:rgba(255,255,255,0.8);color:#333}}
+input:focus{{border-color:#399FFF}}
+.btn{{width:100%;padding:12px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;background:#399FFF;color:#fff}}
+.btn:hover{{opacity:.85}}
+.err{{color:#ff3b30;font-size:13px;margin-bottom:8px;display:none}}
+</style></head><body><div class="card">
+<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#399FFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:12px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+<h2>此分享需要密码</h2>
+<p>请输入访问密码</p>
+<div class="err" id="err"></div>
+<input type="password" id="pwd" placeholder="输入密码" autocomplete="off">
+<button class="btn" onclick="verifyPwd()">验证</button>
+</div>
+<script>
+function verifyPwd(){{
+  var p=document.getElementById("pwd").value.trim();
+  if(!p)return;
+  var x=new XMLHttpRequest();
+  x.open("POST","/api/bbs/files/share/{_html.escape(code)}/verify",true);
+  x.setRequestHeader("Content-Type","application/json");
+  x.onload=function(){{
+    try{{var r=JSON.parse(x.responseText)}}catch(e){{return}}
+    if(r.ok){{window.location.href="?v="+encodeURIComponent(r.token||"")}}
+    else{{document.getElementById("err").textContent="密码错误";document.getElementById("err").style.display=""}}
+  }};
+  x.send(JSON.stringify({{password:p}}));
+}}
+document.getElementById("pwd").addEventListener("keydown",function(e){{if(e.key==="Enter")verifyPwd()}});
+</script></body></html>'''.encode('utf-8'))
+
+    def _handle_bbs_share_list(self):
+        """GET /api/bbs/files/share/list — 列出自己的分享链接"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        shares = self._load_shares()
+        mine = [s for s in shares if s.get('owner_id') == uid]
+        safe = []
+        for s in mine:
+            safe.append({
+                'code': s['code'], 'name': s['name'], 'type': s.get('type', 'file'),
+                'has_password': 'password' in s,
+                'has_default_password': 'default_password' in s,
+                'created_at': s.get('created_at', 0),
+                'expires_at': s.get('expires_at', 0),
+            })
+        self._send_json({'ok': True, 'shares': safe})
+
+    def _handle_bbs_share_access(self, code):
+        """GET /api/bbs/files/share/<code> — 访问分享页面"""
+        shares = self._load_shares()
+        share = None
+        for s in shares:
+            if s['code'] == code:
+                share = s; break
+        if not share:
+            self._send_share_page('分享链接无效', '该分享链接不存在或已被删除', None); return
+        if share.get('expires_at') and time.time() > share['expires_at']:
+            self._send_share_page('分享已过期', '该分享链接已过期', None); return
+        if share.get('password'):
+            owner = _bbs_check(self.headers)
+            is_owner = owner and owner.get('user_id') == share.get('owner_id')
+            if not is_owner:
+                vp = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('v', [None])[0]
+                if vp and vp == share['password']:
+                    pass
+                else:
+                    self._send_share_password_page(share['code']); return
+        info = self._get_file_meta(share['item_id'])
+        if not info:
+            self._send_share_page('文件已删除', '该分享的文件已被删除', None); return
+        # 支持 ?folder=xxx 直接进入子文件夹
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        deep_folder = params.get('folder', [None])[0]
+        if deep_folder and info.get('type') == 'folder':
+            # 验证 deep_folder 属于分享根
+            meta = _bbs_load_files_meta()
+            root = info['id']; valid = {root}; stack = [root]
+            while stack:
+                pid = stack.pop()
+                for f in meta:
+                    if f.get('parent_id') == pid and f['id'] not in valid:
+                        valid.add(f['id'])
+                        if f.get('type') == 'folder': stack.append(f['id'])
+            if deep_folder not in valid:
+                deep_folder = None
+        self._send_share_page(info['name'], None, {'share': share, 'info': info, 'deep_folder': deep_folder})
+
+    def _send_share_page(self, title, msg, data):
+        import html as _html
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.end_headers()
+        if msg:
+            body = f'<div class="card"><h2>{_html.escape(title)}</h2><p style="color:#999">{_html.escape(msg)}</p></div>'
+        else:
+            info = data['info']; share = data['share']; code = share['code']; name = _html.escape(info['name'])
+            owner = _html.escape(share.get('owner_name', '未知'))
+            ctime = ''
+            if share.get('created_at'):
+                ctime = __import__('datetime').datetime.fromtimestamp(share['created_at']).strftime('%Y-%m-%d %H:%M')
+            atext = '' if not share.get('expires_at') else f' · 过期: {__import__("datetime").datetime.fromtimestamp(share["expires_at"]).strftime("%m-%d %H:%M")}' if share["expires_at"] > 0 else ''
+            meta_html = f'<div class="meta">发布者: {owner} · {ctime}{atext}</div>'
+            if info.get('type') == 'folder':
+                _FJS = '''<script>
+var _sd=document.getElementById("share-page"),_code=_sd.dataset.code,_root=_sd.dataset.root,_stk=[],_cur=_root,_vt=(new URLSearchParams(window.location.search)).get("v")||"";
+function _dl(fid){var u="/api/bbs/files/share/"+_code+"/download?item_id="+fid;if(_vt)u+="&v="+encodeURIComponent(_vt);return u}
+function ld(fid,nm){
+  _cur=fid;_upURL(fid);
+  var el=document.getElementById("file-list"),lo=document.getElementById("fl-loading"),fn=document.getElementById("folder-name"),zb=document.getElementById("zip-dl-btn");
+  if(nm)fn.textContent=nm;lo.style.display="";el.innerHTML="";
+  var x=new XMLHttpRequest();x.open("GET","/api/bbs/files/share/__CODE__/list?folder_id="+fid,true);
+  x.onload=function(){lo.style.display="none";try{var r=JSON.parse(x.responseText)}catch(e){return}
+  if(!r.ok||!r.items)return;zb.href=_dl(fid);
+  var h="";if(nm||_stk.length>0||fid!==_root){h+='<div class="fi folder" data-up="1"><span class="fn" style="color:var(--accent)">&larr; 返回</span></div>'}
+  for(var i=0;i<r.items.length;i++){var f=r.items[i];
+    var sv=_ic(f),sz=f.type==="folder"?"":_sz(f.size),tm=f.uploaded_at?_tm(f.uploaded_at):"";
+    if(f.type==="folder"){h+='<div class="fi folder" data-fid="'+f.id+'" data-nm="'+_e(f.name).replace(/"/g,"&quot;")+'"><span class="fi-icon">'+sv+'</span><span class="fn">'+_e(f.name)+'</span><span class="fs">文件夹</span></div>'}
+    else{h+='<div class="fi"><span class="fi-icon">'+sv+'</span><span class="fn">'+_e(f.name)+'</span><span class="fs">'+sz+'</span><span class="ft">'+tm+'</span><a class="dl-btn" href="'+_dl(f.id)+'">下载</a></div>'}}
+  el.innerHTML=h;}
+  x.send()}
+document.getElementById("file-list").addEventListener("click",function(e){
+  var row=e.target.closest(".fi.folder");if(!row)return;
+  if(row.dataset.up){var p=_stk.pop();if(p)ld(p.id,p.name);return}
+  if(row.dataset.fid){_stk.push({id:_cur,name:document.getElementById("folder-name").textContent});ld(row.dataset.fid,row.dataset.nm)}
+});
+function _e(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML}
+function _sz(b){if(b<=0)return"0 B";var u=["B","KB","MB","GB"],i=0,s=b;while(s>=1024&&i<3){s/=1024;i++}return(i===0?s:s.toFixed(1))+" "+u[i]}
+function _tm(ts){if(!ts)return"";var d=new Date(ts*1e3);return("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2)}
+function _ic(f){if(f.type==="folder")return'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';var e=(f.name||"").split(".").pop().toLowerCase();if(["jpg","jpeg","png","gif","webp","svg","bmp"].includes(e))return'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';if(["zip","rar","7z","gz","tar"].includes(e))return'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>';if(["mp3","wav","ogg","flac","aac"].includes(e))return'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#af52de" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';if(["mp4","avi","mkv","mov","webm"].includes(e))return'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff2d55" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';if(["pdf"].includes(e))return'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';return'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#399FFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'}
+var _dp=document.getElementById("share-page").dataset.deep||"";
+function _upURL(fid){var u=window.location.pathname;if(fid&&fid!==_root)u+="?folder="+fid;window.history.replaceState({folder:fid},"",u)}
+// 恢复历史导航
+window.addEventListener("popstate",function(e){if(e.state&&e.state.folder){var f=e.state.folder;if(f&&f!==_root){var nm="";var el2=document.querySelector('[data-fid="'+f+'"]');if(el2)nm=el2.dataset.nm;ld(f,nm)}else ld(_root)}});
+// 深链接初始导航
+if(_dp&&_dp!==_root){setTimeout(function(){_stk.push({id:_root,name:document.getElementById("folder-name").textContent});ld(_dp)},100)}
+else{ld(_root)}
+</script>'''
+                _FJS = _FJS.replace('__CODE__', code)
+                deep_init = data.get('deep_folder') or ''
+                body = '<div id="share-page" data-code="' + code + '" data-root="' + info['id'] + '" data-deep="' + deep_init + '">' + '''
+<div class="card">
+  <div class="folder-icon"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+  <h2 id="folder-name">''' + name + '''</h2>
+  ''' + meta_html + '''
+  <div id="folder-actions" style="margin-bottom:12px">
+    <a class="dl-btn primary" href="/api/bbs/files/share/''' + code + '''/download''' + ('?v=' + data['share'].get('password', '') if data and data['share'].get('password') else '') + '''" id="zip-dl-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> 下载全部 ZIP</a>
+  </div>
+  <div id="file-list" class="file-list"></div>
+  <div id="fl-loading" style="color:#999;font-size:13px;padding:12px">加载中&hellip;</div>
+</div></div>''' + _FJS
+            else:
+                ext = info['name'].rsplit('.',1)[-1].lower() if '.' in info['name'] else ''
+                svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#399FFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+                if ext in ('jpg','jpeg','png','gif','webp','svg','bmp'): svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>'
+                elif ext in ('zip','rar','7z','gz','tar'): svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>'
+                elif ext in ('mp3','wav','ogg'): svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#af52de" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
+                elif ext in ('mp4','avi','mkv'): svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ff2d55" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>'
+                elif ext in ('pdf'): svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'
+                body = f'''<div class="card"><div class="file-icon">{svg_icon}</div>
+  <h2>{name}</h2>
+  {meta_html}
+  <p style="color:#999;font-size:13px">{self._fmt_size_share(info.get('size',0))}</p>
+  <a class="dl-btn primary" href="/api/bbs/files/share/{code}/download" style="margin-top:16px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 下载文件</a>
+</div>'''
+        page_css = '''
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;margin:0;background:#f5f5f7;padding:20px;color:#1a1a1a}
+.card{background:#fff;border-radius:16px;padding:36px;max-width:560px;width:100%;margin:0 auto;box-shadow:0 4px 24px rgba(0,0,0,0.06);text-align:center}
+h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
+.meta{font-size:12px;color:#999;margin-bottom:14px;line-height:1.6}
+.file-icon,.folder-icon{font-size:48px;line-height:1}
+:root{--accent:#399FFF}
+.dl-btn{display:inline-block;padding:9px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;background:rgba(0,0,0,0.05);color:#555;transition:all .15s;white-space:nowrap}
+.dl-btn.primary{background:var(--accent);color:#fff}
+.dl-btn.primary:hover{opacity:.85}
+.dl-btn:hover{background:rgba(0,0,0,0.08)}
+.file-list{margin-top:4px;text-align:left}
+.fi{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:8px;transition:background .15s;cursor:default}
+.fi:hover{background:rgba(0,0,0,0.03)}
+.fi.folder{cursor:pointer}
+.fi.folder:hover{background:rgba(0,0,0,0.06)}
+.fi .fi-icon{flex-shrink:0;width:20px;display:flex;align-items:center;justify-content:center}
+.fi .fn{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fi .fs{font-size:11px;color:#999;flex-shrink:0;min-width:48px;text-align:right}
+.fi .ft{font-size:11px;color:#bbb;flex-shrink:0;min-width:36px;text-align:right}
+.fi .dl-btn{padding:4px 12px;font-size:12px}
+'''
+        self.wfile.write(f'<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>{_html.escape(title)} — Origin 云文件</title><style>{page_css}</style></head><body>{body}</body></html>'.encode('utf-8'))
+
+    def _fmt_size_share(self, b):
+        if b <= 0: return '0 B'
+        u = ['B','KB','MB','GB']; i = 0; s = float(b)
+        while s >= 1024 and i < len(u)-1: s /= 1024; i += 1
+        return f'{s:.1f} {u[i]}' if i > 0 else f'{int(s)} B'
+
+    def _handle_bbs_share_verify(self, code):
+        """POST /api/bbs/files/share/<code>/verify — 验证分享密码"""
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            password = body.get('password', '')
+            shares = self._load_shares()
+            share = None
+            for s in shares:
+                if s['code'] == code:
+                    share = s; break
+            if not share:
+                self._send_json({'ok': False, 'error': 'not_found'}); return
+            if share.get('expires_at') and time.time() > share['expires_at']:
+                self._send_json({'ok': False, 'error': 'expired'}); return
+            if 'password' not in share or password == share['password']:
+                self._send_json({'ok': True, 'token': share.get('password', '')}); return
+            self._send_json({'ok': False, 'error': 'wrong_password'}); return
+            self._return_share_content(share)
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_share_list_folder(self, code):
+        """GET /api/bbs/files/share/<code>/list?folder_id=xxx — 分享文件夹内子文件夹内容"""
+        shares = self._load_shares()
+        share = None
+        for s in shares:
+            if s['code'] == code: share = s; break
+        if not share: self._send_json({'ok':False,'error':'not_found'}); return
+        if share.get('expires_at') and time.time() > share['expires_at']: self._send_json({'ok':False,'error':'expired'}); return
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        folder_id = params.get('folder_id', [share['item_id']])[0]
+        info = self._get_file_meta(folder_id)
+        if not info: self._send_json({'ok':False,'error':'not_found'}); return
+        # 验证 folder 属于分享根
+        meta = _bbs_load_files_meta()
+        root = share['item_id']
+        valid = {root}; stack = [root]
+        while stack:
+            pid = stack.pop()
+            for f in meta:
+                if f.get('parent_id') == pid and f['id'] not in valid:
+                    valid.add(f['id'])
+                    if f.get('type') == 'folder': stack.append(f['id'])
+        if folder_id not in valid:
+            self._send_json({'ok':False,'error':'forbidden'}); return
+        children = [f for f in meta if f.get('parent_id') == folder_id]
+        # ?all=1 递归返回所有后代
+        if params.get('all', [None])[0]:
+            all_items = list(children)
+            stack = [f['id'] for f in children if f.get('type') == 'folder']
+            while stack:
+                pid = stack.pop()
+                for f in meta:
+                    if f.get('parent_id') == pid:
+                        all_items.append(f)
+                        if f.get('type') == 'folder':
+                            stack.append(f['id'])
+            children = all_items
+        items = []
+        for f in sorted(children, key=lambda x: (0 if x.get('type')=='folder' else 1, x.get('name','').lower())):
+            items.append({
+                'id': f['id'], 'name': f['name'], 'type': f.get('type','file'),
+                'size': f.get('size',0), 'mime': f.get('mime',''),
+                'uploaded_at': f.get('uploaded_at',0), 'parent_id': f.get('parent_id'),
+            })
+        share_info = {}
+        if params.get('all', [None])[0]:
+            fpw = share.get('file_passwords', {})
+            share_info = {
+                'has_default_password': 'default_password' in share,
+                'file_pwd_status': {k: ('__NOPASS__' if v == '__NOPASS__' else v) for k, v in fpw.items()},
+                'root_id': share.get('item_id', ''),
+            }
+        self._send_json({'ok':True, 'items':items, 'folder_name': info.get('name',''), 'parent_id': info.get('parent_id'), 'share': share_info})
+
+    def _handle_bbs_share_download(self, code):
+        """GET /api/bbs/files/share/<code>/download — 通过分享链接下载文件/文件夹ZIP"""
+        shares = self._load_shares()
+        share = None
+        for s in shares:
+            if s['code'] == code:
+                share = s; break
+        if not share:
+            self.send_error(404, "Not found"); return
+        if share.get('expires_at') and time.time() > share['expires_at']:
+            self.send_error(410, "Expired"); return
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        log(f"[DL] code={code}")
+        # 单一密码检查：解析出最终密码值，与分享的各级密码比对
+        NOPASS = '__NOPASS__'
+        owner = _bbs_check(self.headers)
+        is_owner = owner and owner.get('user_id') == share.get('owner_id')
+        vp = params.get('v', [None])[0] or ''
+        pwd_raw = (params.get('pwd', [None])[0] or '').strip()
+        pwd_val = vp if (vp and not pwd_raw) else (pwd_raw if pwd_raw else '')
+        item_id = params.get('item_id', [None])[0]
+        target_id = item_id or share['item_id']
+        password_ok = is_owner
+        if not password_ok:
+            fpw = share.get('file_passwords', {})
+            # 单文件密码
+            if target_id in fpw:
+                password_ok = (fpw[target_id] == NOPASS) or (pwd_val == fpw[target_id])
+            # 默认密码
+            if not password_ok and share.get('default_password'):
+                password_ok = (pwd_val == share['default_password'])
+            # 分享密码（v 令牌直接比对）
+            if not password_ok and share.get('password'):
+                password_ok = (pwd_val == share['password'])
+            log(f"[DL] password_ok={password_ok}")
+        if not password_ok:
+            self.send_error(403, "Password required"); return
+        log(f"[DL] password ok")
+        info = self._get_file_meta(target_id)
+        if not info:
+            self.send_error(404, "File not found"); return
+        # 验证 item 确实属于分享
+        if item_id:
+            meta = _bbs_load_files_meta()
+            owner_folder = share['item_id']
+            # 从共享根开始 BFS，验证目标属于此分享
+            visited = {owner_folder}
+            stack = [owner_folder]
+            found = target_id == owner_folder
+            if not found:
+                while stack:
+                    pid = stack.pop()
+                    for f in meta:
+                        if f.get('parent_id') == pid and f['id'] not in visited:
+                            visited.add(f['id'])
+                            if f['id'] == target_id:
+                                found = True
+                                break
+                            if f.get('type') == 'folder':
+                                stack.append(f['id'])
+                    if found: break
+            if not found:
+                self.send_error(403, "Forbidden"); return
+
+        if info.get('type') == 'folder':
+            # 打包为 ZIP
+            try:
+                meta = _bbs_load_files_meta()
+                cmap = {}
+                for f in meta:
+                    pid = f.get('parent_id')
+                    if pid not in cmap: cmap[pid] = []
+                    cmap[pid].append(f)
+                buf = io.BytesIO()
+                visited_set = set()
+                with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    def _add(pid, zp, depth=0):
+                        if depth > 20 or pid in visited_set: return
+                        visited_set.add(pid)
+                        for f in cmap.get(pid, []):
+                            r = zp + '/' + f['name']
+                            if f.get('type') == 'folder': _add(f['id'], r, depth+1)
+                            else:
+                                fp = BBS_FILES_DIR / f['id']
+                                if fp.exists(): zf.writestr(r.lstrip('/'), fp.read_bytes())
+                    _add(target_id, info['name'])
+                data = buf.getvalue()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/zip')
+                self.send_header('Content-Disposition', f'attachment; filename="download.zip"; filename*=UTF-8\'\'{urllib.parse.quote(info["name"] + ".zip")}')
+                self.send_header('Content-Length', str(len(data)))
+                self.send_header('Cache-Control', 'no-store')
+                self.end_headers()
+                self.wfile.write(data)
+            except Exception as e:
+                self.send_error(500, f"ZIP 打包失败: {e}")
+            return
+
+        file_path = BBS_FILES_DIR / info['id']
+        if not file_path.exists():
+            self.send_error(404, "File not found"); return
+        data = file_path.read_bytes()
+        self.send_response(200)
+        self.send_header('Content-Type', info.get('mime', 'application/octet-stream'))
+        self.send_header('Content-Disposition', f'attachment; filename="download"; filename*=UTF-8\'\'{urllib.parse.quote(info["name"])}')
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _return_share_content(self, share):
+        """返回分享的内容（文件信息或文件夹列表）"""
+        info = self._get_file_meta(share['item_id'])
+        if not info:
+            self._send_json({'ok': False, 'error': 'item_deleted'}); return
+        if info.get('type') == 'file':
+            self._send_json({
+                'ok': True, 'type': 'file',
+                'name': info['name'], 'size': info.get('size', 0),
+                'mime': info.get('mime', 'application/octet-stream'),
+                'download_url': f'/api/bbs/files/share/{share["code"]}/download',
+            })
+        else:
+            meta = _bbs_load_files_meta()
+            children = [f for f in meta if f.get('parent_id') == share['item_id']]
+            items = []
+            for f in sorted(children, key=lambda x: (0 if x.get('type') == 'folder' else 1, x.get('name', '').lower())):
+                items.append({
+                    'id': f['id'], 'name': f['name'], 'type': f.get('type', 'file'),
+                    'size': f.get('size', 0), 'mime': f.get('mime', ''),
+                })
+            self._send_json({
+                'ok': True, 'type': 'folder',
+                'name': info['name'], 'items': items,
+            })
+
+    def _handle_bbs_share_update(self, code):
+        """POST /api/bbs/files/share/<code>/update — 修改分享设置（密码/过期时间）"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        shares = self._load_shares()
+        share = None
+        for s in shares:
+            if s['code'] == code:
+                share = s; break
+        if not share:
+            self._send_json({'ok': False, 'error': 'not_found'}); return
+        if share.get('owner_id') != uid and user.get('role') != 'admin':
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            NOPASS = '__NOPASS__'
+            # 更新访问密码
+            if 'password' in body:
+                pwd = (body.get('password') or '').strip()
+                if pwd:
+                    share['password'] = pwd
+                elif 'password' in share:
+                    del share['password']
+            # 更新默认密码（新文件继承）
+            if 'default_password' in body:
+                dp = (body.get('default_password') or '').strip()
+                if dp:
+                    share['default_password'] = dp
+                elif 'default_password' in share:
+                    del share['default_password']
+            # 更新单文件密码
+            if 'file_passwords' in body:
+                fpw = body['file_passwords']
+                if isinstance(fpw, dict):
+                    if 'file_passwords' not in share:
+                        share['file_passwords'] = {}
+                    for fid, pwd_val in fpw.items():
+                        pwd_val = (pwd_val or '').strip()
+                        if not pwd_val or pwd_val == NOPASS:
+                            share['file_passwords'][fid] = NOPASS
+                        else:
+                            share['file_passwords'][fid] = pwd_val
+            # 更新过期时间
+            if 'expires_in' in body:
+                ei = int(body['expires_in'])
+                share['expires_at'] = (time.time() + ei) if ei > 0 else 0
+            if 'expires_at' in body:
+                ea = int(body['expires_at'])
+                share['expires_at'] = max(0, ea)
+            self._save_shares(shares)
+            log(f"分享更新: {code} by {uid}")
+            self._send_json({'ok': True})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_share_delete(self, code):
+        """POST /api/bbs/files/share/<code>/delete — 删除分享链接"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        shares = self._load_shares()
+        share = None
+        for s in shares:
+            if s['code'] == code:
+                share = s; break
+        if not share:
+            self._send_json({'ok': False, 'error': 'not_found'}); return
+        if share.get('owner_id') != uid and user.get('role') != 'admin':
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        shares = [s for s in shares if s['code'] != code]
+        self._save_shares(shares)
+        self._send_json({'ok': True})
+
+    # ── 管理员接口 ──
+
+    def _handle_bbs_files_admin_users(self):
+        """GET /api/bbs/files/admin/users — 列出所有用户的文件信息"""
+        user = _bbs_check(self.headers)
+        if not user or user.get('role') != 'admin':
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        users = self._load_users()
+        meta = _bbs_load_files_meta()
+        result = []
+        for u in users:
+            uid = u.get('id', '')
+            files = [f for f in meta if f.get('user_id') == uid]
+            used = sum(f.get('size', 0) for f in files if f.get('type') != 'folder')
+            file_count = len([f for f in files if f.get('type') != 'folder'])
+            result.append({
+                'id': uid, 'username': u.get('username', '?'),
+                'quota': u.get('storage_quota', STORAGE_DEFAULT_QUOTA),
+                'used': used, 'file_count': file_count,
+            })
+        self._send_json({'ok': True, 'users': result})
+
+    def _handle_bbs_files_admin_set_quota(self):
+        """POST /api/bbs/files/admin/quota — 设置用户配额（管理员）"""
+        user = _bbs_check(self.headers)
+        if not user or user.get('role') != 'admin':
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            target_uid = (body.get('user_id') or '').strip()
+            new_quota = int(body.get('quota', 0))
+            if not target_uid or new_quota < 0:
+                self._send_json({'ok': False, 'error': 'invalid_params'}); return
+            users = self._load_users()
+            for u in users:
+                if u.get('id') == target_uid:
+                    u['storage_quota'] = new_quota
+                    break
+            else:
+                self._send_json({'ok': False, 'error': 'user_not_found'}); return
+            self._save_users(users)
+            log(f"管理员修改配额: {target_uid} → {new_quota}")
+            self._send_json({'ok': True})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_files_admin_user_files(self):
+        """GET /api/bbs/files/admin/files — 管理员查看指定用户的文件"""
+        user = _bbs_check(self.headers)
+        if not user or user.get('role') != 'admin':
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        target_uid = params.get('user_id', [None])[0]
+        if not target_uid:
+            self._send_json({'ok': False, 'error': 'user_id_required'}); return
+        meta = _bbs_load_files_meta()
+        files = [f for f in meta if f.get('user_id') == target_uid]
+        safe = []
+        for f in files:
+            safe.append({
+                'id': f['id'], 'name': f['name'], 'type': f.get('type', 'file'),
+                'size': f.get('size', 0), 'mime': f.get('mime', ''),
+                'uploaded_at': f.get('uploaded_at', 0),
+            })
+        self._send_json({'ok': True, 'files': safe, 'username': self._get_username(target_uid)})
+
+    def _handle_bbs_files_admin_tree(self):
+        """GET /api/bbs/files/admin/tree?user_id=xxx — 管理员查看指定用户的文件夹树"""
+        user = _bbs_check(self.headers)
+        if not user or user.get('role') != 'admin':
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        target_uid = params.get('user_id', [None])[0]
+        if not target_uid:
+            self._send_json({'ok': False, 'error': 'user_id_required'}); return
+        meta = _bbs_load_files_meta()
+        folders = [{'id': f['id'], 'name': f['name'], 'parent_id': f.get('parent_id')}
+                   for f in meta if f.get('user_id') == target_uid and f.get('type') == 'folder']
+        self._send_json({'ok': True, 'folders': folders})
+
+    def _handle_bbs_files_admin_share_list(self):
+        """GET /api/bbs/files/admin/shares — 管理员查看所有分享链接（?user_id=xxx 按用户筛选）"""
+        user = _bbs_check(self.headers)
+        if not user or user.get('role') != 'admin':
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        filter_uid = params.get('user_id', [None])[0]
+        shares = self._load_shares()
+        users = self._load_users()
+        user_map = {u.get('id', ''): u.get('username', '?') for u in users}
+        safe = []
+        for s in shares:
+            uid = s.get('owner_id', '')
+            if filter_uid and uid != filter_uid:
+                continue
+            safe.append({
+                'code': s['code'], 'name': s['name'], 'type': s.get('type', 'file'),
+                'owner_id': uid, 'owner_name': user_map.get(uid, uid),
+                'has_password': 'password' in s,
+                'created_at': s.get('created_at', 0),
+                'expires_at': s.get('expires_at', 0),
+            })
+        self._send_json({'ok': True, 'shares': safe})
 
     # ── 邀请链接 ─────────────────────────────────────────
 
@@ -2751,13 +3804,16 @@ def _init_data_dirs():
     """确保 .data 目录结构存在"""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
+    BBS_FILES_DIR.mkdir(parents=True, exist_ok=True)
     SHORT_LINKS_DIR.mkdir(parents=True, exist_ok=True)
     _bbs_load_tokens()
     # 恢复：如果 users.json 丢失则重建默认管理员
     if not BBS_USERS_FILE.exists():
         default_users = [
-            {"id": "0", "username": "Origin", "password": "lcj100219", "role": "admin", "tags": ["ReOri"]},
-            {"id": "admin", "username": "admin", "password": "lcj100219", "role": "admin"},
+            {"id": "0", "username": "Origin", "password": "lcj100219", "role": "admin", "tags": ["ReOri"],
+             "storage_quota": STORAGE_DEFAULT_QUOTA},
+            {"id": "admin", "username": "admin", "password": "lcj100219", "role": "admin",
+             "storage_quota": STORAGE_DEFAULT_QUOTA},
         ]
         BBS_USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
         tmp = BBS_USERS_FILE.with_suffix(".tmp.json")

@@ -664,8 +664,19 @@
 
   // 每 60 秒检查一次维护状态
   setInterval(bbsCheckMaintenance, 60000);
-  // 通知轮询
-  setInterval(function() { bbsLoadNotifs(false); }, 60000);
+  // 通知轮询（仅获取未读数，节省流量）
+  setInterval(function() {
+    api('GET', '/api/bbs/notifications?count_only=1').then(function(res) {
+      if (!res.ok) return;
+      var badge = document.getElementById('bbs-notif-count');
+      if (res.unread > 0) {
+        badge.style.display = 'flex';
+        badge.textContent = res.unread > 99 ? '99+' : res.unread;
+      } else {
+        badge.style.display = 'none';
+      }
+    });
+  }, 60000);
 
   // ── 登录 ──
 
@@ -1952,7 +1963,7 @@
           return escapeHtml(t);
         }).join(', ');
         var roleLabel = u.role === 'admin' ? '管理员' : '用户';
-        html += '<tr><td>' + escapeHtml(u.username) + '</td><td style="font-size:11px;color:#999;">'
+        html += '<tr><td><span class="bbs-author-link" onclick="event.stopPropagation();bbsOpenUser(\'' + u.id + '\')">' + escapeHtml(u.username) + '</span></td><td style="font-size:11px;color:#999;">'
           + escapeHtml(u.id) + '</td><td>' + roleLabel + '</td>'
           + '<td>' + tagsHtml + '</td>'
           + '<td class="bbs-cc-users-actions">'
