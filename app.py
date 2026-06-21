@@ -817,21 +817,13 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(PROJECT_ROOT), **kwargs)
 
-    def send_head(self):
-        path = self.translate_path(self.path)
-        if path.endswith('.html'):
-            try:
-                with open(path, 'rb') as f:
-                    data = f.read()
-                self.send_response(200)
-                self.send_header('Content-Type', 'text/html; charset=utf-8')
-                self.send_header('Content-Length', str(len(data)))
-                self.end_headers()
-                return data
-            except:
-                self.send_error(404, "File not found")
-                return None
-        return super().send_head()
+    extensions_map = dict(http.server.SimpleHTTPRequestHandler.extensions_map)
+    extensions_map.update({
+        '.html': 'text/html; charset=utf-8',
+        '.htm': 'text/html; charset=utf-8',
+        '.css': 'text/css; charset=utf-8',
+        '.js': 'application/javascript; charset=utf-8',
+    })
 
     def setup(self):
         super().setup()
