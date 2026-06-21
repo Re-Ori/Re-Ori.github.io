@@ -1145,11 +1145,24 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if req_path.startswith('/api/bbs/files/admin/') and req_path.endswith('/quota'):
             self._handle_bbs_files_admin_set_quota()
             return
+        if req_path == '/api/bbs/files/batch-delete':
+            self._handle_bbs_files_batch_delete()
+            return
+        if req_path == '/api/bbs/files/batch-move':
+            self._handle_bbs_files_batch_move()
+            return
         if req_path.startswith('/api/bbs/files/'):
             file_parts = req_path[15:].split('/')
-            if len(file_parts) == 2 and file_parts[1] == 'delete':
-                self._handle_bbs_file_delete(file_parts[0])
-                return
+            if len(file_parts) == 2:
+                if file_parts[1] == 'delete':
+                    self._handle_bbs_file_delete(file_parts[0])
+                    return
+                if file_parts[1] == 'move':
+                    self._handle_bbs_file_move(file_parts[0])
+                    return
+                if file_parts[1] == 'rename':
+                    self._handle_bbs_file_rename(file_parts[0])
+                    return
         if req_path == '/api/bbs/import':
             self._handle_bbs_import()
             return
@@ -3290,6 +3303,181 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         log(f"删除: {info['name']} by {uid} ({len(to_delete)}项)")
         self._send_json({'ok': True})
 
+    def _handle_bbs_file_move(self, file_id):
+        """POST /api/bbs/files/<id>/move — 移动文件/文件夹到其他文件夹"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            target = body.get('target_folder_id') or None  # None = 根目录
+            meta = _bbs_load_files_meta()
+            info = self._get_file_meta(file_id)
+            if not info:
+                self._send_json({'ok': False, 'error': 'not_found'}); return
+            if info.get('user_id') != uid and user.get('role') != 'admin':
+                self._send_json({'ok': False, 'error': 'forbidden'}); return
+            # 如果目标文件夹非根目录，验证存在且属于当前用户
+            if target:
+                target_info = self._get_file_meta(target)
+                if not target_info or target_info.get('type') != 'folder':
+                    self._send_json({'ok': False, 'error': 'target_not_found'}); return
+                if target_info.get('user_id') != uid and user.get('role') != 'admin':
+                    self._send_json({'ok': False, 'error': 'target_forbidden'}); return
+            # 如果是文件夹，检查循环引用（不能移入自身或子文件夹）
+            if info.get('type') == 'folder':
+                cursor = target
+                while cursor:
+                    if cursor == file_id:
+                        self._send_json({'ok': False, 'error': 'circular_move'}); return
+                    cur_meta = self._get_file_meta(cursor)
+                    if not cur_meta: break
+                    cursor = cur_meta.get('parent_id')
+            # 更新 parent_id
+            for f in meta:
+                if f['id'] == file_id:
+                    f['parent_id'] = target
+                    break
+            _bbs_save_files_meta(meta)
+            log(f"文件移动: {info['name']} → {target or 'root'} by {uid}")
+            self._send_json({'ok': True})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_file_rename(self, file_id):
+        """POST /api/bbs/files/<id>/rename — 重命名文件/文件夹"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            new_name = (body.get('name') or '').strip()
+            if not new_name:
+                self._send_json({'ok': False, 'error': 'name_required'}); return
+            if '/' in new_name or '\\' in new_name:
+                self._send_json({'ok': False, 'error': 'invalid_name'}); return
+            meta = _bbs_load_files_meta()
+            info = self._get_file_meta(file_id)
+            if not info:
+                self._send_json({'ok': False, 'error': 'not_found'}); return
+            if info.get('user_id') != uid and user.get('role') != 'admin':
+                self._send_json({'ok': False, 'error': 'forbidden'}); return
+            old_name = info['name']
+            # 如果是文件，重命名物理文件（存储路径附带文件名用于友好显示）
+            if info.get('type') == 'file':
+                old_fp = _get_file_path(file_id)
+                if old_fp.exists():
+                    new_fp = _get_file_path(file_id, new_name)
+                    if old_fp != new_fp:
+                        old_fp.rename(new_fp)
+            # 更新元数据
+            for f in meta:
+                if f['id'] == file_id:
+                    f['name'] = new_name
+                    break
+            _bbs_save_files_meta(meta)
+            log(f"文件重命名: {old_name} → {new_name} by {uid}")
+            self._send_json({'ok': True, 'old_name': old_name, 'new_name': new_name})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_files_batch_delete(self):
+        """POST /api/bbs/files/batch-delete — 批量删除文件/文件夹"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            ids = body.get('ids', [])
+            if not ids or not isinstance(ids, list):
+                self._send_json({'ok': False, 'error': 'ids_required'}); return
+            meta = _bbs_load_files_meta()
+            # 收集所有要删除的 ID（递归）
+            to_delete = set(ids)
+            for fid in ids:
+                info = self._get_file_meta(fid)
+                if info and info.get('type') == 'folder':
+                    stack = [fid]
+                    while stack:
+                        pid = stack.pop()
+                        for f in meta:
+                            if f.get('parent_id') == pid and f['id'] not in to_delete:
+                                to_delete.add(f['id'])
+                                if f.get('type') == 'folder':
+                                    stack.append(f['id'])
+            # 验证所有权
+            for fid in list(to_delete):
+                info = self._get_file_meta(fid)
+                if not info or (info.get('user_id') != uid and user.get('role') != 'admin'):
+                    to_delete.discard(fid)
+            # 删除文件实体
+            for fid in to_delete:
+                fp = _get_file_path(fid)
+                if fp.exists():
+                    fp.unlink()
+            meta = [f for f in meta if f['id'] not in to_delete]
+            _bbs_save_files_meta(meta)
+            # 清理相关分享链接
+            shares = self._load_shares()
+            shares = [s for s in shares if s.get('item_id') not in to_delete]
+            self._save_shares(shares)
+            log(f"批量删除: {len(ids)}项, 实际{len(to_delete)}项 by {uid}")
+            self._send_json({'ok': True, 'deleted': len(to_delete)})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_files_batch_move(self):
+        """POST /api/bbs/files/batch-move — 批量移动文件/文件夹"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            ids = body.get('ids', [])
+            target = body.get('target_folder_id') or None
+            if not ids or not isinstance(ids, list):
+                self._send_json({'ok': False, 'error': 'ids_required'}); return
+            meta = _bbs_load_files_meta()
+            # 验证目标文件夹
+            if target:
+                target_info = self._get_file_meta(target)
+                if not target_info or target_info.get('type') != 'folder':
+                    self._send_json({'ok': False, 'error': 'target_not_found'}); return
+                if target_info.get('user_id') != uid and user.get('role') != 'admin':
+                    self._send_json({'ok': False, 'error': 'target_forbidden'}); return
+            moved = 0
+            for fid in ids:
+                info = self._get_file_meta(fid)
+                if not info: continue
+                if info.get('user_id') != uid and user.get('role') != 'admin': continue
+                # 如果是文件夹，检查循环引用
+                if info.get('type') == 'folder':
+                    cursor = target
+                    circular = False
+                    while cursor:
+                        if cursor == fid:
+                            circular = True
+                            break
+                        cur_meta = self._get_file_meta(cursor)
+                        if not cur_meta: break
+                        cursor = cur_meta.get('parent_id')
+                    if circular: continue
+                # 更新 parent_id
+                for f in meta:
+                    if f['id'] == fid:
+                        f['parent_id'] = target
+                        moved += 1
+                        break
+            _bbs_save_files_meta(meta)
+            log(f"批量移动: {moved}/{len(ids)}项 → {target or 'root'} by {uid}")
+            self._send_json({'ok': True, 'moved': moved})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
     # ── 分享链接 ──
 
     def _handle_bbs_share_create(self):
@@ -3772,22 +3960,37 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
     # ── 管理员接口 ──
 
     def _handle_bbs_files_admin_users(self):
-        """GET /api/bbs/files/admin/users — 列出所有用户的文件信息"""
+        """GET /api/bbs/files/admin/users — 列出所有用户的文件信息（含已删除用户的孤儿文件）"""
         user = _bbs_check(self.headers)
         if not user or user.get('role') != 'admin':
             self._send_json({'ok': False, 'error': 'forbidden'}); return
-        users = self._load_users()
+        bbs_users = self._load_users()
         meta = _bbs_load_files_meta()
+        bbs_user_ids = {u.get('id', '') for u in bbs_users}
         result = []
-        for u in users:
+        for u in bbs_users:
             uid = u.get('id', '')
-            files = [f for f in meta if f.get('user_id') == uid]
-            used = sum(f.get('size', 0) for f in files if f.get('type') != 'folder')
-            file_count = len([f for f in files if f.get('type') != 'folder'])
+            u_files = [f for f in meta if f.get('user_id') == uid]
+            used = sum(f.get('size', 0) for f in u_files if f.get('type') != 'folder')
+            file_count = len([f for f in u_files if f.get('type') != 'folder'])
             result.append({
                 'id': uid, 'username': u.get('username', '?'),
                 'quota': u.get('storage_quota', STORAGE_DEFAULT_QUOTA),
                 'used': used, 'file_count': file_count,
+            })
+        # 已删除用户的孤儿文件
+        orphan_uids = set()
+        for f in meta:
+            uid = f.get('user_id', '')
+            if uid and uid not in bbs_user_ids:
+                orphan_uids.add(uid)
+        for uid in orphan_uids:
+            u_files = [f for f in meta if f.get('user_id') == uid]
+            used = sum(f.get('size', 0) for f in u_files if f.get('type') != 'folder')
+            file_count = len([f for f in u_files if f.get('type') != 'folder'])
+            result.append({
+                'id': uid, 'username': None,
+                'quota': 0, 'used': used, 'file_count': file_count,
             })
         self._send_json({'ok': True, 'users': result})
 
