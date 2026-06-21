@@ -138,7 +138,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 [data-theme="dark"] .tn-item{color:#aaa}
 [data-theme="dark"] .tn-item:hover{background:rgba(255,255,255,0.04)}
 [data-theme="dark"] .tn-item.tn-cur{background:rgba(57,159,255,0.15);color:#5ac8fa}
-@media(max-width:640px){.fs-layout{flex-direction:column}.fs-sidebar{width:100%;max-height:200px;position:static}}
+@media(max-width:640px){
+.fs-layout{flex-direction:column}.fs-sidebar{width:100%;max-height:200px;position:static}
+.fs-admin-table,.fs-admin-table tbody,.fs-admin-table tr,.fs-admin-table td{display:block;width:100%}
+.fs-admin-table tr{padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)}
+.fs-admin-table td{padding:3px 6px;border:none;text-align:left;font-size:13px}
+.fs-admin-table td:last-child{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.fs-admin-table td:last-child .fs-btn{font-size:11px;padding:5px 10px;flex:1;min-width:0;text-align:center}
+.tn-item{white-space:normal;overflow:visible}
+.fs-sidebar-title{font-size:10px}
+.fs-item .acts .fs-btn{font-size:11px;padding:5px 9px}
+.fs-item .meta{font-size:11px}
+.fs-path{font-size:12px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+.fs-path a{white-space:nowrap}
+.fs-share-item{flex-wrap:wrap}
+.fs-share-item .info{width:100%;margin-bottom:4px}
+.fs-share-item .fs-btn{font-size:11px;padding:5px 10px;flex:1;text-align:center}
+}
 </style>
 </head>
 <body>
@@ -202,8 +218,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
   <button class="fs-btn" id="fs-edit-pwd-off" onclick="fsEditPwdToggle(false)" style="flex:1">无密码</button>
 </div>
 <div style="position:relative;margin-bottom:10px">
-<input type="password" id="fs-edit-share-pwd" placeholder="修改密码（留空不修改）" autocomplete="off" style="width:100%;padding:10px 34px 10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
-<span onclick="fsTogglePwdVis()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:13px;color:#999;user-select:none" id="fs-pwd-eye">👁</span>
+<input type="password" id="fs-edit-share-pwd" placeholder="修改密码" autocomplete="off" style="width:100%;padding:10px 34px 10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
+<span onclick="fsTogglePwdVis()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;color:#999;user-select:none;line-height:1;display:flex;align-items:center" id="fs-pwd-eye">
+<svg id="fs-eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+<svg id="fs-eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+</span>
 </div>
 <select id="fs-edit-share-expire" style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;margin-bottom:10px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
   <option value="-1">不修改过期时间</option>
@@ -532,9 +551,10 @@ $('fs-edit-share-expire').value='-1';
 $('fs-edit-share-modal').classList.add('show')};
 window.fsTogglePwdVis=function(){
   var inp=$('fs-edit-share-pwd');
-  var eye=$('fs-pwd-eye');
-  if(inp.type==='password'){inp.type='text';eye.textContent='🙈'}
-  else{inp.type='password';eye.textContent='👁'}
+  var open=$('fs-eye-open');
+  var closed=$('fs-eye-closed');
+  if(inp.type==='password'){inp.type='text';closed.style.display='none';open.style.display=''}
+  else{inp.type='password';closed.style.display='';open.style.display='none'}
 };
 window.fsEditPwdToggle=function(on){
 $('fs-edit-pwd-on').style.borderColor=on?'var(--theme-color,#399FFF)':'rgba(0,0,0,0.12)';
@@ -547,7 +567,7 @@ window.fsDoEditShare=function(){
 var code=window._fsEditCode;if(!code)return;
 var body={};
 if(!window._fsEditHasPwd){body.password=''}  // 明确设为无密码
-else{var pwd=$('fs-edit-share-pwd').value.trim();if(pwd)body.password=pwd}
+else{body.password=$('fs-edit-share-pwd').value.trim()||''}
 var ei=$('fs-edit-share-expire').value;
 if(ei!='-1')body.expires_in=parseInt(ei);
 $('fs-edit-share-modal').classList.remove('show');
@@ -569,7 +589,8 @@ html+='<tr><td><span class="uname" onclick="window.open(\'/forum.html?user='+esc
 '<td>'+u.file_count+' 个文件</td>'+
 '<td>'+fmtSize(u.used)+' / '+fmtSize(u.quota)+' ('+pct+'%)</td>'+
 '<td><button class="fs-btn" onclick="fsShowSetQuota(\''+esc(u.id)+'\',\''+esc(u.username)+'\','+u.quota+')">修改配额</button>'+
-'<button class="fs-btn" onclick="fsShowUserFiles(\''+esc(u.id)+'\',\''+esc(u.username)+'\')">查看文件</button></td></tr>';}
+'<button class="fs-btn" onclick="fsShowUserFiles(\''+esc(u.id)+'\',\''+esc(u.username)+'\')">查看文件</button>'+
+'<button class="fs-btn" onclick="fsShowUserSharesPage(\''+esc(u.id)+'\',\''+esc(u.username)+'\')">分享</button></td></tr>';}
 html+='</tbody></table>';
 c.innerHTML=html;
 _loadAdminShares(c);
@@ -593,6 +614,24 @@ container.innerHTML+=sh});}
 }
 window.loadAdmin=loadAdmin;
 window.fsShowUserShares=function(uid){_loadAdminShares($('fs-tab-admin'),uid)};
+window.fsShowUserSharesPage=function(uid,uname){
+var c=$('fs-tab-admin');if(!c)return;
+c.innerHTML='<div style="text-align:center;padding:40px;color:#bbb;">加载中…</div>';
+api('GET','/api/bbs/files/admin/shares?user_id='+uid).then(function(r){
+if(!r.ok||!r.shares){c.innerHTML='<div class="fs-empty">加载失败</div>';return}
+var html='<div style="margin-bottom:10px"><button class="fs-btn" onclick="loadAdmin()">← 返回</button> <strong>'+esc(uname)+'</strong> 的分享链接 ('+r.shares.length+')</div>';
+if(r.shares.length===0){c.innerHTML=html+'<div class="fs-empty">该用户暂无分享链接</div>';return}
+for(var i=0;i<r.shares.length;i++){
+var s=r.shares[i];
+var pwd=s.has_password?'[加密] ':'[公开] ';
+var exp=s.expires_at?' · 过期:'+fmtTime(s.expires_at):(s.expires_at===0?' · 永不过期':'');
+var url=window.location.origin+'/Tool/files.html?share='+s.code;
+html+='<div class="fs-share-item">'+
+'<div class="info"><div class="name">'+pwd+esc(s.name)+'</div><div class="meta">'+fmtTime(s.created_at)+exp+' · 类型: '+(s.type||'文件')+'</div></div>'+
+'<a class="fs-btn" href="'+url+'" target="_blank">打开</a>'+
+'<button class="fs-btn" onclick="navigator.clipboard.writeText(\''+url+'\');toast(\'已复制\')">复制</button>'+
+'<button class="fs-btn danger" onclick="if(confirm(\'确定删除此分享？\')){api(\'POST\',\'/api/bbs/files/share/'+s.code+'/delete\').then(function(r2){if(r2.ok){toast(\'已删除\');fsShowUserSharesPage(\''+uid+'\',\''+esc(uname)+'\')}else toast(\'删除失败\')})}">删除</button></div>';}
+c.innerHTML=html})};
 window.fsAdminDelShare=function(code){if(!confirm('确定删除此分享？'))return;api('POST','/api/bbs/files/share/'+code+'/delete').then(function(r){if(r.ok){toast('已删除');loadAdmin()}else toast('删除失败')})};
 
 window.fsShowSetQuota=function(uid,uname,q){
@@ -611,28 +650,92 @@ api('POST','/api/bbs/files/admin/quota',JSON.stringify({user_id:uid,quota:Math.r
 if(r.ok){toast('配额已更新');loadAdmin()}else toast('设置失败: '+(r.error||'未知'))})};
 
 window.fsShowUserFiles=function(uid,uname){
-api('GET','/api/bbs/files/admin/files?user_id='+uid).then(function(r){
+window._adminUid=uid;window._adminUname=uname;
+window._adminPATH=[{id:null,name:uname+' 的文件'}];window._adminCUR=null;window._adminAllFiles=[];
+Promise.all([
+api('GET','/api/bbs/files/admin/files?user_id='+uid),
+api('GET','/api/bbs/files/admin/tree?user_id='+uid)
+]).then(function(resp){
+var r=resp[0];var tr=resp[1];
 if(!r.ok||!r.files){toast('加载失败');return}
-var cmap={};
-for(var i=0;i<r.files.length;i++){var f=r.files[i];var pid=f.parent_id||'';if(!cmap[pid])cmap[pid]=[];cmap[pid].push(f);}
-if(!cmap[''])cmap['']=[];
-for(var i=0;i<r.files.length;i++){var f=r.files[i];if(f.type==='folder'&&!f.parent_id&&cmap[''].indexOf(f)<0)cmap[''].push(f);}
-function _admTree(pid,level){
-var kids=cmap[pid]||[];if(!kids.length)return'';
-kids.sort(function(a,b){return(a.type==='folder'?0:1)-(b.type==='folder'?0:1)||a.name.localeCompare(b.name)});
-var h='';
-for(var i=0;i<kids.length;i++){
-var f=kids[i];var pad='padding-left:'+(level*20+12)+'px';
-var ico=f.type==='folder'?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>':'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#399FFF" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-var fid=f.id;var fname=esc(f.name);
-if(f.type==='folder'){
-h+='<div class="fs-item" style="'+pad+'"><div class="ico folder">'+ico+'</div><div class="info"><div class="name">'+fname+'</div><div class="meta">文件夹</div></div><div class="acts"><button class="fs-btn" data-fid="'+fid+'" data-act="dlzip">下载ZIP</button><button class="fs-btn danger" data-fid="'+fid+'" data-act="del" data-fn="'+fname+'">删除</button></div></div>';
-h+=_admTree(f.id,level+1);}
+window._adminAllFiles=r.files;
+_adminRender(r.files||[],tr.ok?tr.folders:[])
+}).catch(function(){toast('网络错误')})};
+function _adminRender(files,folders){
+folders=folders||[];files=files||[];
+var cmap={};for(var i=0;i<files.length;i++){var pid=files[i].parent_id||'';if(!cmap[pid])cmap[pid]=[];cmap[pid].push(files[i])}
+var curId=window._adminCUR;
+var html='<div style="margin-bottom:10px"><button class="fs-btn" onclick="loadAdmin()">← 返回</button> <strong>'+esc(window._adminUname)+'</strong> 的文件</div>'+
+'<div class="fs-layout"><div class="fs-sidebar"><div class="fs-sidebar-title">文件夹</div><div class="fs-tree" id="adm-tree">';
+var rootCls=!curId?' tn-cur':'';
+html+='<div class="tn-item'+rootCls+'" onclick="_adminNavTo(0)" style="padding-left:12px;font-weight:600">'+
+'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'+
+'<span>根目录</span></div>';
+html+=_adminBuildTree(folders,null,1)+'</div></div><div class="fs-main">';
+// 面包屑
+html+='<div class="fs-toolbar"><div class="fs-path">';
+var p=window._adminPATH;
+for(var i=0;i<p.length;i++){
+if(i>0)html+='<span>/</span>';
+if(i===p.length-1)html+='<span>'+esc(p[i].name)+'</span>';
+else html+='<a onclick="_adminNavTo('+i+')">'+esc(p[i].name)+'</a>'}
+html+='</div><div class="spacer"></div></div>';
+// 文件列表
+var items=cmap[curId||'']||[];
+if(items.length===0)html+='<div class="fs-empty">文件夹为空</div>';
 else{
-h+='<div class="fs-item" style="'+pad+'"><div class="ico">'+ico+'</div><div class="info"><div class="name">'+fname+'</div><div class="meta">'+fmtSize(f.size)+' · '+fmtTime(f.uploaded_at)+'</div></div><div class="acts"><button class="fs-btn" data-fid="'+fid+'" data-act="dl">下载</button><button class="fs-btn danger" data-fid="'+fid+'" data-act="del" data-fn="'+fname+'">删除</button></div></div>';}}
+html+='<div class="fs-list">';
+for(var i=0;i<items.length;i++){
+var f=items[i];
+var ico=f.type==='folder'?'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>':'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#399FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+var meta=f.type==='folder'?'文件夹':(fmtSize(f.size)+(f.uploaded_at?' · '+fmtTime(f.uploaded_at):''));
+var acts='';
+if(f.type==='folder'){
+acts='<button class="fs-btn" data-fid="'+f.id+'" data-act="dlzip">下载ZIP</button>';
+acts+='<button class="fs-btn" data-fid="'+f.id+'" data-fn="'+esc(f.name)+'" data-act="del">删除</button>';}
+else{
+acts='<button class="fs-btn" data-fid="'+f.id+'" data-fn="'+esc(f.name)+'" data-act="dl">下载</button>';
+acts+='<button class="fs-btn danger" data-fid="'+f.id+'" data-fn="'+esc(f.name)+'" data-act="del">删除</button>';}
+html+='<div class="fs-item"><div class="ico '+(f.type==='folder'?'folder':'')+'"'+(f.type==='folder'?'onclick="_adminNavInto(\''+f.id+'\',\''+esc(f.name)+'\')"':'')+'>'+ico+'</div>'+
+'<div class="info"><div class="name">'+esc(f.name)+'</div><div class="meta">'+meta+'</div></div><div class="acts">'+acts+'</div></div>';}
+html+='</div>';}
+html+='</div></div>';
+var c=$('fs-tab-admin');if(c)c.innerHTML=html};
+function _adminBuildTree(folders,pid,level){
+var h='';var kids=[];
+for(var i=0;i<folders.length;i++){if(folders[i].parent_id===pid)kids.push(folders[i])}
+kids.sort(function(a,b){return a.name.localeCompare(b.name)});
+for(var i=0;i<kids.length;i++){
+var f=kids[i];var cur=f.id==window._adminCUR;
+var cls=cur?' tn-cur':'';
+var pad='padding-left:'+(12+level*16)+'px';
+h+='<div class="tn-item'+cls+'" style="'+pad+'" onclick="_adminTreeNav(\''+f.id+'\')">'+
+'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'+
+'<span>'+esc(f.name)+'</span></div>';
+h+=_adminBuildTree(folders,f.id,level+1)}
 return h}
-var html='<div style="margin-bottom:10px"><button class="fs-btn" onclick="loadAdmin()">← 返回</button> <strong>'+esc(uname)+'</strong> 的文件</div><div class="fs-list" id="adm-tree-root">'+_admTree('',0)+'</div>';
-var c=$('fs-tab-admin');if(c)c.innerHTML=html})};
+function _adminResolvePath(folderId){
+var fmap={};var fl=window._adminAllFiles;
+for(var i=0;i<fl.length;i++){if(fl[i].type==='folder')fmap[fl[i].id]=fl[i]}
+var stack=[];var cur=folderId;
+while(cur&&fmap[cur]){stack.unshift({id:fmap[cur].id,name:fmap[cur].name});cur=fmap[cur].parent_id}
+return stack}
+window._adminNavTo=function(idx){
+var p=window._adminPATH;if(idx>=p.length-1)return;
+window._adminPATH=p.slice(0,idx+1);
+window._adminCUR=window._adminPATH[window._adminPATH.length-1].id;
+api('GET','/api/bbs/files/admin/tree?user_id='+window._adminUid).then(function(tr){
+_adminRender(window._adminAllFiles,tr.ok?tr.folders:[])})};
+window._adminNavInto=function(id,name){
+window._adminCUR=id;window._adminPATH.push({id:id,name:name});
+api('GET','/api/bbs/files/admin/tree?user_id='+window._adminUid).then(function(tr){
+_adminRender(window._adminAllFiles,tr.ok?tr.folders:[])})};
+window._adminTreeNav=function(id){
+var segs=_adminResolvePath(id);if(segs.length===0)return;
+window._adminPATH=[{id:null,name:window._adminUname+' 的文件'}].concat(segs);
+window._adminCUR=id;
+api('GET','/api/bbs/files/admin/tree?user_id='+window._adminUid).then(function(tr){
+_adminRender(window._adminAllFiles,tr.ok?tr.folders:[])})};
 // 管理员文件树点击事件
 document.addEventListener('click',function(e){
 var btn=e.target.closest('[data-act]');if(!btn)return;

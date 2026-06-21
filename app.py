@@ -3832,6 +3832,7 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
                 'id': f['id'], 'name': f['name'], 'type': f.get('type', 'file'),
                 'size': f.get('size', 0), 'mime': f.get('mime', ''),
                 'uploaded_at': f.get('uploaded_at', 0),
+                'parent_id': f.get('parent_id'),
             })
         self._send_json({'ok': True, 'files': safe, 'username': self._get_username(target_uid)})
 
