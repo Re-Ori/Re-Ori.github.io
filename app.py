@@ -213,8 +213,10 @@ def _load_daily():
         return _DAILY_CACHE
     try:
         if STATS_DAILY_FILE.exists():
-            _DAILY_CACHE = json.loads(STATS_DAILY_FILE.read_text(encoding="utf-8"))
-            return _DAILY_CACHE
+            data = json.loads(STATS_DAILY_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                _DAILY_CACHE = data
+                return _DAILY_CACHE
     except: pass
     _DAILY_CACHE = {}
     return _DAILY_CACHE

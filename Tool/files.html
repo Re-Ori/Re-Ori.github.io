@@ -346,11 +346,34 @@ function fmtTime(ts){if(!ts)return'';return new Date(ts*1e3).toLocaleString()}
 function api(m,p,b){var o={method:m,headers:{}};if(T)o.headers['X-Auth-Token']=T;if(b)o.body=b;return fetch(p,o).then(function(r){return r.json().catch(function(){return{ok:false,error:'bad_response'}})})}
 
 function showLogin(){
-  var ret=encodeURIComponent(window.location.href);
-  window.location.href='/forum.html?redirect='+ret;
+  $('fs-login').classList.add('show');
+  $('fs-login-err').style.display='none';
+  $('fs-login-user').value='';
+  $('fs-login-pass').value='';
+  setTimeout(function(){$('fs-login-user').focus()},100);
 }
 window.fsDoLogin=function(){
-  window.location.href='/forum.html?redirect='+encodeURIComponent(window.location.href);
+  var user=$('fs-login-user').value.trim();
+  var pass=$('fs-login-pass').value.trim();
+  if(!user||!pass){$('fs-login-err').textContent='请输入用户名和密码';$('fs-login-err').style.display='';return}
+  $('fs-login-err').style.display='none';
+  $('fs-login-btn').disabled=true;$('fs-login-btn').textContent='登录中…';
+  fetch('/api/bbs/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass})}).then(function(r){return r.json().catch(function(){return{ok:false}}) }).then(function(r){
+    $('fs-login-btn').disabled=false;$('fs-login-btn').textContent='登录';
+    if(r.ok){
+      T=r.token;U=r.user;UI=r.user_id||'';ROLE=r.role||'';
+      localStorage.setItem('bbs_token',T);localStorage.setItem('bbs_user',U);localStorage.setItem('bbs_user_id',UI);
+      $('fs-uname').textContent=U;window._fsUID=UI;
+      $('fs-login').classList.remove('show');loadView()
+    }else if(r.error==='auth_failed'){
+      $('fs-login-err').textContent='用户名或密码错误';$('fs-login-err').style.display=''
+    }else{
+      $('fs-login-err').textContent='登录失败，请重试';$('fs-login-err').style.display=''
+    }
+  }).catch(function(){
+    $('fs-login-btn').disabled=false;$('fs-login-btn').textContent='登录';
+    $('fs-login-err').textContent='网络错误';$('fs-login-err').style.display=''
+  })
 };
 $('fs-login-pass').addEventListener('keydown',function(e){if(e.key==='Enter')window.fsDoLogin()});
 // ── URL 导航 ──
@@ -828,12 +851,12 @@ if(r.ok){toast('已更新');loadShares()}else toast('更新失败: '+(r.error||'
 	var unameDisplay=isOrphan?'[用户不存在-'+u.id+']':esc(u.username);
 	var unameStyle=isOrphan?' style="color:#ff3b30"':'';
 	var escName=isOrphan?esc('[用户不存在-'+u.id+']'):esc(u.username);
-	html+='<tr><td><span class="uname"'+unameStyle+' onclick="fsShowUserFiles(\'\'+esc(u.id)+'\'\',\'\'+escName+'\'\')">'+unameDisplay+'</span></td>'
+	html+='<tr><td><span class="uname"'+unameStyle+' onclick="fsShowUserFiles(\''+esc(u.id)+'\',\''+escName+'\')">'+unameDisplay+'</span></td>'
 	+'<td>'+u.file_count+' 个文件</td>'
 	+'<td>'+fmtSize(u.used)+' / '+fmtSize(u.quota)+' <span'+pctCls+'>('+pct+'%)</span></td>'
-	+'<td><button class="fs-btn" onclick="event.stopPropagation();fsShowSetQuota(\'\'+esc(u.id)+'\'\',\'\'+escName+'\'\',"+u.quota+")'>修改配额</button>'
-	+'<button class="fs-btn" onclick="event.stopPropagation();fsShowUserFiles(\'\'+esc(u.id)+'\'\',\'\'+escName+'\'\')">查看文件</button>'
-	+'<button class="fs-btn" onclick="event.stopPropagation();fsShowUserSharesPage(\'\'+esc(u.id)+'\'\',\'\'+escName+'\'\')">分享</button></td></tr>';}
+	+'<td><button class="fs-btn" onclick="event.stopPropagation();fsShowSetQuota(\''+esc(u.id)+'\',\''+escName+'\','+u.quota+')">>修改配额</button>'
+	+'<button class="fs-btn" onclick="event.stopPropagation();fsShowUserFiles(\''+esc(u.id)+'\',\''+escName+'\')">查看文件</button>'
+	+'<button class="fs-btn" onclick="event.stopPropagation();fsShowUserSharesPage(\''+esc(u.id)+'\',\''+escName+'\')">分享</button></td></tr>';}
 	html+='</tbody></table>';
 	if(_adminSharesLoaded&&_adminSharesLoaded.length>0){
 	html+='<h3 style="font-size:15px;margin:20px 0 10px;color:#555;font-weight:600">最近分享（'+_adminSharesLoaded.length+'）</h3>';
