@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>云文件存储 — Origin Base</title>
 <link rel="stylesheet" href="/css/style.css">
@@ -64,9 +65,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 .ut-bar .ut-fill{height:100%;border-radius:2px;transition:width .2s}
 .ut-stat{font-size:11px;min-width:32px;text-align:right;flex-shrink:0}
 /* 工具栏 */
-.fs-toolbar{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center;padding:6px 0}
+.fs-toolbar{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;padding:6px 0}
+.fs-toolbar-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .fs-toolbar .spacer{flex:1;min-width:12px}
-.fs-path{display:flex;align-items:center;gap:4px;font-size:13px;color:#555;overflow-x:auto;white-space:nowrap;padding:4px 0;flex:1 1 auto;min-width:60px;margin-right:auto}
+.fs-path{display:flex;align-items:center;gap:4px;font-size:13px;color:#555;overflow-x:auto;white-space:nowrap;padding:2px 0;flex:1;min-width:60px}
 .fs-path a{color:var(--theme-color,#399FFF);cursor:pointer;text-decoration:none}
 .fs-path a:hover{text-decoration:underline}
 .fs-path span{color:#bbb}
@@ -516,12 +518,15 @@ html+='<div class="fs-upload" id="fs-upload"><svg width="24" height="24" viewBox
 html+='<div class="fs-upload-tasks" id="fs-upload-tasks"></div>';
 
 // 工具栏
-html+='<div class="fs-toolbar"><div class="fs-path">';
+html+='<div class="fs-toolbar"><div class="fs-toolbar-row"><div class="fs-path">';
 for(var i=0;i<PATH.length;i++){
 if(i>0)html+='<span>/</span>';
 if(i===PATH.length-1)html+='<span>'+esc(PATH[i].name)+'</span>';
 else html+='<a onclick="fsNavTo('+i+')">'+esc(PATH[i].name)+'</a>'}
 html+='</div><div class="spacer"></div><select style="font-size:12px;padding:3px 6px;border:1px solid rgba(0,0,0,0.1);border-radius:4px;outline:none;color:#555;background:transparent;margin-right:6px" onchange="fsSetSort(this.value)" id="fs-sort-select"><option value="name-asc">名称 ↑</option><option value="name-desc">名称 ↓</option><option value="time-asc">时间 ↑</option><option value="time-desc">时间 ↓</option></select><button class="fs-btn" id="fs-btn-batch" onclick="fsToggleBatch()">批量操作</button><button class="fs-btn" id="fs-btn-batch-del" onclick="fsBatchDelete()" style="display:none">删除</button><button class="fs-btn" id="fs-btn-batch-move" onclick="fsShowMoveDialog()" style="display:none">移动到</button><button class="fs-btn" id="fs-btn-batch-dl" onclick="fsBatchDownload()" style="display:none">下载</button><span id="fs-select-all" style="font-size:11px;color:var(--theme-color,#399FFF);cursor:pointer;display:none;margin-right:6px" onclick="fsToggleSelectAll()">全选</span><span id="fs-select-none" style="font-size:11px;color:#999;cursor:pointer;display:none;margin-right:6px" onclick="fsToggleSelectAll()">取消全选</span><button class="fs-btn" onclick="fsShowNewFolder()">+ 新建</button>';
+html+='<button class="fs-btn" onclick="fsShowShare(\''+(CUR_FOLDER||'')+'\',\''+(CUR_FOLDER?'文件夹':'根目录')+'\')">分享</button><button class="fs-btn" onclick="fsDownload(\''+(CUR_FOLDER||'all')+'\',\''+(CUR_FOLDER?'文件夹':'全部文件')+'.zip\')">下载ZIP</button>';
+html+='</div></div><div class="fs-toolbar-row">';
+html+='<select style="font-size:12px;padding:3px 6px;border:1px solid rgba(0,0,0,0.1);border-radius:4px;outline:none;color:#555;background:transparent;margin-right:6px" onchange="fsSetSort(this.value)" id="fs-sort-select"><option value="name-asc">名称 ↑</option><option value="name-desc">名称 ↓</option><option value="time-asc">时间 ↑</option><option value="time-desc">时间 ↓</option></select><button class="fs-btn" id="fs-btn-batch" onclick="fsToggleBatch()">批量操作</button><button class="fs-btn" id="fs-btn-batch-del" onclick="fsBatchDelete()" style="display:none">删除</button><button class="fs-btn" id="fs-btn-batch-move" onclick="fsShowMoveDialog()" style="display:none">移动到</button><button class="fs-btn" id="fs-btn-batch-dl" onclick="fsBatchDownload()" style="display:none">下载</button><span id="fs-select-all" style="font-size:11px;color:var(--theme-color,#399FFF);cursor:pointer;display:none;margin-right:6px" onclick="fsToggleSelectAll()">全选</span><span id="fs-select-none" style="font-size:11px;color:#999;cursor:pointer;display:none;margin-right:6px" onclick="fsToggleSelectAll()">取消全选</span><button class="fs-btn" onclick="fsShowNewFolder()">+ 新建</button>';
 html+='<button class="fs-btn" onclick="fsShowShare(\''+(CUR_FOLDER||'')+'\',\''+(CUR_FOLDER?'文件夹':'根目录')+'\')">分享</button><button class="fs-btn" onclick="fsDownload(\''+(CUR_FOLDER||'all')+'\',\''+(CUR_FOLDER?'文件夹':'全部文件')+'.zip\')">下载ZIP</button>';
 html+='</div>';
 
@@ -547,7 +552,8 @@ acts+='<button class="fs-btn" onclick="fsShowRename(\''+f.id+'\',\''+esc(f.name)
 '<button class="fs-btn danger" onclick="fsDeleteItem(\''+f.id+'\',\''+esc(f.name)+'\')">删除</button>';
 html+='<div class="fs-item"><div class="fs-cb"><input type="checkbox" class="fs-item-cb" data-id="'+f.id+'" onclick="fsToggleSelect(\''+f.id+'\')" style="display:none"></div><div class="ico '+(f.type==='folder'?'folder':'')+'"'+(f.type==='folder'?'onclick="fsNavInto(\''+f.id+'\',\''+esc(f.name)+'\')"':'')+'>'+ico+'</div>'+
 '<div class="info"><div class="name">'+esc(f.name)+'</div><div class="meta">'+meta+'</div></div><div class="acts">'+acts+'</div></div>';}
-html+='</div>';}
+
+html+='</div></div>';}
 html+='</div></div>';
 // 安全提示
 html+='<div class="fs-notice">本存储仅作临时交换使用，不宜作为长期网盘。因不可控因素导致的文件丢失或泄露，网站恕不承担相关责任。</div>';
