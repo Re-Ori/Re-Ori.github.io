@@ -3321,9 +3321,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             }
             if password:
                 share['password'] = password
-            default_pwd = (body.get('default_password') or '').strip()
-            if default_pwd:
-                share['default_password'] = default_pwd
             shares.append(share)
             self._save_shares(shares)
             log(f"创建分享: {code} → {info['name']} by {uid}")
@@ -3387,9 +3384,7 @@ document.getElementById("pwd").addEventListener("keydown",function(e){{if(e.key=
             safe.append({
                 'code': s['code'], 'name': s['name'], 'type': s.get('type', 'file'),
                 'has_password': 'password' in s,
-                'has_default_password': 'default_password' in s,
                 'password': s.get('password', ''),
-                'default_password': s.get('default_password', ''),
                 'created_at': s.get('created_at', 0),
                 'expires_at': s.get('expires_at', 0),
             })
@@ -3407,13 +3402,13 @@ document.getElementById("pwd").addEventListener("keydown",function(e){{if(e.key=
             self._send_share_page('分享链接无效', '该分享链接不存在或已被删除', None); return
         if share.get('expires_at') and time.time() > share['expires_at']:
             self._send_share_page('分享已过期', '该分享链接已过期', None); return
-        need_pwd = share.get('password') or share.get('default_password')
+        need_pwd = share.get('password')
         if need_pwd:
             owner = _bbs_check(self.headers)
             is_owner = owner and owner.get('user_id') == share.get('owner_id')
             if not is_owner:
                 vp = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('v', [None])[0]
-                if vp and (vp == share.get('password') or vp == share.get('default_password')):
+                if vp and vp == share['password']:
                     pass
                 else:
                     self._send_share_password_page(share['code']); return
@@ -3495,7 +3490,7 @@ else{ld(_root)}
   <h2 id="folder-name">''' + name + '''</h2>
   ''' + meta_html + '''
   <div id="folder-actions" style="margin-bottom:12px">
-    <a class="dl-btn primary" href="/api/bbs/files/share/''' + code + '''/download''' + ('?v=' + (data['share'].get('password') or data['share'].get('default_password','')) if data and (data['share'].get('password') or data['share'].get('default_password')) else '') + '''" id="zip-dl-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> 下载全部 ZIP</a>
+    <a class="dl-btn primary" href="/api/bbs/files/share/''' + code + '''/download''' + ('?v=' + data['share']['password'] if data and data['share'].get('password') else '') + '''" id="zip-dl-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> 下载全部 ZIP</a>
   </div>
   <div id="file-list" class="file-list"></div>
   <div id="fl-loading" style="color:#999;font-size:13px;padding:12px">加载中&hellip;</div>
@@ -3508,7 +3503,7 @@ else{ld(_root)}
                 elif ext in ('mp3','wav','ogg'): svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#af52de" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
                 elif ext in ('mp4','avi','mkv'): svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ff2d55" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>'
                 elif ext in ('pdf'): svg_icon = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'
-                qv = ('?v=' + (share.get('password') or share.get('default_password', '')) if (share.get('password') or share.get('default_password')) else '')
+                qv = ('?v=' + share['password'] if share.get('password') else '')
                 body = f'''<div class="card"><div class="file-icon">{svg_icon}</div>
   <h2>{name}</h2>
   {meta_html}
@@ -3560,14 +3555,13 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
                 self._send_json({'ok': False, 'error': 'not_found'}); return
             if share.get('expires_at') and time.time() > share['expires_at']:
                 self._send_json({'ok': False, 'error': 'expired'}); return
-            # 接受访问密码或文件默认密码
-            if password == share.get('password') or password == share.get('default_password'):
+            # 只检查访问密码
+            if password == share.get('password'):
                 self._send_json({'ok': True, 'token': password}); return
-            # 如果两者都未设置，返回空令牌（不应到达这里）
-            if not share.get('password') and not share.get('default_password'):
+            # 没有设置密码则直接放行（不应到达这里）
+            if not share.get('password'):
                 self._send_json({'ok': True, 'token': ''}); return
             self._send_json({'ok': False, 'error': 'wrong_password'}); return
-            self._return_share_content(share)
         except Exception as e:
             self._send_json({'ok': False, 'error': str(e)})
 
@@ -3617,10 +3611,7 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
             })
         share_info = {}
         if params.get('all', [None])[0]:
-            fpw = share.get('file_passwords', {})
             share_info = {
-                'has_default_password': 'default_password' in share,
-                'file_pwd_status': {k: ('__NOPASS__' if v == '__NOPASS__' else v) for k, v in fpw.items()},
                 'root_id': share.get('item_id', ''),
             }
         self._send_json({'ok':True, 'items':items, 'folder_name': info.get('name',''), 'parent_id': info.get('parent_id'), 'share': share_info})
@@ -3638,31 +3629,18 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
             self.send_error(410, "Expired"); return
         params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         log(f"[DL] code={code} params={params}")
-        # 单一密码检查：解析出最终密码值，与分享的各级密码比对
-        NOPASS = '__NOPASS__'
+        # 密码检查：只检查分享访问密码
         owner = _bbs_check(self.headers)
         is_owner = owner and owner.get('user_id') == share.get('owner_id')
         vp = params.get('v', [None])[0] or ''
-        pwd_raw = (params.get('pwd', [None])[0] or '').strip()
-        pwd_val = vp if (vp and not pwd_raw) else (pwd_raw if pwd_raw else '')
+        pwd_val = vp
         item_id = params.get('item_id', [None])[0]
         target_id = item_id or share['item_id']
         password_ok = is_owner
-        if not password_ok:
-            fpw = share.get('file_passwords', {})
-            # 单文件密码
-            if target_id in fpw:
-                password_ok = (fpw[target_id] == NOPASS) or (pwd_val == fpw[target_id])
-            # 默认密码
-            if not password_ok and share.get('default_password'):
-                password_ok = (pwd_val == share['default_password'])
-            # 分享密码（v 令牌直接比对）
-            if not password_ok and share.get('password'):
-                password_ok = (pwd_val == share['password'])
-            log(f"[DL] password_ok={password_ok} pwd_val={pwd_val!r} target_id={target_id} is_owner={is_owner} item_id={item_id}")
+        if not password_ok and share.get('password'):
+            password_ok = (pwd_val == share['password'])
         if not password_ok:
             self.send_error(403, "Password required"); return
-        log(f"[DL] password ok")
         info = self._get_file_meta(target_id)
         if not info:
             self.send_error(404, "File not found"); return
@@ -3735,32 +3713,6 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
         self.end_headers()
         self.wfile.write(data)
 
-    def _return_share_content(self, share):
-        """返回分享的内容（文件信息或文件夹列表）"""
-        info = self._get_file_meta(share['item_id'])
-        if not info:
-            self._send_json({'ok': False, 'error': 'item_deleted'}); return
-        if info.get('type') == 'file':
-            self._send_json({
-                'ok': True, 'type': 'file',
-                'name': info['name'], 'size': info.get('size', 0),
-                'mime': info.get('mime', 'application/octet-stream'),
-                'download_url': f'/api/bbs/files/share/{share["code"]}/download',
-            })
-        else:
-            meta = _bbs_load_files_meta()
-            children = [f for f in meta if f.get('parent_id') == share['item_id']]
-            items = []
-            for f in sorted(children, key=lambda x: (0 if x.get('type') == 'folder' else 1, x.get('name', '').lower())):
-                items.append({
-                    'id': f['id'], 'name': f['name'], 'type': f.get('type', 'file'),
-                    'size': f.get('size', 0), 'mime': f.get('mime', ''),
-                })
-            self._send_json({
-                'ok': True, 'type': 'folder',
-                'name': info['name'], 'items': items,
-            })
-
     def _handle_bbs_share_update(self, code):
         """POST /api/bbs/files/share/<code>/update — 修改分享设置（密码/过期时间）"""
         user = _bbs_check(self.headers)
@@ -3778,7 +3730,6 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
             self._send_json({'ok': False, 'error': 'forbidden'}); return
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
-            NOPASS = '__NOPASS__'
             # 更新访问密码
             if 'password' in body:
                 pwd = (body.get('password') or '').strip()
@@ -3786,25 +3737,6 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
                     share['password'] = pwd
                 elif 'password' in share:
                     del share['password']
-            # 更新默认密码（新文件继承）
-            if 'default_password' in body:
-                dp = (body.get('default_password') or '').strip()
-                if dp:
-                    share['default_password'] = dp
-                elif 'default_password' in share:
-                    del share['default_password']
-            # 更新单文件密码
-            if 'file_passwords' in body:
-                fpw = body['file_passwords']
-                if isinstance(fpw, dict):
-                    if 'file_passwords' not in share:
-                        share['file_passwords'] = {}
-                    for fid, pwd_val in fpw.items():
-                        pwd_val = (pwd_val or '').strip()
-                        if not pwd_val or pwd_val == NOPASS:
-                            share['file_passwords'][fid] = NOPASS
-                        else:
-                            share['file_passwords'][fid] = pwd_val
             # 更新过期时间
             if 'expires_in' in body:
                 ei = int(body['expires_in'])
