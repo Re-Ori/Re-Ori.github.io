@@ -386,7 +386,9 @@ html+='</div><div class="fs-tab-content active" id="fs-tab-files"></div><div cla
 if(ROLE==='admin')html+='<div class="fs-tab-content" id="fs-tab-admin"></div>';
 $('fs-content').innerHTML=html;
 $('fs-uname').textContent=U;
-loadFiles()}
+// 如果 URL 中包含文件夹路径，自动导航到对应目录
+var _m=location.pathname.match(/^\/Tool\/files\.html(?:\/([0-9a-f\/]+))?\/?$/);
+if(_m&&_m[1]){_loadNavFromURL()}else{loadFiles()}}
 
 // ── 文件浏览 ──
 function loadFiles(){
