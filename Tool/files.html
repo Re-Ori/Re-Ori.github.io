@@ -520,8 +520,8 @@ for(var i=0;i<PATH.length;i++){
 if(i>0)html+='<span>/</span>';
 if(i===PATH.length-1)html+='<span>'+esc(PATH[i].name)+'</span>';
 else html+='<a onclick="fsNavTo('+i+')">'+esc(PATH[i].name)+'</a>'}
-html+='</div><div class="spacer"></div><span style="font-size:12px;color:#999;display:inline-flex;gap:2px;margin-right:6px;align-items:center"><span style="cursor:pointer;color:#999;margin:0 1px" onclick="fsSetSort(\'name\',\'asc\')" id="fs-sort-name-asc">名称↑</span><span style="cursor:pointer;color:#999;margin:0 3px 0 1px" onclick="fsSetSort(\'name\',\'desc\')" id="fs-sort-name-desc">名称↓</span><span style="cursor:pointer;color:#999;margin:0 1px" onclick="fsSetSort(\'time\',\'asc\')" id="fs-sort-time-asc">时间↑</span><span style="cursor:pointer;color:#999;margin:0 3px 0 1px" onclick="fsSetSort(\'time\',\'desc\')" id="fs-sort-time-desc">时间↓</span></span><button class="fs-btn" id="fs-btn-batch" onclick="fsToggleBatch()">批量</button><button class="fs-btn" id="fs-btn-batch-del" onclick="fsBatchDelete()" style="display:none">删除</button><button class="fs-btn" id="fs-btn-batch-move" onclick="fsShowMoveDialog()" style="display:none">移动到</button><span id="fs-select-all" style="font-size:11px;color:var(--theme-color,#399FFF);cursor:pointer;display:none;margin-right:6px" onclick="fsToggleSelectAll()">全选</span><span id="fs-select-none" style="font-size:11px;color:#999;cursor:pointer;display:none;margin-right:6px" onclick="fsToggleSelectAll()">取消全选</span><button class="fs-btn" onclick="fsShowNewFolder()">+ 新建</button>';
-html+='<button class="fs-btn" onclick="fsShowShare(\''+(CUR_FOLDER||'')+'\',\''+(CUR_FOLDER?'文件夹':'根目录')+'\')">分享</button>';
+html+='</div><div class="spacer"></div><select style="font-size:12px;padding:3px 6px;border:1px solid rgba(0,0,0,0.1);border-radius:4px;outline:none;color:#555;background:transparent;margin-right:6px" onchange="fsSetSort(this.value)" id="fs-sort-select"><option value="name-asc">名称 ↑</option><option value="name-desc">名称 ↓</option><option value="time-asc">时间 ↑</option><option value="time-desc">时间 ↓</option></select><button class="fs-btn" id="fs-btn-batch" onclick="fsToggleBatch()">批量操作</button><button class="fs-btn" id="fs-btn-batch-del" onclick="fsBatchDelete()" style="display:none">删除</button><button class="fs-btn" id="fs-btn-batch-move" onclick="fsShowMoveDialog()" style="display:none">移动到</button><button class="fs-btn" id="fs-btn-batch-dl" onclick="fsBatchDownload()" style="display:none">下载</button><span id="fs-select-all" style="font-size:11px;color:var(--theme-color,#399FFF);cursor:pointer;display:none;margin-right:6px" onclick="fsToggleSelectAll()">全选</span><span id="fs-select-none" style="font-size:11px;color:#999;cursor:pointer;display:none;margin-right:6px" onclick="fsToggleSelectAll()">取消全选</span><button class="fs-btn" onclick="fsShowNewFolder()">+ 新建</button>';
+html+='<button class="fs-btn" onclick="fsShowShare(\''+(CUR_FOLDER||'')+'\',\''+(CUR_FOLDER?'文件夹':'根目录')+'\')">分享</button><button class="fs-btn" onclick="fsDownload(\''+(CUR_FOLDER||'all')+'\',\''+(CUR_FOLDER?'文件夹':'全部文件')+'.zip\')">下载ZIP</button>';
 html+='</div>';
 
 // 文件列表
@@ -561,22 +561,25 @@ var SELECTED_IDS={},BATCH_MODE=false;
 window.fsToggleBatch=function(){
   BATCH_MODE=!BATCH_MODE;
   var btn=document.getElementById('fs-btn-batch');
-  if(btn)btn.classList.toggle('on',BATCH_MODE);
+  if(btn)btn.textContent=BATCH_MODE?'取消':'批量操作';
+  // 隐藏/显示其他按钮
+  document.querySelectorAll('.fs-toolbar .fs-btn:not(#fs-btn-batch):not(#fs-btn-batch-del):not(#fs-btn-batch-move):not(#fs-btn-batch-dl), .fs-toolbar .fs-cb-label, .fs-toolbar #fs-sort-select, .fs-toolbar a, .fs-toolbar .fs-path').forEach(function(el){
+    if(BATCH_MODE&&el.closest){var p=el.closest('.fs-path');if(p&&p.contains(el)){el.style.display='none';return}}
+    if(el.id!=='fs-btn-batch'&&el.tagName!=='SPAN'&&el.tagName!=='DIV')el.style.display=BATCH_MODE?'none':''
+  });
+  // 只隐藏路径面包屑，不隐藏其他
+  var pathEl=document.querySelector('.fs-toolbar .fs-path');if(pathEl)pathEl.style.display=BATCH_MODE?'none':'';
+  var sortEl=document.getElementById('fs-sort-select');if(sortEl)sortEl.style.display=BATCH_MODE?'none':'';
   var delBtn=document.getElementById('fs-btn-batch-del');if(delBtn)delBtn.style.display=BATCH_MODE?'':'none';
   var moveBtn=document.getElementById('fs-btn-batch-move');if(moveBtn)moveBtn.style.display=BATCH_MODE?'':'none';
+  var dlBtn=document.getElementById('fs-btn-batch-dl');if(dlBtn)dlBtn.style.display=BATCH_MODE?'':'none';
   var sa=document.getElementById('fs-select-all');if(sa)sa.style.display=BATCH_MODE?'':'none';
   var sn=document.getElementById('fs-select-none');if(sn)sn.style.display='none';
   if(!BATCH_MODE){SELECTED_IDS={};fsUpdateBatchBar()}
   var cbs=document.querySelectorAll('.fs-item-cb');cbs.forEach(function(c){c.style.display=BATCH_MODE?'':'none';c.checked=false});
 };
-window.fsSetSort=function(by,order){
-  SORT_BY=by;SORT_ORDER=order;
-  var all=["name-asc","name-desc","time-asc","time-desc"];
-  for(var i=0;i<all.length;i++){
-    var el=document.getElementById("fs-sort-"+all[i]);
-    if(el)el.style.color=(by+"-"+order===all[i])?"var(--theme-color,#399FFF)":"#999";
-    if(el)el.style.fontWeight=(by+"-"+order===all[i])?"600":"normal";
-  }
+window.fsSetSort=function(val){
+  var parts=val.split('-');SORT_BY=parts[0];SORT_ORDER=parts[1];
   loadFiles()
 };
 window.fsToggleSelect=function(id){
@@ -593,8 +596,8 @@ window.fsToggleSelectAll=function(){
     if(c.checked)SELECTED_IDS[c.dataset.id]=true;else delete SELECTED_IDS[c.dataset.id]
   });
   var sa=$('fs-select-all');var sn=$('fs-select-none');
-  if(sa)sa.style.display=allChecked?'none':'';
-  if(sn)sn.style.display=allChecked?'':'none';
+  if(sa)sa.style.display=allChecked?'':'none';
+  if(sn)sn.style.display=allChecked?'none':'';
   fsUpdateBatchBar()
 }
 function fsUpdateBatchBar(){
@@ -604,8 +607,16 @@ function fsUpdateBatchBar(){
   if(bar){var ct=bar.querySelector('.count');if(ct)ct.textContent='已选 '+cnt+' 项';bar.classList.toggle('show',cnt>0)}
   if(fbar){var fc=$('fs-float-count');if(fc)fc.textContent='已选 '+cnt+' 项';}
   var bm=$('fs-batch-bar-move');if(bm)bm.disabled=cnt===0;
-  var bd=$('fs-batch-bar-del');if(bd)bd.disabled=cnt===0
+  var bd=$('fs-batch-bar-del');if(bd)bd.disabled=cnt===0;
+  var bdl=$('fs-btn-batch-dl');if(bdl)bdl.disabled=cnt===0
 }
+window.fsBatchDownload=function(){
+  var ids=Object.keys(SELECTED_IDS);
+  if(!ids.length){toast('请先选择文件');return}
+  var a=document.createElement('a');a.style.display='none';document.body.appendChild(a);
+  fetch('/api/bbs/files/batch-download',{method:'POST',headers:{'X-Auth-Token':T,'Content-Type':'application/json'},body:JSON.stringify({ids:ids})}).then(function(r){
+  if(!r.ok){toast('下载失败');return}
+  r.blob().then(function(blob){a.href=URL.createObjectURL(blob);a.download='batch_download.zip';a.click();setTimeout(function(){URL.revokeObjectURL(a.href);document.body.removeChild(a)},1000)})}).catch(function(){toast('下载失败');document.body.removeChild(a)})};
 window.fsBatchDelete=function(){
   var ids=Object.keys(SELECTED_IDS);
   if(!ids.length)return;

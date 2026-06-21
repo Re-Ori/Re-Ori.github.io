@@ -1153,6 +1153,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if req_path == '/api/bbs/files/batch-move':
             self._handle_bbs_files_batch_move()
             return
+        if req_path == '/api/bbs/files/batch-download':
+            self._handle_bbs_files_batch_download()
+            return
         if req_path.startswith('/api/bbs/files/'):
             file_parts = req_path[15:].split('/')
             if len(file_parts) == 2:
@@ -3222,6 +3225,26 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'}); return
         uid = user.get('user_id', '')
+        # 支持下载全部文件（根目录）
+        if file_id == 'all':
+            meta = _bbs_load_files_meta()
+            user_files = [f for f in meta if f.get('user_id') == uid]
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for f in user_files:
+                    if f.get('type') == 'folder': continue
+                    fp = _get_file_path(f['id'])
+                    if fp.exists():
+                        zf.writestr(f['name'], fp.read_bytes())
+            data = buf.getvalue()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/zip')
+            self.send_header('Content-Disposition', 'attachment; filename="all_files.zip"; filename*=UTF-8\'\'all_files.zip')
+            self.send_header('Content-Length', str(len(data)))
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(data)
+            return
         info = self._get_file_meta(file_id)
         if not info:
             self.send_error(404, "File not found"); return
@@ -3487,6 +3510,59 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             log(f"批量移动: {moved}/{len(ids)}项 → {target or 'root'} by {uid}")
             self._send_json({'ok': True, 'moved': moved})
         except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_files_batch_download(self):
+        """POST /api/bbs/files/batch-download — 批量下载，返回一个 ZIP"""
+        user = _bbs_check(self.headers)
+        if not user:
+            self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        uid = user.get('user_id', '')
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            ids = body.get('ids', [])
+            if not ids or not isinstance(ids, list):
+                self._send_json({'ok': False, 'error': 'ids_required'}); return
+            meta = _bbs_load_files_meta()
+            import io, zipfile
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                visited = set(); name_counts = {}
+                def _add_items(folder_ids, path=''):
+                    nonlocal name_counts
+                    for fid in folder_ids:
+                        if fid in visited: continue
+                        visited.add(fid)
+                        info = next((f for f in meta if f['id'] == fid), None)
+                        if not info: continue
+                        if info.get('user_id') != uid and user.get('role') != 'admin': continue
+                        name = info.get('name', 'untitled')
+                        if info.get('type') == 'folder':
+                            children = [f for f in meta if f.get('parent_id') == fid]
+                            _add_items([f['id'] for f in children], path + name + '/')
+                        else:
+                            fp = _get_file_path(fid)
+                            if fp.exists():
+                                arcname = path + name
+                                if arcname in name_counts:
+                                    name_counts[arcname] += 1
+                                    base, ext = (name.rsplit('.', 1) if '.' in name else (name, ''))
+                                    if ext: arcname = path + f"{base}_{name_counts[arcname]}.{ext}"
+                                    else: arcname = path + f"{name}_{name_counts[arcname]}"
+                                else:
+                                    name_counts[arcname] = 1
+                                zf.writestr(arcname, fp.read_bytes())
+                _add_items(ids)
+            data = buf.getvalue()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/zip')
+            self.send_header('Content-Disposition', 'attachment; filename="batch_download.zip"; filename*=UTF-8\'\'batch_download.zip')
+            self.send_header('Content-Length', str(len(data)))
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception as e:
+            log(f"批量下载失败: {e}")
             self._send_json({'ok': False, 'error': str(e)})
 
     # ── 分享链接 ──
