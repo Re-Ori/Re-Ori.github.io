@@ -36,7 +36,7 @@ BBS_NOTIFICATIONS_FILE = BBS_DIR / "notifications.json"
 BBS_INVITES_FILE = BBS_DIR / "invites.json"
 BBS_FILES_DIR = DATA_DIR / "files"
 BBS_FILES_META_FILE = DATA_DIR / "files_meta.json"
-STORAGE_DEFAULT_QUOTA = 256 * 1024 * 1024  # 256MB
+STORAGE_DEFAULT_QUOTA = 64 * 1024 * 1024  # 64MB
 
 def _get_file_path(file_id, filename=None):
     """获取文件存储路径，支持新旧两种命名格式"""

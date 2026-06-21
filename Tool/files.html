@@ -49,11 +49,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 .fs-upload svg{color:#bbb;margin-bottom:6px}
 .fs-upload .hint{font-size:13px;color:#999}
 .fs-upload .hint strong{color:var(--theme-color,#399FFF)}
-.fs-upbar{display:none;margin-top:10px}
-.fs-upbar.show{display:block}
-.fs-upbar .track{width:100%;height:4px;background:rgba(0,0,0,0.06);border-radius:2px;overflow:hidden;margin-bottom:4px}
-.fs-upbar .track .fill{height:100%;background:var(--theme-color,#399FFF);width:0;transition:width .2s}
-.fs-upbar .pct{font-size:11px;color:#999}
+/* 安全提示 */
+.fs-notice{font-size:11px;color:#ccc;text-align:center;padding:12px 8px 4px;line-height:1.5}
+[data-theme="dark"] .fs-notice{color:#444}
+/* 上传任务列表 */
+.fs-upload-tasks{margin-bottom:10px}
+.ut-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:8px;margin-bottom:4px;box-shadow:0 1px 3px rgba(0,0,0,0.03)}
+[data-theme="dark"] .ut-item{background:#1c1c1e;border-color:rgba(255,255,255,0.06)}
+.ut-info{flex:1;min-width:0;display:flex;gap:8px;align-items:center}
+.ut-name{font-size:12px;font-weight:600;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+[data-theme="dark"] .ut-name{color:#e0e0e0}
+.ut-size{font-size:10px;color:#999;flex-shrink:0}
+.ut-bar{width:60px;height:4px;background:rgba(0,0,0,0.06);border-radius:2px;overflow:hidden;flex-shrink:0}
+.ut-bar .ut-fill{height:100%;border-radius:2px;transition:width .2s}
+.ut-stat{font-size:11px;min-width:32px;text-align:right;flex-shrink:0}
 /* 工具栏 */
 .fs-toolbar{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
 .fs-toolbar .spacer{flex:1}
@@ -426,7 +435,9 @@ html+='</div></div><div class="fs-main">';
 html+='<div class="fs-card" style="padding:10px 14px;margin-bottom:8px"><div class="fs-qrow"><span class="fs-qlabel">已使用</span><span class="fs-qnum">'+fmtSize(used)+' / '+fmtSize(quota)+'</span></div><div class="fs-qbar"><div class="fs-qfill '+cls+'" style="width:'+pct+'%"></div></div></div>';
 
 // 上传区
-html+='<div class="fs-upload" id="fs-upload"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><div class="hint">点击或拖拽文件上传</div><div class="fs-upbar" id="fs-upbar"><div class="track"><div class="fill" id="fs-upfill"></div></div><div class="pct" id="fs-uppct">0%</div></div></div>';
+html+='<div class="fs-upload" id="fs-upload"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><div class="hint">点击或拖拽文件上传（可多选）</div></div>';
+// 上传任务列表
+html+='<div class="fs-upload-tasks" id="fs-upload-tasks"></div>';
 
 // 工具栏
 html+='<div class="fs-toolbar"><div class="fs-path">';
@@ -461,43 +472,66 @@ html+='<div class="fs-item"><div class="ico '+(f.type==='folder'?'folder':'')+'"
 '<div class="info"><div class="name">'+esc(f.name)+'</div><div class="meta">'+meta+'</div></div><div class="acts">'+acts+'</div></div>';}
 html+='</div>';}
 html+='</div></div>';
+// 安全提示
+html+='<div class="fs-notice">本存储仅作临时交换使用，不宜作为长期网盘。因不可控因素导致的文件丢失或泄露，网站恕不承担相关责任。</div>';
 $('fs-tab-files').innerHTML=html;
 // 高亮树中当前项
 var treeEl=$('fs-tree');
 if(treeEl){treeEl.querySelectorAll('.tn-cur').forEach(function(e){e.scrollIntoView({block:'nearest'})})}
 bindUpload()}
 
+var UPLOAD_TASKS=[],UPLOAD_CONCURRENCY=3;
 function bindUpload(){
 var zone=$('fs-upload');if(!zone)return;
-var inp=document.createElement('input');inp.type='file';inp.style.display='none';zone.appendChild(inp);
+var inp=document.createElement('input');inp.type='file';inp.multiple=true;inp.style.display='none';zone.appendChild(inp);
 zone.onclick=function(){inp.click()};
-inp.addEventListener('change',function(){if(inp.files)for(var _i=0;_i<inp.files.length;_i++)doUpload(inp.files[_i]);inp.value=''});
+inp.addEventListener('change',function(){if(inp.files)for(var i=0;i<inp.files.length;i++)addUploadTask(inp.files[i]);inp.value=''});
 zone.addEventListener('dragover',function(e){e.preventDefault();zone.classList.add('dragover')});
 zone.addEventListener('dragleave',function(){zone.classList.remove('dragover')});
-zone.addEventListener('drop',function(e){e.preventDefault();zone.classList.remove('dragover');if(e.dataTransfer.files&&e.dataTransfer.files[0])doUpload(e.dataTransfer.files[0])})}
-
-function doUpload(file){
-var bar=$('fs-upbar'),fill=$('fs-upfill'),pct=$('fs-uppct');
-// 先检查配额，空间不足直接拒绝，不上传
+zone.addEventListener('drop',function(e){e.preventDefault();zone.classList.remove('dragover');if(e.dataTransfer.files)for(var i=0;i<e.dataTransfer.files.length;i++)addUploadTask(e.dataTransfer.files[i])})}
+function addUploadTask(file){
+UPLOAD_TASKS.push({id:Date.now()+'_'+Math.random().toString(36).slice(2,6),file:file,name:file.name,size:file.size,progress:0,status:'queued',error:''});
+renderTasks();processQueue()}
+function renderTasks(){
+var c=$('fs-upload-tasks');if(!c)return;
+if(!UPLOAD_TASKS.length){c.innerHTML='';return}
+var h='';
+for(var i=0;i<UPLOAD_TASKS.length;i++){
+var t=UPLOAD_TASKS[i];var st=t.status==='queued'?'排队中':(t.status==='uploading'?t.progress+'%':(t.status==='done'?'完成':'失败'));
+var sc=t.status==='queued'?'#999':(t.status==='uploading'?'#399FFF':(t.status==='done'?'#34c759':'#ff3b30'));
+var bw=t.status==='uploading'?t.progress:(t.status==='done'?100:(t.status==='error'?100:0));
+var bg=t.status==='done'?'#34c759':(t.status==='error'?'#ff3b30':'#399FFF');
+h+='<div class="ut-item"><div class="ut-info"><span class="ut-name">'+esc(t.name)+'</span><span class="ut-size">'+fmtSize(t.size)+'</span></div>'+
+'<div class="ut-bar"><div class="ut-fill" style="width:'+bw+'%;background:'+bg+'"></div></div>'+
+'<div class="ut-stat" style="color:'+sc+'">'+st+'</div></div>';}
+c.innerHTML=h}
+function processQueue(){
+var active=0;
+for(var i=0;i<UPLOAD_TASKS.length;i++){if(UPLOAD_TASKS[i].status==='uploading')active++}
+for(var i=0;i<UPLOAD_TASKS.length&&active<UPLOAD_CONCURRENCY;i++){
+if(UPLOAD_TASKS[i].status==='queued'){active++;uploadFile(UPLOAD_TASKS[i])}}}
+function uploadFile(task){
+task.status='uploading';renderTasks();
+// 先查配额
 api('GET','/api/bbs/files').then(function(r){
-if(!r.ok){toast('无法检查存储空间');return}
+if(!r.ok){task.status='error';task.error='无法检查空间';renderTasks();processQueue();return}
 var used=r.used||0,quota=r.quota||0;
-if(used+file.size>quota){toast('空间不足！已用 '+fmtSize(used)+'，容量 '+fmtSize(quota)+'，文件 '+fmtSize(file.size));return}
-// 配额足够，开始上传
-if(bar)bar.classList.add('show');if(fill)fill.style.width='0%';if(pct)pct.textContent='0%';
-var fd=new FormData();fd.append('file',file);
+if(used+task.file.size>quota){task.status='error';task.error='空间不足';renderTasks();toast('空间不足：'+task.name);processQueue();return}
+var fd=new FormData();fd.append('file',task.file);
 if(CUR_FOLDER)fd.append('folder_id',CUR_FOLDER);
 var xhr=new XMLHttpRequest();
 xhr.open('POST','/api/bbs/files/upload',true);if(T)xhr.setRequestHeader('X-Auth-Token',T);
-xhr.upload.onprogress=function(e){if(e.lengthComputable){var p=Math.round(e.loaded/e.total*100);if(fill)fill.style.width=p+'%';if(pct)pct.textContent=p+'%'}};
+xhr.upload.onprogress=function(e){if(e.lengthComputable){task.progress=Math.round(e.loaded/e.total*100);renderTasks()}};
 xhr.onload=function(){try{
 var r2=JSON.parse(xhr.responseText);
-if(r2.ok){toast('上传成功');loadFiles()}
-else toast('上传失败: '+(r2.error||'未知'))
-}catch(e){toast('上传失败')}if(bar)bar.classList.remove('show')};
-xhr.onerror=function(){toast('上传失败');if(bar)bar.classList.remove('show')};
-xhr.send(fd)
-}).catch(function(){toast('检查空间失败')})}
+if(r2.ok){task.status='done';task.progress=100}else{task.status='error';task.error=r2.error||'上传失败'}
+}catch(e){task.status='error';task.error='解析失败'}
+renderTasks();processQueue();checkAllDone()};
+xhr.onerror=function(){task.status='error';task.error='网络错误';renderTasks();processQueue()};
+xhr.send(fd)}).catch(function(){task.status='error';task.error='检查配额失败';renderTasks()})}
+function checkAllDone(){
+for(var i=0;i<UPLOAD_TASKS.length;i++){if(UPLOAD_TASKS[i].status!=='done'&&UPLOAD_TASKS[i].status!=='error')return}
+setTimeout(function(){loadFiles();UPLOAD_TASKS=[];renderTasks()},1200)}
 
 window.fsNavTo=function(idx){
 if(idx>=PATH.length-1)return;
