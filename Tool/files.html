@@ -413,6 +413,7 @@ function _loadNavFromURL(){
       else{found=false;break}
     }
     if(found){PATH=path;loadFiles();}
+    else{CUR_FOLDER=null;PATH=[{id:null,name:'根目录'}];_updateNavURL();loadFiles()}
   });
 }
 // 监听浏览器后退/前进
@@ -862,7 +863,7 @@ if(r.ok){toast('已更新');loadShares()}else toast('更新失败: '+(r.error||'
 
 	// ── 管理面板 ──
 	var _adminUsers=[],_adminSharesLoaded=[];
-	function loadAdmin(){
+	window.loadAdmin=function(){
 	var c=$('fs-tab-admin');if(!c)return;
 	c.innerHTML='<div style="text-align:center;padding:40px;color:#bbb;">加载中…</div>';
 	api('GET','/api/bbs/files/admin/users').then(function(r){
@@ -914,9 +915,9 @@ if(r.ok){toast('已更新');loadShares()}else toast('更新失败: '+(r.error||'
 	for(var i=0;i<showShares.length;i++){
 	var s=showShares[i];var pwd=s.has_password?'[加密] ':'';
 	var ownerExists=false;for(var _ui=0;_ui<users.length;_ui++){if(users[_ui].id===s.owner_id){ownerExists=true;break}}
-	var ownerDisplay=ownerExists?esc(s.owner_name||s.owner_id||'?'):'[ç¨æ·ä¸å­å¨-'+s.owner_id+']';
+	var ownerDisplay=ownerExists?esc(s.owner_name||s.owner_id||'?'):'[用户不存在-'+s.owner_id+']';
 	var ownerStyle=ownerExists?'':' style="color:#ff3b30"';
-	var owner='<span class="uname"'+ownerStyle+' onclick="fsShowUserSharesPage(\''+esc(s.owner_id)+'\',\''+(ownerExists?esc(s.owner_name||s.owner_id||'?'):'[ç¨æ·ä¸å­å¨-'+s.owner_id+']')+'\')">'+ownerDisplay+'</span>';
+	var owner='<span class="uname"'+ownerStyle+' onclick="fsShowUserSharesPage(\''+esc(s.owner_id)+'\',\''+(ownerExists?esc(s.owner_name||s.owner_id||'?'):'[用户不存在-'+s.owner_id+']')+'\')">'+ownerDisplay+'</span>';
 	html+='<div class="fs-share-item"><div class="info"><div class="name">'+pwd+esc(s.name)+'</div><div class="meta">'+owner+' · '+fmtTime(s.created_at)+(s.expires_at?' · 过期:'+fmtTime(s.expires_at):'')+'</div></div>'+
 	'<a class="fs-btn" href="/Tool/files.html?share='+s.code+'" target="_blank">打开</a>'+
 	'<button class="fs-btn danger" onclick="fsAdminDelShare(\''+s.code+'\')">删除</button></div>';}}
@@ -947,12 +948,12 @@ if(r.ok){toast('已更新');loadShares()}else toast('更新失败: '+(r.error||'
 	// 在 fs-main 中渲染
 	var mainEl=document.querySelector('#fs-tab-admin .fs-main');
 	if(!mainEl)return;
-	var html='<div style="margin-bottom:10px"><button class="fs-btn" onclick="loadAdmin()">\xe2\x86\x90 \xe8\xbf\x94\xe5\x9b\x9e</button> <strong>'+esc(window._adminUname)+'</strong> \xe7\x9a\x84\xe6\x96\x87\xe4\xbb\xb6</div>'+
-	'<div class="fs-layout"><div class="fs-sidebar"><div class="fs-sidebar-title">\xe6\x96\x87\xe4\xbb\xb6\xe5\xa4\xb9</div><div class="fs-tree" id="adm-tree">';
+	var html='<div style="margin-bottom:10px"><button class="fs-btn" onclick="loadAdmin()">\xe2\x86\x90 返回</button> <strong>'+esc(window._adminUname)+'</strong> 的文件</div>'+
+	'<div class="fs-layout"><div class="fs-sidebar"><div class="fs-sidebar-title">文件夹</div><div class="fs-tree" id="adm-tree">';
 	var rootCls=!curId?' tn-cur':'';
 	html+='<div class="tn-item'+rootCls+'" onclick="_adminNavTo(0)" style="padding-left:12px;font-weight:600">'+
 	'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'+
-	'<span>\xe6\xa0\xb9\xe7\x9b\xae\xe5\xbd\x95</span></div>';
+	'<span>根目录</span></div>';
 	html+=_adminBuildTree(folders,null,1)+'</div></div><div class="fs-main">';
 	// 面包屑
 	html+='<div class="fs-toolbar"><div class="fs-path">';
@@ -964,20 +965,20 @@ if(r.ok){toast('已更新');loadShares()}else toast('更新失败: '+(r.error||'
 	html+='</div><div class="spacer"></div></div>';
 	// 文件列表
 	var items=cmap[curId||'']||[];
-	if(items.length===0)html+='<div class="fs-empty">\xe6\x96\x87\xe4\xbb\xb6\xe5\xa4\xb9\xe4\xb8\xba\xe7\xa9\xba</div>';
+	if(items.length===0)html+='<div class="fs-empty">文件夹\xe4\xb8\xba\xe7\xa9\xba</div>';
 	else{
 	html+='<div class="fs-list">';
 	for(var i=0;i<items.length;i++){
 	var f=items[i];
 	var ico=f.type==='folder'?'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>':'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#399FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-	var meta=f.type==='folder'?'\xe6\x96\x87\xe4\xbb\xb6\xe5\xa4\xb9':(fmtSize(f.size)+(f.uploaded_at?' \xc2\xb7 '+fmtTime(f.uploaded_at):''));
+	var meta=f.type==='folder'?'文件夹':(fmtSize(f.size)+(f.uploaded_at?' \xc2\xb7 '+fmtTime(f.uploaded_at):''));
 	var acts='';
 	if(f.type==='folder'){
-	acts='<button class="fs-btn" data-fid="'+f.id+'" data-act="dlzip">\xe4\xb8\x8b\xe8\xbd\xbdZIP</button>';
-	acts+='<button class="fs-btn" data-fid="'+f.id+'" data-fn="'+esc(f.name)+'" data-act="del">\xe5\x88\xa0\xe9\x99\xa4</button>';}
+	acts='<button class="fs-btn" data-fid="'+f.id+'" data-act="dlzip">下载ZIP</button>';
+	acts+='<button class="fs-btn" data-fid="'+f.id+'" data-fn="'+esc(f.name)+'" data-act="del">删除</button>';}
 	else{
-	acts='<button class="fs-btn" data-fid="'+f.id+'" data-fn="'+esc(f.name)+'" data-act="dl">\xe4\xb8\x8b\xe8\xbd\xbd</button>';
-	acts+='<button class="fs-btn danger" data-fid="'+f.id+'" data-fn="'+esc(f.name)+'" data-act="del">\xe5\x88\xa0\xe9\x99\xa4</button>';}
+	acts='<button class="fs-btn" data-fid="'+f.id+'" data-fn="'+esc(f.name)+'" data-act="dl">下载</button>';
+	acts+='<button class="fs-btn danger" data-fid="'+f.id+'" data-fn="'+esc(f.name)+'" data-act="del">删除</button>';}
 	html+='<div class="fs-item"><div class="ico '+(f.type==='folder'?'folder':'')+'"'+(f.type==='folder'?'onclick="_adminNavInto(\''+f.id+'\',\''+esc(f.name)+'\')"':'')+'>'+ico+'</div>'+
 	'<div class="info"><div class="name">'+esc(f.name)+'</div><div class="meta">'+meta+'</div></div><div class="acts">'+acts+'</div></div>';}
 	html+='</div>';}
