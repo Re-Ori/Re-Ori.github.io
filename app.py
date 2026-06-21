@@ -3089,13 +3089,22 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         used = sum(f.get('size', 0) for f in meta if f.get('user_id') == uid and f.get('type') != 'folder')
         quota = self._get_user_quota(uid)
 
+        sort_by = params.get('sort_by', ['name'])[0]
+        sort_order = params.get('sort_order', ['asc'])[0]
+        rev = sort_order == 'desc'
+
         safe = []
-        for f in sorted(files, key=lambda x: (0 if x.get('type') == 'folder' else 1, x.get('name', '').lower())):
+        for f in files:
             entry = {'id': f['id'], 'name': f['name'], 'type': f.get('type', 'file'), 'size': f.get('size', 0)}
             if f.get('type') == 'file':
                 entry['mime'] = f.get('mime', 'application/octet-stream')
                 entry['uploaded_at'] = f.get('uploaded_at', 0)
             safe.append(entry)
+        sort_key = lambda x: (0 if x['type'] == 'folder' else 1,
+                               -x.get('uploaded_at', 0) if sort_by == 'time' else (
+                                   x['name'].lower() if sort_by == 'name' else ''),
+                               x['name'].lower())
+        safe.sort(key=sort_key, reverse=False)
         self._send_json({'ok': True, 'files': safe, 'quota': quota, 'used': used})
 
     def _handle_bbs_folder_create(self):

@@ -105,6 +105,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 .fs-move-target{font-size:12px;color:#999;margin-bottom:8px;padding:6px 10px;background:rgba(57,159,255,0.04);border-radius:6px;border:1px solid rgba(57,159,255,0.1)}
 /* 重命名内联编辑 */
 .fs-rename-input{font-size:14px;font-weight:600;padding:2px 6px;border:1px solid var(--theme-color,#399FFF);border-radius:4px;outline:none;background:rgba(57,159,255,0.04);color:inherit;width:100%;box-sizing:border-box}
+/* 多选模式 */
+.fs-ms-toggle{font-size:12px;padding:4px 10px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;cursor:pointer;background:transparent;color:#8e8e93;transition:all .15s;display:inline-flex;align-items:center;gap:4px}
+.fs-ms-toggle:hover{border-color:var(--theme-color,#399FFF);color:var(--theme-color,#399FFF)}
+.fs-ms-toggle.on{background:var(--theme-color,#399FFF);color:#fff;border-color:var(--theme-color,#399FFF)}
+[data-theme="dark"] .fs-ms-toggle{color:#aaa;border-color:rgba(255,255,255,0.12)}
+/* 悮浮操作栏 */
+.fs-float-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;background:#fff;border-top:1px solid rgba(0,0,0,0.06);padding:10px 16px;display:none;align-items:center;justify-content:center;gap:10px;box-shadow:0 -2px 12px rgba(0,0,0,0.06);backdrop-filter:blur(12px)}
+.fs-float-bar.show{display:flex}
+.fs-float-bar .count{font-size:13px;color:#555;margin-right:auto;font-weight:600}
+[data-theme="dark"] .fs-float-bar{background:#1c1c1e;border-color:rgba(255,255,255,0.06)}
+[data-theme="dark"] .fs-float-bar .count{color:#aaa}
+@media(max-width:720px){.fs-float-bar{padding:8px 10px;gap:6px;flex-wrap:wrap}.fs-float-bar .count{width:100%;text-align:center;margin-right:0;margin-bottom:4px}}
+
 [data-theme="dark"] .fs-rename-input{background:rgba(57,159,255,0.08);color:#e0e0e0}
 /* 模态框 */
 .fs-modal{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center}
@@ -456,7 +469,7 @@ var c=$('fs-tab-files');if(!c)return;
 c.innerHTML='<div style="text-align:center;padding:40px;color:#bbb;">加载中…</div>';
 // 并行获取文件列表和文件夹树
 Promise.all([
-api('GET','/api/bbs/files'+'?folder_id='+(CUR_FOLDER||'')),
+api('GET','/api/bbs/files'+'?folder_id='+(CUR_FOLDER||'')+'&sort_by='+SORT_BY+'&sort_order='+SORT_ORDER),
 api('GET','/api/bbs/files/tree')
 ]).then(function(resp){
 var r=resp[0];var treeResp=resp[1];
@@ -507,8 +520,8 @@ for(var i=0;i<PATH.length;i++){
 if(i>0)html+='<span>/</span>';
 if(i===PATH.length-1)html+='<span>'+esc(PATH[i].name)+'</span>';
 else html+='<a onclick="fsNavTo('+i+')">'+esc(PATH[i].name)+'</a>'}
-html+='</div><div class="spacer"></div><button class="fs-btn" onclick="fsShowNewFolder()">+ 新建</button>';
-if(CUR_FOLDER)html+='<button class="fs-btn" onclick="fsShowShare(\''+CUR_FOLDER+'\',\'文件夹\')">分享</button>';
+html+='</div><div class="spacer"></div><span style="font-size:12px;color:#999;display:inline-flex;gap:2px;margin-right:6px;align-items:center"><span style="cursor:pointer;color:#999;margin:0 1px" onclick="fsSetSort(\'name\',\'asc\')" id="fs-sort-name-asc">名称↑</span><span style="cursor:pointer;color:#999;margin:0 3px 0 1px" onclick="fsSetSort(\'name\',\'desc\')" id="fs-sort-name-desc">名称↓</span><span style="cursor:pointer;color:#999;margin:0 1px" onclick="fsSetSort(\'time\',\'asc\')" id="fs-sort-time-asc">时间↑</span><span style="cursor:pointer;color:#999;margin:0 3px 0 1px" onclick="fsSetSort(\'time\',\'desc\')" id="fs-sort-time-desc">时间↓</span></span><button class="fs-btn" id="fs-btn-batch" onclick="fsToggleBatch()">批量</button><button class="fs-btn" id="fs-btn-batch-del" onclick="fsBatchDelete()" style="display:none">删除</button><button class="fs-btn" id="fs-btn-batch-move" onclick="fsShowMoveDialog()" style="display:none">移动到</button><span id="fs-select-all" style="font-size:11px;color:var(--theme-color,#399FFF);cursor:pointer;display:none;margin-right:6px" onclick="fsToggleSelectAll()">全选</span><span id="fs-select-none" style="font-size:11px;color:#999;cursor:pointer;display:none;margin-right:6px" onclick="fsToggleSelectAll()">取消全选</span><button class="fs-btn" onclick="fsShowNewFolder()">+ 新建</button>';
+html+='<button class="fs-btn" onclick="fsShowShare(\''+(CUR_FOLDER||'')+'\',\''+(CUR_FOLDER?'文件夹':'根目录')+'\')">分享</button>';
 html+='</div>';
 
 // 文件列表
@@ -531,7 +544,7 @@ acts='<button class="fs-btn" onclick="fsDownload(\''+f.id+'\',\''+esc(f.name)+'\
 }
 acts+='<button class="fs-btn" onclick="fsShowRename(\''+f.id+'\',\''+esc(f.name)+'\')">重命名</button>'+
 '<button class="fs-btn danger" onclick="fsDeleteItem(\''+f.id+'\',\''+esc(f.name)+'\')">删除</button>';
-html+='<div class="fs-item"><div class="fs-cb"><input type="checkbox" class="fs-item-cb" data-id="'+f.id+'" onclick="fsToggleSelect(\''+f.id+'\')"></div><div class="ico '+(f.type==='folder'?'folder':'')+'"'+(f.type==='folder'?'onclick="fsNavInto(\''+f.id+'\',\''+esc(f.name)+'\')"':'')+'>'+ico+'</div>'+
+html+='<div class="fs-item"><div class="fs-cb"><input type="checkbox" class="fs-item-cb" data-id="'+f.id+'" onclick="fsToggleSelect(\''+f.id+'\')" style="display:none"></div><div class="ico '+(f.type==='folder'?'folder':'')+'"'+(f.type==='folder'?'onclick="fsNavInto(\''+f.id+'\',\''+esc(f.name)+'\')"':'')+'>'+ico+'</div>'+
 '<div class="info"><div class="name">'+esc(f.name)+'</div><div class="meta">'+meta+'</div></div><div class="acts">'+acts+'</div></div>';}
 html+='</div>';}
 html+='</div></div>';
@@ -543,31 +556,57 @@ var treeEl=$('fs-tree');
 if(treeEl){treeEl.querySelectorAll('.tn-cur').forEach(function(e){e.scrollIntoView({block:'nearest'})})}
 bindUpload()}
 
-var UPLOAD_TASKS=[],UPLOAD_CONCURRENCY=3;
-var SELECTED_IDS={};
-function fsToggleSelect(id){
+var UPLOAD_TASKS=[],UPLOAD_CONCURRENCY=3,SORT_BY="name",SORT_ORDER="asc";
+var SELECTED_IDS={},BATCH_MODE=false;
+window.fsToggleBatch=function(){
+  BATCH_MODE=!BATCH_MODE;
+  var btn=document.getElementById('fs-btn-batch');
+  if(btn)btn.classList.toggle('on',BATCH_MODE);
+  var delBtn=document.getElementById('fs-btn-batch-del');if(delBtn)delBtn.style.display=BATCH_MODE?'':'none';
+  var moveBtn=document.getElementById('fs-btn-batch-move');if(moveBtn)moveBtn.style.display=BATCH_MODE?'':'none';
+  var sa=document.getElementById('fs-select-all');if(sa)sa.style.display=BATCH_MODE?'':'none';
+  var sn=document.getElementById('fs-select-none');if(sn)sn.style.display='none';
+  if(!BATCH_MODE){SELECTED_IDS={};fsUpdateBatchBar()}
+  var cbs=document.querySelectorAll('.fs-item-cb');cbs.forEach(function(c){c.style.display=BATCH_MODE?'':'none';c.checked=false});
+};
+window.fsSetSort=function(by,order){
+  SORT_BY=by;SORT_ORDER=order;
+  var all=["name-asc","name-desc","time-asc","time-desc"];
+  for(var i=0;i<all.length;i++){
+    var el=document.getElementById("fs-sort-"+all[i]);
+    if(el)el.style.color=(by+"-"+order===all[i])?"var(--theme-color,#399FFF)":"#999";
+    if(el)el.style.fontWeight=(by+"-"+order===all[i])?"600":"normal";
+  }
+  loadFiles()
+};
+window.fsToggleSelect=function(id){
   if(SELECTED_IDS[id]){delete SELECTED_IDS[id]}else{SELECTED_IDS[id]=true}
   fsUpdateBatchBar();
   var cbs=document.querySelectorAll('.fs-item-cb[data-id="'+id+'"]');
   cbs.forEach(function(c){c.checked=!!SELECTED_IDS[id]})
 }
-function fsToggleSelectAll(){
+window.fsToggleSelectAll=function(){
   var items=document.querySelectorAll('.fs-item-cb');
   var allChecked=true;
   items.forEach(function(c){if(!c.checked)allChecked=false});
   items.forEach(function(c){c.checked=!allChecked;
     if(c.checked)SELECTED_IDS[c.dataset.id]=true;else delete SELECTED_IDS[c.dataset.id]
   });
+  var sa=$('fs-select-all');var sn=$('fs-select-none');
+  if(sa)sa.style.display=allChecked?'none':'';
+  if(sn)sn.style.display=allChecked?'':'none';
   fsUpdateBatchBar()
 }
 function fsUpdateBatchBar(){
   var bar=$('fs-batch-bar');
+  var fbar=$('fs-float-bar');var fc=$('fs-float-count');
   var cnt=Object.keys(SELECTED_IDS).length;
   if(bar){var ct=bar.querySelector('.count');if(ct)ct.textContent='已选 '+cnt+' 项';bar.classList.toggle('show',cnt>0)}
+  if(fbar){var fc=$('fs-float-count');if(fc)fc.textContent='已选 '+cnt+' 项';}
   var bm=$('fs-batch-bar-move');if(bm)bm.disabled=cnt===0;
   var bd=$('fs-batch-bar-del');if(bd)bd.disabled=cnt===0
 }
-function fsBatchDelete(){
+window.fsBatchDelete=function(){
   var ids=Object.keys(SELECTED_IDS);
   if(!ids.length)return;
   if(!confirm('确定删除选中的 '+ids.length+' 项吗？'))return;
@@ -575,7 +614,7 @@ function fsBatchDelete(){
     if(r.ok){toast('已删除 '+ids.length+' 项');SELECTED_IDS={};loadFiles()}
     else toast('删除失败: '+(r.error||'未知'))})
 }
-function fsShowMoveDialog(){
+window.fsShowMoveDialog=function(){
   var ids=Object.keys(SELECTED_IDS);
   if(!ids.length){toast('请先选择文件');return}
   window._fsMoveIds=ids;window._fsMoveTarget=null;
@@ -624,7 +663,7 @@ window.fsMoveSel=function(el){
   var btn=$('fs-move-btn');
   if(btn){btn.disabled=false;btn.textContent='移动到 '+(window._fsMoveTarget?el.textContent.trim():'根目录')}
 };
-function fsDoMove(){
+window.fsDoMove=function(){
   var ids=window._fsMoveIds;var target=window._fsMoveTarget;
   if(!ids||!ids.length)return;
   $('fs-move-modal').classList.remove('show');
@@ -697,14 +736,14 @@ if(r2.ok){task.status='done';task.progress=100}else{task.status='error';task.err
 renderTasks();processQueue();checkAllDone()};
 xhr.onerror=function(){task.status='error';task.error='网络错误';renderTasks();processQueue()};
 task.xhr=xhr;xhr.send(fd)}).catch(function(){task.status='error';task.error='检查配额失败';renderTasks()})}
-function cancelUpload(id){
+window.cancelUpload=function(id){
 for(var i=0;i<UPLOAD_TASKS.length;i++){if(UPLOAD_TASKS[i].id===id){
 var t=UPLOAD_TASKS[i];if(t.status==='uploading'&&t.xhr){t.xhr.abort()}
 t.status='cancelled';UPLOAD_TASKS.splice(i,1);renderTasks();processQueue();return}}
 toast('未找到上传任务')}
 function checkAllDone(){
-for(var i=0;i<UPLOAD_TASKS.length;i++){if(UPLOAD_TASKS[i].status!=='done'&&UPLOAD_TASKS[i].status!=='error')return}
-setTimeout(function(){loadFiles();UPLOAD_TASKS=[];renderTasks()},1200)}
+for(var i=0;i<UPLOAD_TASKS.length;i++){if(UPLOAD_TASKS[i].status!=='done'&&UPLOAD_TASKS[i].status!=='error'&&UPLOAD_TASKS[i].status!=='cancelled')return}
+setTimeout(function(){loadFiles();UPLOAD_TASKS=[];renderTasks()},400)}
 
 window.fsNavTo=function(idx){
 if(idx>=PATH.length-1)return;
