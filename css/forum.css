@@ -145,6 +145,16 @@
 .bbs-role-badge.author { background: rgba(52,199,89,0.12); color: #34c759; }
 .bbs-role-badge.custom { background: rgba(175,82,222,0.12); color: #af52de; }
 .bbs-role-badge.custom-outline { background: transparent; color: #af52de; border: 1px solid rgba(175,82,222,0.3); }
+.bbs-role-badge.review-pending { background: rgba(255,149,0,0.15); color: #ff9500; }
+.bbs-role-badge.review-rejected { background: rgba(255,59,48,0.12); color: #ff3b30; }
+.bbs-topic-pending { border-left: 3px solid #ff9500; background: rgba(255,149,0,0.04); }
+.bbs-topic-rejected { border-left: 3px solid #ff3b30; opacity: 0.7; background: rgba(255,59,48,0.04); }
+[data-theme="dark"] .bbs-topic-pending { background: rgba(255,149,0,0.06); }
+[data-theme="dark"] .bbs-topic-rejected { background: rgba(255,59,48,0.06); }
+.bbs-reply-item.bbs-reply-pending { background: rgba(255,149,0,0.04); border-left: 3px solid #ff9500; padding-left: 13px; }
+.bbs-reply-item.bbs-reply-rejected { background: rgba(255,59,48,0.04); border-left: 3px solid #ff3b30; padding-left: 13px; opacity: 0.7; }
+[data-theme="dark"] .bbs-reply-item.bbs-reply-pending { background: rgba(255,149,0,0.06); }
+[data-theme="dark"] .bbs-reply-item.bbs-reply-rejected { background: rgba(255,59,48,0.06); }
 .bbs-author-link {
   cursor: pointer; color: var(--theme-color,#399FFF);
   transition: opacity 0.15s;
@@ -778,3 +788,63 @@
   border-color: rgba(255,255,255,0.1) !important;
   color: #ddd !important;
 }
+
+/* ── 暗色模式：综合优化 ── */
+[data-theme="dark"] .bbs-detect-box p { color: #999; }
+[data-theme="dark"] .bbs-topic-meta { color: #777; }
+[data-theme="dark"] .bbs-topic-stats { color: #777; }
+[data-theme="dark"] .bbs-detail-meta { color: #777; }
+[data-theme="dark"] .bbs-detail-back { color: #888; }
+[data-theme="dark"] .bbs-detail-back:hover { color: #399FFF; }
+[data-theme="dark"] .bbs-page-dots { color: #666; }
+[data-theme="dark"] .bbs-page-info { color: #666; }
+[data-theme="dark"] .bbs-post-body input::placeholder { color: #555; }
+[data-theme="dark"] .bbs-fab { box-shadow: 0 4px 16px rgba(57,159,255,0.3); }
+[data-theme="dark"] .bbs-notif-del { color: transparent; }
+[data-theme="dark"] .bbs-notif-item:hover .bbs-notif-del { color: #666; }
+[data-theme="dark"] .bbs-notif-del:hover { color: #ff3b30 !important; }
+[data-theme="dark"] .bbs-reply-to-btn { color: #666; }
+[data-theme="dark"] .bbs-notif-preview { color: #666; }
+[data-theme="dark"] .bbs-notif-time { color: #666; }
+[data-theme="dark"] .bbs-img-dialog { background: rgba(0,0,0,0.55); }
+[data-theme="dark"] .bbs-modal-overlay { background: rgba(0,0,0,0.55); }
+
+/* ── 暗色模式：控制中心图标按钮 ── */
+[data-theme="dark"] .bbs-cc-section-title { color: #aaa; }
+[data-theme="dark"] .bbs-post-body { color: #ccc; }
+
+/* ── 暗色模式：内联回复框 ── */
+[data-theme="dark"] #bbs-inline-reply { background: rgba(255,255,255,0.03) !important; }
+[data-theme="dark"] #bbs-inline-reply textarea {
+  background: rgba(40,42,65,0.8) !important;
+  border-color: rgba(255,255,255,0.1) !important;
+  color: #ddd !important;
+}
+
+/* ── 暗色模式：其他设置折叠面板 ── */
+[data-theme="dark"] .bbs-modal select,
+[data-theme="dark"] .bbs-user-form-select {
+  background: rgba(40,42,65,0.8) !important;
+  border-color: rgba(255,255,255,0.1) !important;
+  color: #ddd !important;
+}
+[data-theme="dark"] .bbs-modal label { color: #aaa !important; }
+
+/* ── 暗色模式：审核页 ── */
+[data-theme="dark"] .bbs-review-header { color: #aaa; }
+
+/* ── 暗色模式：控制中心关闭按钮 ── */
+.bbs-cc-close {
+  cursor: pointer; font-size: 22px; color: #999; line-height: 1;
+  padding: 4px; border-radius: 4px; transition: color 0.15s;
+  display: inline-flex;
+}
+.bbs-cc-close:hover { color: #333; }
+[data-theme="dark"] .bbs-cc-close { color: #666; }
+[data-theme="dark"] .bbs-cc-close:hover { color: #ddd; }
+
+/* ── 暗色模式：通知铃铛 ── */
+.bbs-bell-icon { color: #888; }
+[data-theme="dark"] .bbs-bell-icon { color: #888; }
+#bbs-notif-bell:hover .bbs-bell-icon { color: #399FFF; }
+[data-theme="dark"] #bbs-notif-bell:hover .bbs-bell-icon { color: #5aadff; }

@@ -35,26 +35,39 @@ BBS_TOKENS_FILE = BBS_DIR / "tokens.json"
 BBS_NOTIFICATIONS_FILE = BBS_DIR / "notifications.json"
 BBS_INVITES_FILE = BBS_DIR / "invites.json"
 BBS_FILES_DIR = DATA_DIR / "files"
-BBS_FILES_META_FILE = DATA_DIR / "files_meta.json"
+BBS_FILES_META_FILE = BBS_FILES_DIR / "files_meta.json"
 STORAGE_DEFAULT_QUOTA = 64 * 1024 * 1024  # 64MB
 
-def _get_file_path(file_id, filename=None):
-    """获取文件存储路径，支持新旧两种命名格式"""
-    # 新格式：{file_id}__{sanitized_name}
+def _get_file_path(file_id, filename=None, user_id=None):
+    """获取文件存储路径，按 {user_id}/{file_id}__{name} 组织"""
+    if user_id:
+        user_dir = BBS_FILES_DIR / str(user_id)
+        if filename:
+            safe_name = "".join(c if c.isalnum() or c in '.-_ ' else '_' for c in filename).strip()
+            safe_name = safe_name[:80]
+            return user_dir / f"{file_id}__{safe_name}"
+        # 在用户目录下精确/前缀匹配
+        fp = user_dir / file_id
+        if fp.exists():
+            return fp
+        if user_dir.exists():
+            for f in user_dir.iterdir():
+                if f.name.startswith(file_id + "__"):
+                    return f
+        return fp
+    # 无 user_id 时兼容旧路径
     if filename:
         safe_name = "".join(c if c.isalnum() or c in '.-_ ' else '_' for c in filename).strip()
-        safe_name = safe_name[:80]  # 限制长度
+        safe_name = safe_name[:80]
         return BBS_FILES_DIR / f"{file_id}__{safe_name}"
-    # 精确匹配（旧格式）
     fp = BBS_FILES_DIR / file_id
     if fp.exists():
         return fp
-    # 前缀匹配（新格式）
     if BBS_FILES_DIR.exists():
         for f in BBS_FILES_DIR.iterdir():
             if f.name.startswith(file_id + "__"):
                 return f
-    return fp  # 返回原路径，调用方会处理不存在的情况
+    return fp
 
 def _migrate_files_dir():
     """将文件从旧目录 (.data/bbs/files) 迁移到新目录 (.data/files)"""
@@ -529,6 +542,16 @@ def _bbs_all_topics():
         t['author_role'] = info['role'] if info else ''
         t['author_tags'] = info['tags'] if info else []
         t['reply_count'] = len(t.get('replies', []))
+        # 确保 review_status 有默认值（兼容旧数据）
+        if 'review_status' not in t:
+            t['review_status'] = 'approved'
+        # 统计待审核回复数
+        review_reply_count = 0
+        for r in t.get('replies', []):
+            rs = r.get('review_status', 'approved')
+            if rs == 'pending':
+                review_reply_count += 1
+        t['review_reply_pending'] = review_reply_count
         raw = t.get('content', '')
         plain = raw
         plain = __import__('re').sub(r'```[\s\S]*?```|`([^`]+)`', r'\1', plain)
@@ -587,6 +610,33 @@ def _bbs_ensure_storage_quota(users):
     for u in users:
         if 'storage_quota' not in u:
             u['storage_quota'] = STORAGE_DEFAULT_QUOTA
+            changed = True
+    return changed
+
+def _bbs_ensure_user_extras(users):
+    """确保所有用户有 review_required、muted_post、muted_reply 字段"""
+    changed = False
+    for u in users:
+        # 从旧字段迁移 review_required → review_post + review_reply
+        old_rr = u.pop('review_required', None) if 'review_required' in u else None
+        if 'review_post' not in u:
+            u['review_post'] = old_rr if old_rr is not None else True
+            changed = True
+        if 'review_reply' not in u:
+            u['review_reply'] = old_rr if old_rr is not None else True
+            changed = True
+        if 'muted_post' not in u:
+            u['muted_post'] = False
+            changed = True
+        if 'muted_reply' not in u:
+            u['muted_reply'] = False
+            changed = True
+        # 兼容旧字段
+        if 'muted' in u:
+            if u['muted']:
+                if not u.get('muted_post'): u['muted_post'] = True
+                if not u.get('muted_reply'): u['muted_reply'] = True
+            del u['muted']
             changed = True
     return changed
 
@@ -712,6 +762,10 @@ def _bbs_resolve_author(author_id):
                     'role': u.get('role', 'user'),
                     'tags': visible_tags,
                     'last_login': u.get('last_login', 0),
+                    'muted_post': u.get('muted_post', False),
+                    'muted_reply': u.get('muted_reply', False),
+                    'review_post': u.get('review_post', True),
+                    'review_reply': u.get('review_reply', True),
                 }
     except:
         pass
@@ -933,6 +987,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 return
         if req_path == '/api/bbs/export':
             self._handle_bbs_export()
+            return
+        if req_path == '/api/bbs/reviews/pending':
+            self._handle_bbs_reviews_pending()
             return
         if req_path == '/api/admin/download-source':
             self._handle_admin_download_source()
@@ -1179,6 +1236,15 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         if req_path == '/api/bbs/import':
             self._handle_bbs_import()
             return
+        # 审核操作
+        if req_path.startswith('/api/bbs/reviews/topic/'):
+            review_parts = req_path[23:].split('/')
+            if len(review_parts) == 1 and review_parts[0]:
+                self._handle_bbs_review_topic(review_parts[0])
+                return
+            if len(review_parts) == 3 and review_parts[1] == 'reply':
+                self._handle_bbs_review_reply(review_parts[0], review_parts[2])
+                return
         if req_path == '/api/admin/upload-source':
             self._handle_admin_upload_source()
             return
@@ -1784,11 +1850,14 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     def _send_json(self, data: dict):
         """发送 JSON 响应。"""
         resp = json.dumps(data)
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(resp)))
-        self.end_headers()
-        self.wfile.write(resp.encode())
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(resp)))
+            self.end_headers()
+            self.wfile.write(resp.encode())
+        except (ConnectionAbortedError, BrokenPipeError, ConnectionResetError):
+            pass  # 客户端断开连接时静默忽略
 
     # ── 统计 ──
 
@@ -1953,8 +2022,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 log(f"短链登录失败: 读取用户文件出错 {BBS_USERS_FILE} — {e}")
                 self._send_json({'ok': False, 'error': 'server_error', 'detail': str(e)})
                 return
-            # 迁移：确保所有用户有存储配额字段
-            if _bbs_ensure_storage_quota(users):
+            # 迁移：确保所有用户有存储配额、审核和禁言字段
+            if _bbs_ensure_storage_quota(users) | _bbs_ensure_user_extras(users):
                 tmp = BBS_USERS_FILE.with_suffix(".tmp.json")
                 tmp.write_text(json.dumps(users, ensure_ascii=False, indent=2), encoding='utf-8')
                 tmp.replace(BBS_USERS_FILE)
@@ -2081,8 +2150,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 log(f"BBS 登录失败: 读取用户文件出错 {BBS_USERS_FILE} — {e}")
                 self._send_json({'ok': False, 'error': 'server_error', 'detail': str(e)})
                 return
-            # 迁移：确保所有用户有存储配额字段
-            if _bbs_ensure_storage_quota(users):
+            # 迁移：确保所有用户有存储配额、审核和禁言字段
+            if _bbs_ensure_storage_quota(users) | _bbs_ensure_user_extras(users):
                 tmp = BBS_USERS_FILE.with_suffix(".tmp.json")
                 tmp.write_text(json.dumps(users, ensure_ascii=False, indent=2), encoding='utf-8')
                 tmp.replace(BBS_USERS_FILE)
@@ -2116,7 +2185,19 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         try:
             _bbs_migrate_old_format()
             topics = _bbs_all_topics()
-            log(f"BBS 帖子列表: 磁盘共 {len(topics)} 条")
+            req_user = _bbs_check(self.headers)
+            req_user_id = req_user.get('user_id', '') if req_user else ''
+            req_role = req_user.get('role', '') if req_user else ''
+            # 审核过滤：只显示可见的帖子
+            filtered = []
+            for t in topics:
+                rs = t.get('review_status', 'approved')
+                is_author = t.get('author_id') == req_user_id
+                is_admin = req_role == 'admin'
+                if rs == 'approved' or is_author or is_admin:
+                    filtered.append(t)
+            topics = filtered
+            log(f"BBS 帖子列表: 磁盘共 {len(topics)} 条（审核过滤后）")
             params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             q = params.get('q', [None])[0]
             if q:
@@ -2137,8 +2218,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 'limit': limit,
             }
             # 管理员查看时附带隐藏标签映射
-            req_user = _bbs_check(self.headers)
-            if req_user and req_user.get('role') == 'admin':
+            if req_user and req_role == 'admin':
                 try:
                     all_u = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
                     hidden_map = {}
@@ -2162,6 +2242,17 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             return
         if self._check_maintenance_block(user):
             return
+        # 禁言检查
+        author_id = user.get('user_id', '')
+        users = self._load_users()
+        author_full = None
+        for u in users:
+            if u.get('id') == author_id:
+                author_full = u
+                break
+        if author_full and author_full.get('muted_post'):
+            self._send_json({'ok': False, 'error': 'muted', 'message': '你已被禁言，无法发帖'})
+            return
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
             title = body.get('title', '').strip()
@@ -2174,11 +2265,14 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             title = title[:16]
             topic_path = BBS_TOPICS_DIR / _bbs_topic_filename(tid, title)
             now = time.time()
-            author_id = user.get('user_id', '')
+            # 审核状态判断
+            need_review = author_full and author_full.get('review_post', True)
             topic_data = {
                 'id': tid, 'title': title, 'author_id': author_id,
                 'content': content, 'created_at': now, 'updated_at': now,
                 'replies': [],
+                'review_status': 'pending' if need_review else 'approved',
+                'reviewed_by': None,
             }
             BBS_TOPICS_DIR.mkdir(parents=True, exist_ok=True)
             topic_path.write_text(json.dumps(topic_data, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -2190,7 +2284,6 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     def _handle_bbs_topic_detail(self, tid):
         """GET /api/bbs/topics/<id> — 帖子详情（含作者名解析）"""
         try:
-            # 支持 ?content_only=1 跳过回复解析（前端分块加载用）
             parsed = urllib.parse.urlparse(self.path)
             params = urllib.parse.parse_qs(parsed.query)
             content_only = 'content_only' in params
@@ -2200,7 +2293,22 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({'ok': False, 'error': 'not_found'})
                 return
             topic = json.loads(topic_path.read_text(encoding='utf-8'))
-            # 剥离 base64 图片，替换为占位标记
+
+            # 审核可见性检查
+            req_user_d = _bbs_check(self.headers)
+            req_uid_d = req_user_d.get('user_id', '') if req_user_d else ''
+            req_role_d = req_user_d.get('role', '') if req_user_d else ''
+            topic_rs = topic.get('review_status', 'approved')
+            is_author_d = topic.get('author_id') == req_uid_d
+            is_admin_d = req_role_d == 'admin'
+            if topic_rs != 'approved' and not is_author_d and not is_admin_d:
+                self._send_json({'ok': False, 'error': 'not_found'})
+                return
+            topic['_review_status'] = topic_rs
+            if topic.get('reviewed_by'):
+                rb = _bbs_resolve_author(topic['reviewed_by'])
+                topic['_reviewed_by_name'] = rb['username'] if rb else topic['reviewed_by']
+
             import re as _re
             emb_counter = [0]
             def _strip_emb(m):
@@ -2211,14 +2319,13 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             has_emb = 'data:image/' in content
             if has_emb:
                 topic['content'] = _re.sub(r'!\[([^\]]*)\]\(data:image/[^,]+;base64,[^"\')\s]+\)', _strip_emb, content)
-            # 同样处理回复中的图片
             for r in topic.get('replies', []):
                 rc = r.get('content', '')
                 if 'data:image/' in rc:
                     r['content'] = _re.sub(r'!\[([^\]]*)\]\(data:image/[^,]+;base64,[^"\')\s]+\)', _strip_emb, rc)
             if emb_counter[0] > 0:
                 topic['emb_count'] = emb_counter[0]
-            # 解析作者名
+
             aid = topic.get('author_id', '')
             info = _bbs_resolve_author(aid)
             topic['author_name'] = info['username'] if info else '账号不存在'
@@ -2228,6 +2335,14 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 topic.pop('replies', None)
                 self._send_json(topic)
                 return
+            # 回复审核过滤
+            visible = []
+            for r in topic.get('replies', []):
+                r_rs = r.get('review_status', 'approved')
+                r_is_author = r.get('author_id') == req_uid_d
+                if r_rs == 'approved' or r_is_author or is_admin_d:
+                    visible.append(r)
+            topic['replies'] = visible
             # 解析回复作者名
             for r in topic.get('replies', []):
                 rid = r.get('author_id', '')
@@ -2235,8 +2350,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 r['author_name'] = rinfo['username'] if rinfo else '账号不存在'
                 r['author_role'] = rinfo['role'] if rinfo else ''
                 r['author_tags'] = rinfo['tags'] if rinfo else []
-                r.pop('author', None)  # 清理旧字段
-            # 构建用户 ID→用户名 映射表（供前端 @ 渲染）
+                r.pop('author', None)
             user_map = {}
             user_map[aid] = topic.get('author_name', '')
             for r in topic.get('replies', []):
@@ -2245,19 +2359,15 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                     rinfo = _bbs_resolve_author(rid)
                     user_map[rid] = rinfo['username'] if rinfo else rid
             topic['user_map'] = user_map
-            # 管理员查看时附带隐藏标签映射
-            req_user = _bbs_check(self.headers)
-            if req_user and req_user.get('role') == 'admin':
+            if is_admin_d:
                 try:
                     all_u = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
-                    hidden_map = {}
+                    hm = {}
                     for u in all_u:
-                        all_tags = u.get('tags', [])
-                        h = [t[1:] for t in all_tags if isinstance(t, str) and t.startswith('_')]
-                        if h:
-                            hidden_map[u.get('id', '')] = h
-                    if hidden_map:
-                        topic['hidden_tags_map'] = hidden_map
+                        at = u.get('tags', [])
+                        h = [t[1:] for t in at if isinstance(t, str) and t.startswith('_')]
+                        if h: hm[u.get('id', '')] = h
+                    if hm: topic['hidden_tags_map'] = hm
                 except: pass
             self._send_json(topic)
         except Exception as e:
@@ -2270,6 +2380,10 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if not topic_path or not topic_path.exists():
                 self._send_json({'ok': False, 'error': 'not_found'}); return
             topic = json.loads(topic_path.read_text(encoding='utf-8'))
+            req_user_r = _bbs_check(self.headers)
+            req_uid_r = req_user_r.get('user_id', '') if req_user_r else ''
+            req_role_r = req_user_r.get('role', '') if req_user_r else ''
+            is_admin_r = req_role_r == 'admin'
             # 剥离回复中的 base64 图片
             import re as _re
             emb_counter = [0]
@@ -2278,6 +2392,14 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 emb_counter[0] += 1
                 return f'![_emb_{idx}_](/api/bbs/emb/{tid}/image{idx})'
             replies = topic.get('replies', [])
+            # 回复审核过滤
+            visible = []
+            for r in replies:
+                r_rs = r.get('review_status', 'approved')
+                r_is_author = r.get('author_id') == req_uid_r
+                if r_rs == 'approved' or r_is_author or is_admin_r:
+                    visible.append(r)
+            replies = visible
             for r in replies:
                 rc = r.get('content', '')
                 if 'data:image/' in rc:
@@ -2289,7 +2411,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 r['author_tags'] = rinfo['tags'] if rinfo else []
                 r.pop('author', None)
             # 管理员隐藏标签
-            req_user = _bbs_check(self.headers)
+            req_user_r = _bbs_check(self.headers)
             hidden_map = {}
             if req_user and req_user.get('role') == 'admin':
                 try:
@@ -2341,6 +2463,17 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             return
         if self._check_maintenance_block(user):
             return
+        # 禁言检查
+        reply_author_id = user.get('user_id', '')
+        users = self._load_users()
+        reply_author_full = None
+        for u in users:
+            if u.get('id') == reply_author_id:
+                reply_author_full = u
+                break
+        if reply_author_full and reply_author_full.get('muted_reply'):
+            self._send_json({'ok': False, 'error': 'muted', 'message': '你已被禁言，无法回复'})
+            return
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
             content = body.get('content', '').strip()
@@ -2355,11 +2488,13 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             import random, string as _s
             reply_id = _bbs_id()
             reply_to = body.get('reply_to', '')
+            need_review = reply_author_full and reply_author_full.get('review_reply', True)
             reply = {
                 'id': reply_id,
-                'author_id': user.get('user_id', ''),
+                'author_id': reply_author_id,
                 'content': content,
                 'created_at': time.time(),
+                'review_status': 'pending' if need_review else 'approved',
             }
             if reply_to:
                 reply['reply_to'] = reply_to
@@ -2367,7 +2502,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             topic['updated_at'] = time.time()
             topic_path.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
             # 创建通知（已通知集合，避免重复）
-            author_id = user.get('user_id', '')
+            author_id = reply_author_id
             topic_author = topic.get('author_id', '')
             topic_title = topic.get('title', '')
             preview = content[:40].replace('\n', ' ')
@@ -2618,6 +2753,20 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                          'message': '论坛维护中，暂时无法操作'})
         return True
 
+    def _check_files_maintenance_block(self, user) -> bool:
+        """检查云文件维护模式（允许下载，禁止上传/修改/删除）"""
+        m = self._load_maintenance()
+        if not m.get('enabled'):
+            return False
+        auto_close = m.get('auto_close_at', 0)
+        if auto_close and time.time() >= auto_close:
+            m['enabled'] = False
+            self._save_maintenance(m)
+            return False
+        self._send_json({'ok': False, 'error': 'maintenance',
+                         'message': '系统维护中，暂时无法上传和修改文件，下载不受影响'})
+        return True
+
     def _handle_admin_maintenance(self):
         if self.command == 'GET':
             state = self._load_maintenance()
@@ -2665,6 +2814,113 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             os._exit(0)
         threading.Thread(target=_restart, daemon=False).start()
 
+    # ── 审核系统 ──
+
+    def _handle_bbs_reviews_pending(self):
+        """GET /api/bbs/reviews/pending — 列出所有待审核的帖子与回复（管理员）"""
+        if not self._is_admin():
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        try:
+            if not BBS_TOPICS_DIR.exists():
+                self._send_json({'ok': True, 'topics': [], 'pending_topics': 0, 'pending_replies': 0})
+                return
+            pending_topics = []
+            total_pending_topics = 0
+            total_pending_replies = 0
+            for fp in sorted(BBS_TOPICS_DIR.iterdir(), reverse=True):
+                if fp.suffix != '.json': continue
+                try:
+                    t = json.loads(fp.read_text(encoding='utf-8'))
+                    t_rs = t.get('review_status', 'approved')
+                    pending_reply_ids = []
+                    for r in t.get('replies', []):
+                        if r.get('review_status') == 'pending':
+                            pending_reply_ids.append(r.get('id', ''))
+                            total_pending_replies += 1
+                    if t_rs == 'pending':
+                        aid = t.get('author_id', '')
+                        info = _bbs_resolve_author(aid)
+                        total_pending_topics += 1
+                        pending_topics.append({
+                            'id': t['id'], 'title': t.get('title', ''),
+                            'author_id': aid, 'author_name': info['username'] if info else '?',
+                            'created_at': t.get('created_at', 0),
+                            'review_status': 'pending', 'review_type': 'topic',
+                            'pending_reply_count': len(pending_reply_ids),
+                            'pending_reply_ids': pending_reply_ids,
+                        })
+                    elif pending_reply_ids:
+                        aid = t.get('author_id', '')
+                        info = _bbs_resolve_author(aid)
+                        pending_topics.append({
+                            'id': t['id'], 'title': t.get('title', ''),
+                            'author_id': aid, 'author_name': info['username'] if info else '?',
+                            'created_at': t.get('created_at', 0),
+                            'review_status': t_rs, 'review_type': 'reply',
+                            'pending_reply_count': len(pending_reply_ids),
+                            'pending_reply_ids': pending_reply_ids,
+                        })
+                except: pass
+            pending_topics.sort(key=lambda x: x.get('created_at', 0), reverse=True)
+            self._send_json({
+                'ok': True, 'topics': pending_topics[:100],
+                'pending_topics': total_pending_topics,
+                'pending_replies': total_pending_replies,
+            })
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_review_topic(self, tid):
+        """POST /api/bbs/reviews/topic/<id> — 审核帖子（通过/拒绝）"""
+        if not self._is_admin():
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            action = body.get('action', '')
+            if action not in ('approve', 'reject', 'pending'):
+                self._send_json({'ok': False, 'error': 'invalid_action'}); return
+            topic_path = _bbs_find_topic_file(tid)
+            if not topic_path or not topic_path.exists():
+                self._send_json({'ok': False, 'error': 'not_found'}); return
+            topic = json.loads(topic_path.read_text(encoding='utf-8'))
+            admin_info = _bbs_check(self.headers)
+            topic['review_status'] = 'approved' if action == 'approve' else ('rejected' if action == 'reject' else 'pending')
+            topic['reviewed_by'] = admin_info.get('user_id', '') if admin_info else None
+            topic['updated_at'] = time.time()
+            topic_path.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
+            log(f'审核帖子: {tid} -> {topic["review_status"]}')
+            self._send_json({'ok': True, 'review_status': topic['review_status']})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
+    def _handle_bbs_review_reply(self, tid, reply_id):
+        """POST /api/bbs/reviews/topic/<id>/reply/<reply_id> — 审核回复"""
+        if not self._is_admin():
+            self._send_json({'ok': False, 'error': 'forbidden'}); return
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
+            action = body.get('action', '')
+            if action not in ('approve', 'reject', 'pending'):
+                self._send_json({'ok': False, 'error': 'invalid_action'}); return
+            topic_path = _bbs_find_topic_file(tid)
+            if not topic_path or not topic_path.exists():
+                self._send_json({'ok': False, 'error': 'not_found'}); return
+            topic = json.loads(topic_path.read_text(encoding='utf-8'))
+            found = False
+            for r in topic.get('replies', []):
+                if r.get('id') == reply_id:
+                    r['review_status'] = 'approved' if action == 'approve' else ('rejected' if action == 'reject' else 'pending')
+                    found = True
+                    break
+            if not found:
+                self._send_json({'ok': False, 'error': 'reply_not_found'}); return
+            topic['updated_at'] = time.time()
+            topic_path.write_text(json.dumps(topic, ensure_ascii=False, indent=2), encoding='utf-8')
+            log(f'审核回复: {tid}/{reply_id} -> {"approved" if action == "approve" else "rejected"}')
+            self._send_json({'ok': True})
+        except Exception as e:
+            self._send_json({'ok': False, 'error': str(e)})
+
     # -- 用户 CRUD --
 
     def _handle_admin_users(self):
@@ -2710,6 +2966,10 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 'id': uid, 'username': username, 'password': password,
                 'role': body.get('role', 'user'),
                 'storage_quota': body.get('storage_quota', STORAGE_DEFAULT_QUOTA),
+                'review_post': body.get('review_post', True),
+                'review_reply': body.get('review_reply', True),
+                'muted_post': body.get('muted_post', False),
+                'muted_reply': body.get('muted_reply', False),
             }
             tags = body.get('tags')
             if tags:
@@ -2771,6 +3031,14 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 try:
                     found['storage_quota'] = max(0, int(body['storage_quota']))
                 except: pass
+            if 'review_post' in body:
+                found['review_post'] = bool(body['review_post'])
+            if 'review_reply' in body:
+                found['review_reply'] = bool(body['review_reply'])
+            if 'muted_post' in body:
+                found['muted_post'] = bool(body['muted_post'])
+            if 'muted_reply' in body:
+                found['muted_reply'] = bool(body['muted_reply'])
             self._save_users(users)
             log(f'管理员更新用户: {found["id"]}')
             self._send_json({'ok': True, 'id': found.get('id', uid)})
@@ -2902,18 +3170,28 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if not info:
                 self._send_json({'ok': False, 'error': 'user_not_found'})
                 return
-            # 收集该用户的所有帖子
+            # 收集该用户的所有帖子（审核过滤）
             all_topics = _bbs_all_topics()
+            req_user_p = _bbs_check(self.headers)
+            req_uid_p = req_user_p.get('user_id', '') if req_user_p else ''
+            req_role_p = req_user_p.get('role', '') if req_user_p else ''
             user_topics = []
             for t in all_topics:
-                if t.get('author_id') == uid:
-                    user_topics.append({
-                        'id': t['id'],
-                        'title': t['title'],
-                        'reply_count': t.get('reply_count', 0),
-                        'created_at': t.get('created_at', 0),
-                        'content_preview': t.get('content_preview', ''),
-                    })
+                if t.get('author_id') != uid:
+                    continue
+                rs = t.get('review_status', 'approved')
+                is_self = req_uid_p == uid
+                is_admin_p = req_role_p == 'admin'
+                if rs != 'approved' and not is_self and not is_admin_p:
+                    continue
+                user_topics.append({
+                    'id': t['id'],
+                    'title': t['title'],
+                    'reply_count': t.get('reply_count', 0),
+                    'created_at': t.get('created_at', 0),
+                    'content_preview': t.get('content_preview', ''),
+                    'review_status': rs,
+                })
             user_topics.sort(key=lambda x: x.get('created_at', 0), reverse=True)
             resp = {
                 'ok': True,
@@ -2924,10 +3202,11 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 'last_login': info.get('last_login', 0),
                 'topics': user_topics,
                 'topic_count': len(user_topics),
+                'muted_post': info.get('muted_post', False),
+                'muted_reply': info.get('muted_reply', False),
             }
-            # 管理员查看时附带隐藏标签
-            req_user = _bbs_check(self.headers)
-            if req_user and req_user.get('role') == 'admin':
+            # 管理员查看时附带隐藏标签和更多字段
+            if req_user_p and req_role_p == 'admin':
                 try:
                     all_u = json.loads(BBS_USERS_FILE.read_text(encoding='utf-8'))
                     for u in all_u:
@@ -2936,6 +3215,10 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                             hidden = [t[1:] for t in all_tags if isinstance(t, str) and t.startswith('_')]
                             if hidden:
                                 resp['hidden_tags'] = hidden
+                            resp['muted_post'] = u.get('muted_post', False)
+                            resp['muted_reply'] = u.get('muted_reply', False)
+                            resp['review_post'] = u.get('review_post', True)
+                            resp['review_reply'] = u.get('review_reply', True)
                             break
                 except: pass
             self._send_json(resp)
@@ -3015,7 +3298,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
     # ── 云文件存储 ──────────────────────────────────────────
 
     # ── 分享链接存储 ──
-    BBS_SHARES_FILE = BBS_DIR / "shares.json"
+    BBS_SHARES_FILE = BBS_FILES_DIR / "shares.json"
 
     def _load_shares(self):
         try:
@@ -3123,6 +3406,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         user = _bbs_check(self.headers)
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        if self._check_files_maintenance_block(user):
+            return
         uid = user.get('user_id', '')
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
@@ -3133,6 +3418,15 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             if '/' in name or '\\' in name:
                 self._send_json({'ok': False, 'error': 'invalid_name'}); return
             meta = _bbs_load_files_meta()
+            # 检查同名称文件夹是否已存在（防重复创建）
+            existing = None
+            for f in meta:
+                if (f.get('type') == 'folder' and f.get('name') == name
+                    and f.get('parent_id') == parent_id and f.get('user_id') == uid):
+                    existing = f; break
+            if existing:
+                self._send_json({'ok': True, 'folder_id': existing['id'], 'name': name, 'exists': True})
+                return
             folder_id = uuid.uuid4().hex[:16]
             meta.append({
                 'id': folder_id, 'name': name, 'type': 'folder',
@@ -3148,6 +3442,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         user = _bbs_check(self.headers)
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        if self._check_files_maintenance_block(user):
+            return
         uid = user.get('user_id', '')
         try:
             ctype = self.headers.get('Content-Type', '')
@@ -3209,7 +3505,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                                  'used': used, 'quota': quota, 'file_size': file_size}); return
             file_id = uuid.uuid4().hex[:16]
             BBS_FILES_DIR.mkdir(parents=True, exist_ok=True)
-            _get_file_path(file_id, filename).write_bytes(file_data)
+            (BBS_FILES_DIR / str(uid)).mkdir(parents=True, exist_ok=True)
+            _get_file_path(file_id, filename, uid).write_bytes(file_data)
             meta.append({
                 'id': file_id, 'name': filename, 'size': file_size, 'mime': mime_type,
                 'type': 'file', 'parent_id': parent_id,
@@ -3241,7 +3538,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
                 for f in user_files:
                     if f.get('type') == 'folder': continue
-                    fp = _get_file_path(f['id'])
+                    fp = _get_file_path(f['id'], user_id=f.get('user_id', uid))
                     if fp.exists():
                         zf.writestr(f['name'], fp.read_bytes())
             data = buf.getvalue()
@@ -3280,7 +3577,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                             if f.get('type') == 'folder':
                                 _add_to_zip(f['id'], rel, depth + 1)
                             else:
-                                fp = _get_file_path(f['id'])
+                                fp = _get_file_path(f['id'], user_id=f.get('user_id', uid))
                                 if fp.exists():
                                     zf.writestr(rel.lstrip('/'), fp.read_bytes())
                     _add_to_zip(file_id, info['name'])
@@ -3296,7 +3593,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                 log(f"文件夹下载失败: {e}")
                 self.send_error(500, f"下载失败: {e}")
             return
-        file_path = _get_file_path(file_id)
+        file_path = _get_file_path(file_id, user_id=info.get('user_id', uid))
         if not file_path.exists():
             self.send_error(404, "File not found"); return
         data = file_path.read_bytes()
@@ -3313,6 +3610,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         user = _bbs_check(self.headers)
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        if self._check_files_maintenance_block(user):
+            return
         uid = user.get('user_id', '')
         meta = _bbs_load_files_meta()
         info = self._get_file_meta(file_id)
@@ -3332,8 +3631,9 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                         if f.get('type') == 'folder':
                             stack.append(f['id'])
         # 删除文件实体 + 元数据
+        owner_uid = info.get('user_id', uid)
         for fid in to_delete:
-            fp = _get_file_path(fid)
+            fp = _get_file_path(fid, user_id=owner_uid)
             if fp.exists():
                 fp.unlink()
         meta = [f for f in meta if f['id'] not in to_delete]
@@ -3350,6 +3650,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         user = _bbs_check(self.headers)
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        if self._check_files_maintenance_block(user):
+            return
         uid = user.get('user_id', '')
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
@@ -3392,6 +3694,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         user = _bbs_check(self.headers)
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        if self._check_files_maintenance_block(user):
+            return
         uid = user.get('user_id', '')
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
@@ -3409,9 +3713,10 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
             old_name = info['name']
             # 如果是文件，重命名物理文件（存储路径附带文件名用于友好显示）
             if info.get('type') == 'file':
-                old_fp = _get_file_path(file_id)
+                file_uid = info.get('user_id', uid)
+                old_fp = _get_file_path(file_id, user_id=file_uid)
                 if old_fp.exists():
-                    new_fp = _get_file_path(file_id, new_name)
+                    new_fp = _get_file_path(file_id, new_name, file_uid)
                     if old_fp != new_fp:
                         old_fp.rename(new_fp)
             # 更新元数据
@@ -3430,6 +3735,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         user = _bbs_check(self.headers)
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        if self._check_files_maintenance_block(user):
+            return
         uid = user.get('user_id', '')
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
@@ -3457,7 +3764,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                     to_delete.discard(fid)
             # 删除文件实体
             for fid in to_delete:
-                fp = _get_file_path(fid)
+                finfo = self._get_file_meta(fid)
+                fp = _get_file_path(fid, user_id=finfo.get('user_id', uid) if finfo else uid)
                 if fp.exists():
                     fp.unlink()
             meta = [f for f in meta if f['id'] not in to_delete]
@@ -3476,6 +3784,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         user = _bbs_check(self.headers)
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        if self._check_files_maintenance_block(user):
+            return
         uid = user.get('user_id', '')
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
@@ -3549,7 +3859,7 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
                             children = [f for f in meta if f.get('parent_id') == fid]
                             _add_items([f['id'] for f in children], path + name + '/')
                         else:
-                            fp = _get_file_path(fid)
+                            fp = _get_file_path(fid, user_id=info.get('user_id', uid))
                             if fp.exists():
                                 arcname = path + name
                                 if arcname in name_counts:
@@ -3580,6 +3890,8 @@ class AutoUpdateHandler(http.server.SimpleHTTPRequestHandler):
         user = _bbs_check(self.headers)
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        if self._check_files_maintenance_block(user):
+            return
         uid = user.get('user_id', '')
         try:
             body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
@@ -3907,7 +4219,7 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
             if s['code'] == code:
                 share = s; break
         if not share:
-            self.send_error(404, "Not found"); return
+            self._send_json({'ok': False, 'error': 'share_not_found'}); return
         if share.get('expires_at') and time.time() > share['expires_at']:
             self.send_error(410, "Expired"); return
         params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -3919,8 +4231,8 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
         pwd_val = vp
         item_id = params.get('item_id', [None])[0]
         target_id = item_id or share['item_id']
-        password_ok = is_owner
-        if not password_ok and share.get('password'):
+        password_ok = is_owner or not share.get('password')
+        if not password_ok:
             password_ok = (pwd_val == share['password'])
         if not password_ok:
             self.send_error(403, "Password required"); return
@@ -3969,7 +4281,7 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
                             r = zp + '/' + f['name']
                             if f.get('type') == 'folder': _add(f['id'], r, depth+1)
                             else:
-                                fp = _get_file_path(f['id'])
+                                fp = _get_file_path(f['id'], user_id=f.get('user_id'))
                                 if fp.exists(): zf.writestr(r.lstrip('/'), fp.read_bytes())
                     _add(target_id, info['name'])
                 data = buf.getvalue()
@@ -3981,12 +4293,12 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
                 self.end_headers()
                 self.wfile.write(data)
             except Exception as e:
-                self.send_error(500, f"ZIP 打包失败: {e}")
+                self._send_json({'ok': False, 'error': f'zip_failed: {e}'})
             return
 
-        file_path = BBS_FILES_DIR / info['id']
+        file_path = _get_file_path(target_id, info.get('name'), info.get('user_id'))
         if not file_path.exists():
-            self.send_error(404, "File not found"); return
+            self._send_json({'ok': False, 'error': 'file_path_not_found', 'path': str(file_path)}); return
         data = file_path.read_bytes()
         self.send_response(200)
         self.send_header('Content-Type', info.get('mime', 'application/octet-stream'))
@@ -4001,6 +4313,8 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
         user = _bbs_check(self.headers)
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        if self._check_files_maintenance_block(user):
+            return
         uid = user.get('user_id', '')
         shares = self._load_shares()
         share = None
@@ -4038,6 +4352,8 @@ h2{font-size:20px;margin:12px 0 6px;word-break:break-all}
         user = _bbs_check(self.headers)
         if not user:
             self._send_json({'ok': False, 'error': 'unauthorized'}); return
+        if self._check_files_maintenance_block(user):
+            return
         uid = user.get('user_id', '')
         shares = self._load_shares()
         share = None

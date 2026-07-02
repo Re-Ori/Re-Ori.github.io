@@ -1,1077 +1,2383 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
-<meta charset="UTF-8">
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>云文件存储 — Origin Base</title>
-<link rel="stylesheet" href="/css/style.css">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-.fs-overlay{position:fixed;inset:0;background:rgba(255,255,255,0.95);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;z-index:200}
-[data-theme="dark"] .fs-overlay{background:rgba(26,27,46,0.95)}
-.fs-overlay-box{text-align:center;padding:40px;max-width:400px}
-.fs-overlay-box h2{font-size:22px;margin-bottom:8px;color:#1a1a1a}
-[data-theme="dark"] .fs-overlay-box h2{color:#e0e0e0}
-.fs-spinner{width:40px;height:40px;border:3px solid rgba(57,159,255,0.2);border-top-color:var(--theme-color,#399FFF);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
-@keyframes spin{to{transform:rotate(360deg)}}
-.fs-body{max-width:820px;margin:0 auto;padding:0 12px 80px}
-.fs-header{display:flex;align-items:center;justify-content:space-between;padding:20px 0 16px;border-bottom:1px solid rgba(0,0,0,0.06);margin-bottom:16px;flex-wrap:wrap;gap:8px}
-[data-theme="dark"] .fs-header{border-color:rgba(255,255,255,0.06)}
-.fs-header h1{font-size:20px;font-weight:700;color:#1a1a1a;display:flex;align-items:center;gap:8px}
-[data-theme="dark"] .fs-header h1{color:#e0e0e0}
-.fs-user{font-size:12px;color:#8e8e93;display:flex;align-items:center;gap:6px}
-.fs-user .name{color:var(--theme-color,#399FFF);cursor:pointer;font-weight:600}
-.fs-user .name:hover{text-decoration:underline}
-.fs-btn{padding:6px 12px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;font-size:12px;cursor:pointer;background:transparent;color:#555;transition:all .15s;display:inline-flex;align-items:center;gap:4px;text-decoration:none;white-space:nowrap}
-.fs-btn:hover{border-color:var(--theme-color,#399FFF);color:var(--theme-color,#399FFF)}
-.fs-btn.danger:hover{border-color:#ff3b30;color:#ff3b30}
-.fs-btn.primary{background:var(--theme-color,#399FFF);color:#fff;border-color:var(--theme-color,#399FFF)}
-.fs-btn.primary:hover{opacity:.85}
-.fs-btn:disabled{opacity:.4;cursor:default;pointer-events:none}
-[data-theme="dark"] .fs-btn{color:#aaa;border-color:rgba(255,255,255,0.12)}
-/* 配额 */
-.fs-card{background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:18px 20px;margin-bottom:12px;box-shadow:0 2px 12px rgba(0,0,0,0.04)}
-[data-theme="dark"] .fs-card{background:#1c1c1e;border-color:rgba(255,255,255,0.06)}
-.fs-qrow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;flex-wrap:wrap;gap:4px}
-.fs-qlabel{font-size:13px;color:#8e8e93}
-.fs-qnum{font-size:15px;font-weight:700;color:#1a1a1a}
-[data-theme="dark"] .fs-qnum{color:#e0e0e0}
-.fs-qbar{width:100%;height:6px;background:rgba(0,0,0,0.06);border-radius:3px;overflow:hidden}
-[data-theme="dark"] .fs-qbar{background:rgba(255,255,255,0.08)}
-.fs-qfill{height:100%;border-radius:3px;background:var(--theme-color,#399FFF);transition:width .3s}
-.fs-qfill.warning{background:#ff9500}
-.fs-qfill.danger{background:#ff3b30}
-/* 上传区 */
-.fs-upload{border:2px dashed rgba(0,0,0,0.12);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:all .15s;margin-bottom:12px;background:rgba(57,159,255,0.02)}
-[data-theme="dark"] .fs-upload{border-color:rgba(255,255,255,0.12);background:rgba(57,159,255,0.04)}
-.fs-upload:hover,.fs-upload.dragover{border-color:var(--theme-color,#399FFF);background:rgba(57,159,255,0.06)}
-.fs-upload svg{color:#bbb;margin-bottom:6px}
-.fs-upload .hint{font-size:13px;color:#999}
-.fs-upload .hint strong{color:var(--theme-color,#399FFF)}
-/* 安全提示 */
-.fs-notice{font-size:11px;color:#ccc;text-align:center;padding:12px 8px 4px;line-height:1.5}
-[data-theme="dark"] .fs-notice{color:#444}
-/* 上传任务列表 */
-.fs-upload-tasks{margin-bottom:10px}
-.ut-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:8px;margin-bottom:4px;box-shadow:0 1px 3px rgba(0,0,0,0.03)}
-[data-theme="dark"] .ut-item{background:#1c1c1e;border-color:rgba(255,255,255,0.06)}
-.ut-info{flex:1;min-width:0;display:flex;gap:8px;align-items:center}
-.ut-name{font-size:12px;font-weight:600;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-[data-theme="dark"] .ut-name{color:#e0e0e0}
-.ut-size{font-size:10px;color:#999;flex-shrink:0}
-.ut-bar{width:60px;height:4px;background:rgba(0,0,0,0.06);border-radius:2px;overflow:hidden;flex-shrink:0}
-.ut-bar .ut-fill{height:100%;border-radius:2px;transition:width .2s}
-.ut-stat{font-size:11px;min-width:32px;text-align:right;flex-shrink:0}
-/* 工具栏 */
-.fs-toolbar{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;padding:6px 0}
-.fs-toolbar-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.fs-toolbar .spacer{flex:1;min-width:12px}
-.fs-path{display:flex;align-items:center;gap:4px;font-size:13px;color:#555;overflow-x:auto;white-space:nowrap;padding:2px 0;flex:1;min-width:60px}
-.fs-path a{color:var(--theme-color,#399FFF);cursor:pointer;text-decoration:none}
-.fs-path a:hover{text-decoration:underline}
-.fs-path span{color:#bbb}
-/* 列表 */
-.fs-empty{text-align:center;padding:48px 16px;color:#bbb;font-size:14px}
-.fs-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:10px;margin-bottom:6px;box-shadow:0 1px 4px rgba(0,0,0,0.03);transition:box-shadow .15s}
-[data-theme="dark"] .fs-item{background:#1c1c1e;border-color:rgba(255,255,255,0.06)}
-.fs-item:hover{box-shadow:0 2px 10px rgba(0,0,0,0.06)}
-.fs-item .ico{flex-shrink:0;width:32px;height:32px;background:rgba(57,159,255,0.08);border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.fs-item .ico svg{color:var(--theme-color,#399FFF)}
-.fs-item .ico.folder{background:rgba(255,149,0,0.1)}
-.fs-item .ico.folder svg{color:#ff9500}
-.fs-item .info{flex:1;min-width:0}
-.fs-item .info .name{font-size:14px;font-weight:600;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-[data-theme="dark"] .fs-item .info .name{color:#e0e0e0}
-.fs-item .info .meta{font-size:11px;color:#999;margin-top:2px}
-.fs-item .acts{display:flex;gap:4px;flex-shrink:0}
-/* 复选框 */
-.fs-cb{flex-shrink:0;width:18px;height:18px;display:flex;align-items:center;justify-content:center}
-.fs-cb input[type="checkbox"]{width:16px;height:16px;cursor:pointer;accent-color:var(--theme-color,#399FFF);margin:0;pointer-events:auto}
-.fs-cb-label{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:12px;color:#8e8e93}
-/* 批量操作栏 */
-.fs-batch-bar{display:none;align-items:center;gap:8px;padding:8px 14px;background:rgba(57,159,255,0.06);border:1px solid rgba(57,159,255,0.15);border-radius:10px;margin-bottom:8px;font-size:13px;color:#555}
-.fs-batch-bar.show{display:flex}
-.fs-batch-bar .count{flex:1;font-weight:600;color:var(--theme-color,#399FFF)}
-[data-theme="dark"] .fs-batch-bar{background:rgba(57,159,255,0.08);border-color:rgba(57,159,255,0.2);color:#aaa}
-/* 移动选择树 */
-.fs-move-list{max-height:300px;overflow-y:auto;margin-bottom:10px;border:1px solid rgba(0,0,0,0.06);border-radius:8px;padding:4px 0}
-[data-theme="dark"] .fs-move-list{border-color:rgba(255,255,255,0.06)}
-.fs-move-item{display:flex;align-items:center;gap:6px;padding:7px 12px;cursor:pointer;font-size:13px;color:#555;transition:background .1s}
-.fs-move-item:hover{background:rgba(0,0,0,0.04)}
-[data-theme="dark"] .fs-move-item{color:#aaa}
-[data-theme="dark"] .fs-move-item:hover{background:rgba(255,255,255,0.04)}
-.fs-move-item.sel{background:rgba(57,159,255,0.08);color:var(--theme-color,#399FFF);font-weight:600}
-/* 已选移动目标 */
-.fs-move-target{font-size:12px;color:#999;margin-bottom:8px;padding:6px 10px;background:rgba(57,159,255,0.04);border-radius:6px;border:1px solid rgba(57,159,255,0.1)}
-/* 重命名内联编辑 */
-.fs-rename-input{font-size:14px;font-weight:600;padding:2px 6px;border:1px solid var(--theme-color,#399FFF);border-radius:4px;outline:none;background:rgba(57,159,255,0.04);color:inherit;width:100%;box-sizing:border-box}
-/* 多选模式 */
-.fs-ms-toggle{font-size:12px;padding:4px 10px;border:1px solid rgba(0,0,0,0.1);border-radius:6px;cursor:pointer;background:transparent;color:#8e8e93;transition:all .15s;display:inline-flex;align-items:center;gap:4px}
-.fs-ms-toggle:hover{border-color:var(--theme-color,#399FFF);color:var(--theme-color,#399FFF)}
-.fs-ms-toggle.on{background:var(--theme-color,#399FFF);color:#fff;border-color:var(--theme-color,#399FFF)}
-[data-theme="dark"] .fs-ms-toggle{color:#aaa;border-color:rgba(255,255,255,0.12)}
-/* 悮浮操作栏 */
-.fs-float-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;background:#fff;border-top:1px solid rgba(0,0,0,0.06);padding:10px 16px;display:none;align-items:center;justify-content:center;gap:10px;box-shadow:0 -2px 12px rgba(0,0,0,0.06);backdrop-filter:blur(12px)}
-.fs-float-bar.show{display:flex}
-.fs-float-bar .count{font-size:13px;color:#555;margin-right:auto;font-weight:600}
-[data-theme="dark"] .fs-float-bar{background:#1c1c1e;border-color:rgba(255,255,255,0.06)}
-[data-theme="dark"] .fs-float-bar .count{color:#aaa}
-@media(max-width:720px){.fs-float-bar{padding:8px 10px;gap:6px;flex-wrap:wrap}.fs-float-bar .count{width:100%;text-align:center;margin-right:0;margin-bottom:4px}}
-
-[data-theme="dark"] .fs-rename-input{background:rgba(57,159,255,0.08);color:#e0e0e0}
-/* 模态框 */
-.fs-modal{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center}
-.fs-modal.show{display:flex}
-.fs-modal-box{background:#fff;border-radius:14px;padding:24px;width:90%;max-width:420px;max-height:80vh;overflow-y:auto}
-[data-theme="dark"] .fs-modal-box{background:#1c1c1e;color:#e0e0e0}
-.fs-modal-box h3{font-size:17px;margin-bottom:12px}
-.fs-modal-box input,.fs-modal-box select{width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;outline:none;background:rgba(255,255,255,0.8);color:#333;margin-bottom:10px;box-sizing:border-box}
-[data-theme="dark"] .fs-modal-box input,[data-theme="dark"] .fs-modal-box select{background:rgba(255,255,255,0.06);color:#e0e0e0;border-color:rgba(255,255,255,0.15)}
-.fs-modal-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
-.fs-tab-bar{display:flex;gap:0;margin-bottom:12px;border-bottom:1px solid rgba(0,0,0,0.06)}
-.fs-tab{padding:8px 16px;font-size:13px;cursor:pointer;color:#999;border-bottom:2px solid transparent;transition:all .15s}
-.fs-tab:hover{color:#555}
-.fs-tab.active{color:var(--theme-color,#399FFF);border-bottom-color:var(--theme-color,#399FFF)}
-.fs-tab-content{display:none}
-.fs-tab-content.active{display:block}
-/* 分享列表 */
-.fs-share-item{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid rgba(0,0,0,0.06);border-radius:8px;margin-bottom:6px}
-[data-theme="dark"] .fs-share-item{border-color:rgba(255,255,255,0.06)}
-.fs-share-item .info{flex:1;min-width:0}
-.fs-share-item .info .name{font-size:13px;font-weight:600;color:#1a1a1a}
-[data-theme="dark"] .fs-share-item .info .name{color:#e0e0e0}
-.fs-share-item .info .meta{font-size:11px;color:#999}
-/* 管理员表格 */
-.fs-admin-table{width:100%;border-collapse:collapse;font-size:13px}
-.fs-admin-table td{padding:8px 6px;border-bottom:1px solid rgba(0,0,0,0.04);vertical-align:middle}
-.fs-admin-table tr:hover{background:rgba(57,159,255,0.03)}
-.fs-admin-table .uname{color:var(--theme-color,#399FFF);cursor:pointer;font-weight:600}
-.fs-admin-table .uname:hover{text-decoration:underline}
-/* Toast */
-.fs-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none}
-.fs-toast.show{opacity:1}
-/* 登录 */
-.fs-login{position:fixed;inset:0;z-index:150;background:rgba(255,255,255,0.95);backdrop-filter:blur(12px);display:none;align-items:center;justify-content:center}
-[data-theme="dark"] .fs-login{background:rgba(26,27,46,0.95)}
-.fs-login.show{display:flex}
-.fs-login-box{text-align:center;padding:40px;max-width:340px;width:90%}
-.fs-login-box h2{font-size:22px;margin-bottom:4px;color:#1a1a1a}
-[data-theme="dark"] .fs-login-box h2{color:#e0e0e0}
-.fs-login-box p{font-size:13px;color:#8e8e93;margin-bottom:16px}
-.fs-login-box input{width:100%;padding:12px 14px;border:1px solid rgba(0,0,0,0.12);border-radius:10px;font-size:15px;outline:none;background:rgba(255,255,255,0.8);color:#333;margin-bottom:10px;box-sizing:border-box}
-[data-theme="dark"] .fs-login-box input{background:rgba(255,255,255,0.06);color:#e0e0e0}
-.fs-login-box .err{color:#ff3b30;font-size:13px;margin-bottom:8px;display:none}
-.fs-login-box button{width:100%;padding:12px;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;background:var(--theme-color,#399FFF);color:#fff;transition:opacity .15s}
-.fs-login-box button:disabled{opacity:.5;cursor:default}
-[data-theme="dark"] #fs-quota-unit{background:rgba(40,42,65,0.8)!important;border-color:rgba(255,255,255,0.1)!important;color:#ddd!important}
-[data-theme="dark"] #fs-share-pwd,[data-theme="dark"] #fs-share-title{background:rgba(40,42,65,0.8)!important;border-color:rgba(255,255,255,0.1)!important;color:#ddd!important}
-[data-theme="dark"] #fs-quota-modal .fs-modal-box p{color:#aaa!important}
-[data-theme="dark"] #fs-edit-share-expire,[data-theme="dark"] #fs-share-expire,[data-theme="dark"] #fs-edit-share-pwd{background:rgba(40,42,65,0.8)!important;border-color:rgba(255,255,255,0.1)!important;color:#ddd!important}
-/* 树形布局 */
-.fs-layout{display:flex;gap:12px;align-items:flex-start}
-.fs-sidebar{width:200px;flex-shrink:0;background:#fff;border:1px solid rgba(0,0,0,0.06);border-radius:10px;padding:8px 0;box-shadow:0 1px 4px rgba(0,0,0,0.03);overflow-y:auto;max-height:calc(100vh - 200px);position:sticky;top:80px}
-[data-theme="dark"] .fs-sidebar{background:#1c1c1e;border-color:rgba(255,255,255,0.06)}
-.fs-sidebar-title{font-size:11px;font-weight:600;color:#999;padding:6px 12px 4px;text-transform:uppercase}
-.fs-main{flex:1;min-width:0}
-.fs-tree{font-size:13px}
-.tn-item{display:flex;align-items:center;padding:5px 12px;cursor:pointer;color:#555;transition:background .12s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tn-item:hover{background:rgba(0,0,0,0.04)}
-.tn-item.tn-cur{background:rgba(57,159,255,0.08);color:var(--theme-color,#399FFF);font-weight:600}
-[data-theme="dark"] .tn-item{color:#aaa}
-[data-theme="dark"] .tn-item:hover{background:rgba(255,255,255,0.04)}
-[data-theme="dark"] .tn-item.tn-cur{background:rgba(57,159,255,0.15);color:#5ac8fa}
-@media(max-width:720px){
-/* ── 整体布局 ── */
-.fs-body{padding:10px}
-.fs-header{flex-wrap:wrap;gap:6px;padding:10px 0}
-.fs-header h1{font-size:16px}
-.fs-user{font-size:12px}
-/* ── 侧边栏树 ── */
-.fs-layout{flex-direction:column}
-.fs-sidebar{width:100%;max-height:160px;position:static;border-radius:8px}
-.tn-item{white-space:normal;overflow:visible;padding:6px 10px;font-size:12px}
-.fs-sidebar-title{font-size:10px}
-/* ── 工具栏/面包屑 ── */
-.fs-toolbar{flex-wrap:wrap;gap:4px}
-.fs-path{font-size:12px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;padding:2px 0}
-.fs-toolbar .spacer{display:none}
-.fs-toolbar .fs-btn{font-size:11px;padding:5px 10px}
-/* ── 文件列表 ── */
-.fs-item{padding:8px 10px;gap:8px}
-.fs-item .ico{width:28px;height:28px}
-.fs-item .ico svg{width:14px;height:14px}
-.fs-item .info .name{font-size:13px;white-space:normal;overflow:visible}
-.fs-item .info .meta{font-size:10px}
-.fs-item .acts{gap:3px}
-.fs-item .acts .fs-btn{font-size:10px;padding:4px 7px}
-/* ── 上传区 ── */
-.fs-upload{padding:16px}
-.fs-upload svg{width:20px;height:20px}
-.fs-upload .hint{font-size:12px}
-/* ── 配额条 ── */
-.fs-qrow{font-size:12px}
-.fs-qbar{height:6px}
-/* ── 分享列表 ── */
-.fs-share-item{flex-wrap:wrap;padding:8px 10px}
-.fs-share-item .info{width:100%;margin-bottom:4px}
-.fs-share-item .info .name{font-size:12px}
-.fs-share-item .info .meta{font-size:10px}
-.fs-share-item .fs-btn{font-size:10px;padding:4px 8px;flex:1;text-align:center}
-/* ── 管理员表格 ── */
-.fs-admin-table,.fs-admin-table tbody,.fs-admin-table tr,.fs-admin-table td{display:block;width:100%}
-.fs-admin-table tr{padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)}
-.fs-admin-table td{padding:3px 6px;border:none;text-align:left;font-size:13px}
-.fs-admin-table td:last-child{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
-.fs-admin-table td:last-child .fs-btn{font-size:11px;padding:5px 10px;flex:1;min-width:0;text-align:center}
-/* ── 模态框 ── */
-.fs-modal-box{padding:16px;width:95%;max-width:none}
-.fs-modal-box h3{font-size:15px}
-.fs-modal-box input,.fs-modal-box select{font-size:13px;padding:8px 10px}
-}
-</style>
-</head>
-<body>
-<div class="container">
-<div id="fs-detect" class="fs-overlay"><div class="fs-overlay-box"><div class="fs-spinner"></div><h2>正在连接服务器</h2><p>获取云文件存储服务…</p></div></div>
-
-<div id="fs-app" style="display:none">
-<div class="fs-body">
-<div class="fs-header">
-<h1><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> 云文件存储</h1>
-<div style="display:flex;align-items:center;gap:10px">
-<div class="fs-user" id="fs-user-info">欢迎，<span class="name" id="fs-uname" onclick="window.open('/forum.html?user='+encodeURIComponent(window._fsUID),'_blank')"></span></div>
-<button class="fs-btn" onclick="fsLogout()">退出</button>
-</div>
-</div>
-<div id="fs-content"></div>
-</div></div>
-
-<div class="fs-login" id="fs-login"><div class="fs-login-box">
-<h2><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> 登录</h2>
-<p>使用 BBS 账号登录云存储</p>
-<div class="err" id="fs-login-err"></div>
-<input type="text" id="fs-login-user" placeholder="用户名" autocomplete="off">
-<input type="password" id="fs-login-pass" placeholder="密码" autocomplete="off">
-<button id="fs-login-btn" onclick="fsDoLogin()">登录</button>
-</div></div>
-
-<div class="fs-toast" id="fs-toast"></div>
-
-<!-- 新建文件夹模态框 -->
-<div class="fs-modal" id="fs-folder-modal"><div class="fs-modal-box">
-<h3>新建文件夹</h3>
-<input type="text" id="fs-folder-name" placeholder="文件夹名称" autocomplete="off">
-<div class="fs-modal-acts"><button class="fs-btn primary" onclick="fsCreateFolder()">创建</button><button class="fs-btn" onclick="fsCloseModal('fs-folder-modal')">取消</button></div>
-</div></div>
-
-<!-- 分享模态框 -->
-<div class="fs-modal" id="fs-share-modal"><div class="fs-modal-box">
-<h3>创建分享链接</h3>
-<p style="font-size:13px;color:#999;margin-bottom:10px" id="fs-share-name"></p>
-<input type="text" id="fs-share-title" placeholder="分享名称（留空使用原名称）" autocomplete="off" style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;margin-bottom:6px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
-<p style="font-size:11px;color:#bbb;margin-bottom:10px" id="fs-share-hint"></p>
-<input type="password" id="fs-share-pwd" placeholder="访问密码（留空=无密码）" autocomplete="off" style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;margin-bottom:10px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
-<select id="fs-share-expire" style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;margin-bottom:10px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
-  <option value="0">永不过期</option>
-  <option value="3600">1 小时</option>
-  <option value="86400">24 小时</option>
-  <option value="604800" selected>7 天</option>
-  <option value="2592000">30 天</option>
-  <option value="7776000">90 天</option>
-</select>
-<div class="fs-modal-acts"><button class="fs-btn primary" onclick="fsDoShare()">创建</button><button class="fs-btn" onclick="fsCloseModal('fs-share-modal')">取消</button></div>
-</div></div>
-
-<!-- 编辑分享模态框 -->
-<div class="fs-modal" id="fs-edit-share-modal"><div class="fs-modal-box">
-<h3>编辑分享链接</h3>
-<p style="font-size:13px;color:#999;margin-bottom:10px" id="fs-edit-share-name"></p>
-<div style="display:flex;gap:6px;margin-bottom:10px">
-  <button class="fs-btn" id="fs-edit-pwd-on" onclick="fsEditPwdToggle(true)" style="flex:1;border-color:var(--theme-color,#399FFF);color:var(--theme-color,#399FFF)">有密码</button>
-  <button class="fs-btn" id="fs-edit-pwd-off" onclick="fsEditPwdToggle(false)" style="flex:1">无密码</button>
-</div>
-<div style="position:relative;margin-bottom:10px">
-<input type="password" id="fs-edit-share-pwd" placeholder="修改密码" autocomplete="off" style="width:100%;padding:10px 34px 10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
-<span onclick="fsTogglePwdVis()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;color:#999;user-select:none;line-height:1;display:flex;align-items:center" id="fs-pwd-eye">
-<svg id="fs-eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-<svg id="fs-eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-</span>
-</div>
-<select id="fs-edit-share-expire" style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;margin-bottom:10px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
-  <option value="-1">不修改过期时间</option>
-  <option value="0">永不过期</option>
-  <option value="3600">1 小时</option>
-  <option value="86400">24 小时</option>
-  <option value="604800">7 天</option>
-  <option value="2592000">30 天</option>
-  <option value="7776000">90 天</option>
-</select>
-<div class="fs-modal-acts"><button class="fs-btn primary" onclick="fsDoEditShare()">保存</button><button class="fs-btn" onclick="fsCloseModal('fs-edit-share-modal')">取消</button></div>
-</div></div>
-
-<!-- 移动文件模态框 -->
-<div class="fs-modal" id="fs-move-modal"><div class="fs-modal-box">
-<h3>移动文件到</h3>
-<div class="fs-move-target" id="fs-move-info">正在加载文件夹结构…</div>
-<div class="fs-move-list" id="fs-move-list"></div>
-<div class="fs-modal-acts"><button class="fs-btn primary" id="fs-move-btn" onclick="fsDoMove()" disabled>移动</button><button class="fs-btn" onclick="fsCloseModal('fs-move-modal')">取消</button></div>
-</div></div>
-
-<!-- 重命名模态框 -->
-<div class="fs-modal" id="fs-rename-modal"><div class="fs-modal-box">
-<h3>重命名</h3>
-<input type="text" id="fs-rename-input" placeholder="输入新名称" autocomplete="off">
-<div class="fs-modal-acts"><button class="fs-btn primary" onclick="fsDoRename()">保存</button><button class="fs-btn" onclick="fsCloseModal('fs-rename-modal')">取消</button></div>
-</div></div>
-
-</div><!-- /.container -->
-
-<!-- 设置配额模态框 -->
-<div class="fs-modal" id="fs-quota-modal"><div class="fs-modal-box">
-<h3>设置存储配额</h3>
-<p style="font-size:13px;color:#999;margin-bottom:6px" id="fs-quota-user"></p>
-<div style="display:flex;gap:6px;margin-bottom:10px">
-<input type="number" id="fs-quota-input" placeholder="配额数值" autocomplete="off" min="0" style="flex:1;height:40px;padding:0 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
-<select id="fs-quota-unit" style="height:40px;width:auto;min-width:75px;padding:0 6px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
-  <option value="1">B</option>
-  <option value="1024" selected>KB</option>
-  <option value="1048576">MB</option>
-  <option value="1073741824">GB</option>
-</select>
-</div>
-<div class="fs-modal-acts"><button class="fs-btn primary" onclick="fsDoSetQuota()">保存</button><button class="fs-btn" onclick="fsCloseModal('fs-quota-modal')">取消</button></div>
-</div></div>
-
-<script src="/js/navbar.js"></script>
-<script>window.showFooter=false;</script>
-<script src="/js/main.js"></script>
-<script>
-(function(){
-window.__navActive=["工具"];
-var T=localStorage.getItem('bbs_token')||'', U=localStorage.getItem('bbs_user')||'', UI=localStorage.getItem('bbs_user_id')||'', ROLE='';
-var CUR_FOLDER=null, CUR_TREE_ID=null, PATH=[{id:null,name:'根目录'}], SHARE_ITEM_ID='', G_FOLDERS=[];
-
-function $(id){return document.getElementById(id)}
-function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML}
-function toast(m){var t=$('fs-toast');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show')},2500)}
-function fmtSize(b){if(b<=0)return'0 B';var u=['B','KB','MB','GB'],i=0,s=b;while(s>=1024&&i<u.length-1){s/=1024;i++}return(i===0?s:s.toFixed(1))+' '+u[i]}
-function fmtTime(ts){if(!ts)return'';return new Date(ts*1e3).toLocaleString()}
-function api(m,p,b){var o={method:m,headers:{}};if(T)o.headers['X-Auth-Token']=T;if(b)o.body=b;return fetch(p,o).then(function(r){return r.json().catch(function(){return{ok:false,error:'bad_response'}})})}
-
-function showLogin(){
-  $('fs-login').classList.add('show');
-  $('fs-login-err').style.display='none';
-  $('fs-login-user').value='';
-  $('fs-login-pass').value='';
-  setTimeout(function(){$('fs-login-user').focus()},100);
-}
-window.fsDoLogin=function(){
-  var user=$('fs-login-user').value.trim();
-  var pass=$('fs-login-pass').value.trim();
-  if(!user||!pass){$('fs-login-err').textContent='请输入用户名和密码';$('fs-login-err').style.display='';return}
-  $('fs-login-err').style.display='none';
-  $('fs-login-btn').disabled=true;$('fs-login-btn').textContent='登录中…';
-  fetch('/api/bbs/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass})}).then(function(r){return r.json().catch(function(){return{ok:false}}) }).then(function(r){
-    $('fs-login-btn').disabled=false;$('fs-login-btn').textContent='登录';
-    if(r.ok){
-      T=r.token;U=r.user;UI=r.user_id||'';ROLE=r.role||'';
-      localStorage.setItem('bbs_token',T);localStorage.setItem('bbs_user',U);localStorage.setItem('bbs_user_id',UI);
-      $('fs-uname').textContent=U;window._fsUID=UI;
-      $('fs-login').classList.remove('show');loadView()
-    }else if(r.error==='auth_failed'){
-      $('fs-login-err').textContent='用户名或密码错误';$('fs-login-err').style.display=''
-    }else{
-      $('fs-login-err').textContent='登录失败，请重试';$('fs-login-err').style.display=''
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>云文件存储 — Origin Base</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box
     }
-  }).catch(function(){
-    $('fs-login-btn').disabled=false;$('fs-login-btn').textContent='登录';
-    $('fs-login-err').textContent='网络错误';$('fs-login-err').style.display=''
-  })
-};
-$('fs-login-pass').addEventListener('keydown',function(e){if(e.key==='Enter')window.fsDoLogin()});
-// ── URL 导航 ──
-function _updateNavURL(){
-  var ids=PATH.slice(1).map(function(p){return p.id}).filter(Boolean);
-  var url='/Tool/files.html';
-  if(ids.length>0)url+='/'+ids.join('/')+'/';
-  history.replaceState({folder:CUR_FOLDER,path:PATH},'',url);
-}
-function _loadNavFromURL(){
-  var m=location.pathname.match(/^\/Tool\/files\.html(?:\/([0-9a-f\/]+))?\/?$/);
-  if(!m||!m[1])return;
-  var ids=m[1].split('/').filter(Boolean);
-  if(ids.length===0)return;
-  // 获取文件夹树并导航到目标
-  api('GET','/api/bbs/files/tree').then(function(r){
-    if(!r.ok||!r.folders)return;
-    var fmap={};for(var i=0;i<r.folders.length;i++)fmap[r.folders[i].id]=r.folders[i];
-    var path=[{id:null,name:'根目录'}];
-    var found=true;
-    for(var i=0;i<ids.length;i++){
-      var f=fmap[ids[i]];
-      if(f){path.push({id:f.id,name:f.name});CUR_FOLDER=f.id}
-      else{found=false;break}
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif
     }
-    if(found){PATH=path;loadFiles();}
-    else{CUR_FOLDER=null;PATH=[{id:null,name:'根目录'}];_updateNavURL();loadFiles()}
-  });
-}
-// 监听浏览器后退/前进
-window.addEventListener('popstate',function(e){
-  var st=e.state;
-  if(st&&st.folder){CUR_FOLDER=st.folder;PATH=st.path||[{id:null,name:'根目录'}];loadFiles()}
-  else _loadNavFromURL();
-});
 
+    .fs-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200
+    }
 
-window.fsLogout=function(){T='';U='';UI='';ROLE='';localStorage.removeItem('bbs_token');localStorage.removeItem('bbs_user');localStorage.removeItem('bbs_user_id');showLogin()};
+    [data-theme="dark"] .fs-overlay {
+      background: rgba(26, 27, 46, 0.95)
+    }
 
-function detect(){
-// ?share=xxx 直接跳转到分享页面
-var sp=new URLSearchParams(window.location.search).get('share');
-if(sp){window.location.href='/api/bbs/files/share/'+sp;return}
-fetch('/api/ping',{cache:'no-store'}).then(function(r){if(r.ok){$('fs-detect').style.display='none';$('fs-app').style.display='';checkAuth()}else throw Error()}).catch(function(){$('fs-detect').style.display='none'})}
+    .fs-overlay-box {
+      text-align: center;
+      padding: 40px;
+      max-width: 400px
+    }
 
-function checkAuth(){
-if(T){api('POST','/api/bbs/auth',JSON.stringify({verify:true})).then(function(r){
-if(r.ok){U=r.user||U;UI=r.user_id||UI;ROLE=r.role||'';window._fsUID=UI;
-localStorage.setItem('bbs_user',U);localStorage.setItem('bbs_user_id',UI);
-$('fs-uname').textContent=U;$('fs-login').classList.remove('show');loadView()}
-else{T='';localStorage.removeItem('bbs_token');showLogin()}}).catch(function(){showLogin()})}
-else showLogin()}
+    .fs-overlay-box h2 {
+      font-size: 22px;
+      margin-bottom: 8px;
+      color: #1a1a1a
+    }
 
-// ── Tab 切换 ──
-var CURRENT_TAB='files';
-function switchTab(tab){
-CURRENT_TAB=tab;
-document.querySelectorAll('.fs-tab').forEach(function(t){t.classList.toggle('active',t.dataset.tab===tab)});
-document.querySelectorAll('.fs-tab-content').forEach(function(t){t.classList.toggle('active',t.id==='fs-tab-'+tab)});
-if(tab==='files')loadFiles();
-else if(tab==='shares')loadShares();
-else if(tab==='admin')loadAdmin()}
-window.switchTab=switchTab;
+    [data-theme="dark"] .fs-overlay-box h2 {
+      color: #e0e0e0
+    }
 
-function loadView(){
-var html='<div class="fs-tab-bar">'+
-'<div class="fs-tab active" data-tab="files" onclick="switchTab(\'files\')">文件</div>'+
-'<div class="fs-tab" data-tab="shares" onclick="switchTab(\'shares\')">分享</div>';
-if(ROLE==='admin')html+='<div class="fs-tab" data-tab="admin" onclick="switchTab(\'admin\')">管理</div>';
-html+='</div><div class="fs-tab-content active" id="fs-tab-files"></div><div class="fs-tab-content" id="fs-tab-shares"></div>';
-if(ROLE==='admin')html+='<div class="fs-tab-content" id="fs-tab-admin"></div>';
-$('fs-content').innerHTML=html;
-$('fs-uname').textContent=U;
-// 如果 URL 中包含文件夹路径，自动导航到对应目录
-var _m=location.pathname.match(/^\/Tool\/files\.html(?:\/([0-9a-f\/]+))?\/?$/);
-if(_m&&_m[1]){_loadNavFromURL()}else{loadFiles()}}
+    .fs-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(57, 159, 255, 0.2);
+      border-top-color: var(--theme-color, #399FFF);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 16px
+    }
 
-// ── 文件浏览 ──
-function loadFiles(){
-var c=$('fs-tab-files');if(!c)return;
-c.innerHTML='<div style="text-align:center;padding:40px;color:#bbb;">加载中…</div>';
-// 并行获取文件列表和文件夹树
-Promise.all([
-api('GET','/api/bbs/files'+'?folder_id='+(CUR_FOLDER||'')+'&sort_by='+SORT_BY+'&sort_order='+SORT_ORDER),
-api('GET','/api/bbs/files/tree')
-]).then(function(resp){
-var r=resp[0];var treeResp=resp[1];
-if(!r.ok){if(r.error==='unauthorized'){T='';showLogin()}else c.innerHTML='<div class="fs-empty">加载失败</div>';return}
-renderFiles(r.files||[],r.quota,r.used,treeResp.ok?treeResp.folders:[])
-}).catch(function(){c.innerHTML='<div class="fs-empty">网络错误</div>'})}
-
-function _buildTree(folders,pid,level){
-var h='';var kids=[];
-for(var i=0;i<folders.length;i++){if(folders[i].parent_id===pid)kids.push(folders[i])}
-kids.sort(function(a,b){return a.name.localeCompare(b.name)});
-for(var i=0;i<kids.length;i++){
-var f=kids[i];var cur=f.id==CUR_FOLDER;
-if(cur)CUR_TREE_ID=f.id;
-var cls=cur?' tn-cur':'';
-var pad='padding-left:'+(12+level*16)+'px';
-var info=(f.file_count?f.file_count+' 个文件':'文件夹');
-if(f.total_size)info+=', '+fmtSize(f.total_size);
-h+='<div class="tn-item'+cls+'" style="'+pad+'" onclick="fsTreeNav(\''+f.id+'\')" title="'+info+'">'+
-'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'+
-'<span>'+esc(f.name)+'</span></div>';
-h+=_buildTree(folders,f.id,level+1)}
-return h}
-function renderFiles(files,quota,used,folders){
-folders=folders||[];G_FOLDERS=folders;
-var pct=quota>0?Math.min(100,Math.round(used/quota*100)):0;
-var cls=pct>=90?'danger':(pct>=75?'warning':'');
-var html='<div class="fs-layout"><div class="fs-sidebar"><div class="fs-sidebar-title">文件夹</div><div class="fs-tree" id="fs-tree">';
-// 根目录
-var rootCls=!CUR_FOLDER?' tn-cur':'';
-html+='<div class="tn-item'+rootCls+'" onclick="fsNavTo(0)" style="padding-left:12px;font-weight:600">'+
-'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'+
-'<span>根目录</span></div>';
-html+=_buildTree(folders,null,1);
-html+='</div></div><div class="fs-main">';
-
-// 配额
-html+='<div class="fs-card" style="padding:10px 14px;margin-bottom:8px"><div class="fs-qrow"><span class="fs-qlabel">已使用</span><span class="fs-qnum">'+fmtSize(used)+' / '+fmtSize(quota)+'</span></div><div class="fs-qbar"><div class="fs-qfill '+cls+'" style="width:'+pct+'%"></div></div></div>';
-
-// 上传区
-html+='<div class="fs-upload" id="fs-upload"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><div class="hint">点击或拖拽文件上传（可多选）</div></div>';
-// 上传任务列表
-html+='<div class="fs-upload-tasks" id="fs-upload-tasks"></div>';
-
-// 工具栏
-html+='<div class="fs-toolbar"><div class="fs-toolbar-row"><div class="fs-path">';
-for(var i=0;i<PATH.length;i++){
-if(i>0)html+='<span>/</span>';
-if(i===PATH.length-1)html+='<span>'+esc(PATH[i].name)+'</span>';
-else html+='<a onclick="fsNavTo('+i+')">'+esc(PATH[i].name)+'</a>'}
-html+='</div><div class="spacer"></div><select style="font-size:12px;padding:3px 6px;border:1px solid rgba(0,0,0,0.1);border-radius:4px;outline:none;color:#555;background:transparent;margin-right:6px" onchange="fsSetSort(this.value)" id="fs-sort-select"><option value="name-asc">名称 ↑</option><option value="name-desc">名称 ↓</option><option value="time-asc">时间 ↑</option><option value="time-desc">时间 ↓</option></select><button class="fs-btn" id="fs-btn-batch" onclick="fsToggleBatch()">批量操作</button><button class="fs-btn" id="fs-btn-batch-del" onclick="fsBatchDelete()" style="display:none">删除</button><button class="fs-btn" id="fs-btn-batch-move" onclick="fsShowMoveDialog()" style="display:none">移动到</button><button class="fs-btn" id="fs-btn-batch-dl" onclick="fsBatchDownload()" style="display:none">下载</button><span id="fs-select-all" style="font-size:11px;color:var(--theme-color,#399FFF);cursor:pointer;display:none;margin-right:6px" onclick="fsToggleSelectAll()">全选</span><span id="fs-select-none" style="font-size:11px;color:#999;cursor:pointer;display:none;margin-right:6px" onclick="fsToggleSelectAll()">取消全选</span><button class="fs-btn" onclick="fsShowNewFolder()">+ 新建</button>';
-html+='<button class="fs-btn" onclick="fsShowShare(\''+(CUR_FOLDER||'')+'\',\''+(CUR_FOLDER?'文件夹':'根目录')+'\')">分享</button><button class="fs-btn" onclick="fsDownload(\''+(CUR_FOLDER||'all')+'\',\''+(CUR_FOLDER?'文件夹':'全部文件')+'.zip\')">下载ZIP</button>';
-html+='</div></div><div class="fs-toolbar-row">';
-html+='<select style="font-size:12px;padding:3px 6px;border:1px solid rgba(0,0,0,0.1);border-radius:4px;outline:none;color:#555;background:transparent;margin-right:6px" onchange="fsSetSort(this.value)" id="fs-sort-select"><option value="name-asc">名称 ↑</option><option value="name-desc">名称 ↓</option><option value="time-asc">时间 ↑</option><option value="time-desc">时间 ↓</option></select><button class="fs-btn" id="fs-btn-batch" onclick="fsToggleBatch()">批量操作</button><button class="fs-btn" id="fs-btn-batch-del" onclick="fsBatchDelete()" style="display:none">删除</button><button class="fs-btn" id="fs-btn-batch-move" onclick="fsShowMoveDialog()" style="display:none">移动到</button><button class="fs-btn" id="fs-btn-batch-dl" onclick="fsBatchDownload()" style="display:none">下载</button><span id="fs-select-all" style="font-size:11px;color:var(--theme-color,#399FFF);cursor:pointer;display:none;margin-right:6px" onclick="fsToggleSelectAll()">全选</span><span id="fs-select-none" style="font-size:11px;color:#999;cursor:pointer;display:none;margin-right:6px" onclick="fsToggleSelectAll()">取消全选</span><button class="fs-btn" onclick="fsShowNewFolder()">+ 新建</button>';
-html+='<button class="fs-btn" onclick="fsShowShare(\''+(CUR_FOLDER||'')+'\',\''+(CUR_FOLDER?'文件夹':'根目录')+'\')">分享</button><button class="fs-btn" onclick="fsDownload(\''+(CUR_FOLDER||'all')+'\',\''+(CUR_FOLDER?'文件夹':'全部文件')+'.zip\')">下载ZIP</button>';
-html+='</div>';
-
-// 文件列表
-if(files.length===0)html+='<div class="fs-empty">文件夹为空</div>';
-else{
-html+='<div class="fs-list">';
-for(var i=0;i<files.length;i++){
-var f=files[i];
-var ico=f.type==='folder'?'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>':'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#399FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-var meta='';var acts='';
-if(f.type==='folder'){
-meta='文件夹';
-acts='<button class="fs-btn" onclick="fsNavInto(\''+f.id+'\',\''+esc(f.name)+'\')">打开</button>'+
-'<button class="fs-btn" onclick="fsDownload(\''+f.id+'\',\''+esc(f.name)+'.zip\')">下载ZIP</button>'+
-'<button class="fs-btn" onclick="fsShowShare(\''+f.id+'\',\''+esc(f.name)+'\',true)">分享</button>';
-}else{
-meta=fmtSize(f.size)+(f.uploaded_at?' · '+fmtTime(f.uploaded_at):'');
-acts='<button class="fs-btn" onclick="fsDownload(\''+f.id+'\',\''+esc(f.name)+'\')">下载</button>'+
-'<button class="fs-btn" onclick="fsShowShare(\''+f.id+'\',\''+esc(f.name)+'\')">分享</button>';
-}
-acts+='<button class="fs-btn" onclick="fsShowRename(\''+f.id+'\',\''+esc(f.name)+'\')">重命名</button>'+
-'<button class="fs-btn danger" onclick="fsDeleteItem(\''+f.id+'\',\''+esc(f.name)+'\')">删除</button>';
-html+='<div class="fs-item"><div class="fs-cb"><input type="checkbox" class="fs-item-cb" data-id="'+f.id+'" onclick="fsToggleSelect(\''+f.id+'\')" style="display:none"></div><div class="ico '+(f.type==='folder'?'folder':'')+'"'+(f.type==='folder'?'onclick="fsNavInto(\''+f.id+'\',\''+esc(f.name)+'\')"':'')+'>'+ico+'</div>'+
-'<div class="info"><div class="name">'+esc(f.name)+'</div><div class="meta">'+meta+'</div></div><div class="acts">'+acts+'</div></div>';}
-
-html+='</div></div>';}
-html+='</div></div>';
-// 安全提示
-html+='<div class="fs-notice">本存储仅作临时交换使用，不宜作为长期网盘。因不可控因素导致的文件丢失或泄露，网站恕不承担相关责任。</div>';
-$('fs-tab-files').innerHTML=html;
-// 高亮树中当前项
-var treeEl=$('fs-tree');
-if(treeEl){treeEl.querySelectorAll('.tn-cur').forEach(function(e){e.scrollIntoView({block:'nearest'})})}
-bindUpload()}
-
-var UPLOAD_TASKS=[],UPLOAD_CONCURRENCY=3,SORT_BY="name",SORT_ORDER="asc";
-var SELECTED_IDS={},BATCH_MODE=false;
-window.fsToggleBatch=function(){
-  BATCH_MODE=!BATCH_MODE;
-  var btn=document.getElementById('fs-btn-batch');
-  if(btn)btn.textContent=BATCH_MODE?'取消':'批量操作';
-  // 隐藏/显示其他按钮
-  document.querySelectorAll('.fs-toolbar .fs-btn:not(#fs-btn-batch):not(#fs-btn-batch-del):not(#fs-btn-batch-move):not(#fs-btn-batch-dl), .fs-toolbar .fs-cb-label, .fs-toolbar #fs-sort-select, .fs-toolbar a, .fs-toolbar .fs-path').forEach(function(el){
-    if(BATCH_MODE&&el.closest){var p=el.closest('.fs-path');if(p&&p.contains(el)){el.style.display='none';return}}
-    if(el.id!=='fs-btn-batch'&&el.tagName!=='SPAN'&&el.tagName!=='DIV')el.style.display=BATCH_MODE?'none':''
-  });
-  // 只隐藏路径面包屑，不隐藏其他
-  var pathEl=document.querySelector('.fs-toolbar .fs-path');if(pathEl)pathEl.style.display=BATCH_MODE?'none':'';
-  var sortEl=document.getElementById('fs-sort-select');if(sortEl)sortEl.style.display=BATCH_MODE?'none':'';
-  var delBtn=document.getElementById('fs-btn-batch-del');if(delBtn)delBtn.style.display=BATCH_MODE?'':'none';
-  var moveBtn=document.getElementById('fs-btn-batch-move');if(moveBtn)moveBtn.style.display=BATCH_MODE?'':'none';
-  var dlBtn=document.getElementById('fs-btn-batch-dl');if(dlBtn)dlBtn.style.display=BATCH_MODE?'':'none';
-  var sa=document.getElementById('fs-select-all');if(sa)sa.style.display=BATCH_MODE?'':'none';
-  var sn=document.getElementById('fs-select-none');if(sn)sn.style.display='none';
-  if(!BATCH_MODE){SELECTED_IDS={};fsUpdateBatchBar()}
-  var cbs=document.querySelectorAll('.fs-item-cb');cbs.forEach(function(c){c.style.display=BATCH_MODE?'':'none';c.checked=false});
-};
-window.fsSetSort=function(val){
-  var parts=val.split('-');SORT_BY=parts[0];SORT_ORDER=parts[1];
-  loadFiles()
-};
-window.fsToggleSelect=function(id){
-  if(SELECTED_IDS[id]){delete SELECTED_IDS[id]}else{SELECTED_IDS[id]=true}
-  fsUpdateBatchBar();
-  var cbs=document.querySelectorAll('.fs-item-cb[data-id="'+id+'"]');
-  cbs.forEach(function(c){c.checked=!!SELECTED_IDS[id]})
-}
-window.fsToggleSelectAll=function(){
-  var items=document.querySelectorAll('.fs-item-cb');
-  var allChecked=true;
-  items.forEach(function(c){if(!c.checked)allChecked=false});
-  items.forEach(function(c){c.checked=!allChecked;
-    if(c.checked)SELECTED_IDS[c.dataset.id]=true;else delete SELECTED_IDS[c.dataset.id]
-  });
-  var sa=$('fs-select-all');var sn=$('fs-select-none');
-  if(sa)sa.style.display=allChecked?'':'none';
-  if(sn)sn.style.display=allChecked?'none':'';
-  fsUpdateBatchBar()
-}
-function fsUpdateBatchBar(){
-  var bar=$('fs-batch-bar');
-  var fbar=$('fs-float-bar');var fc=$('fs-float-count');
-  var cnt=Object.keys(SELECTED_IDS).length;
-  if(bar){var ct=bar.querySelector('.count');if(ct)ct.textContent='已选 '+cnt+' 项';bar.classList.toggle('show',cnt>0)}
-  if(fbar){var fc=$('fs-float-count');if(fc)fc.textContent='已选 '+cnt+' 项';}
-  var bm=$('fs-batch-bar-move');if(bm)bm.disabled=cnt===0;
-  var bd=$('fs-batch-bar-del');if(bd)bd.disabled=cnt===0;
-  var bdl=$('fs-btn-batch-dl');if(bdl)bdl.disabled=cnt===0
-}
-window.fsBatchDownload=function(){
-  var ids=Object.keys(SELECTED_IDS);
-  if(!ids.length){toast('请先选择文件');return}
-  var a=document.createElement('a');a.style.display='none';document.body.appendChild(a);
-  fetch('/api/bbs/files/batch-download',{method:'POST',headers:{'X-Auth-Token':T,'Content-Type':'application/json'},body:JSON.stringify({ids:ids})}).then(function(r){
-  if(!r.ok){toast('下载失败');return}
-  r.blob().then(function(blob){a.href=URL.createObjectURL(blob);a.download='batch_download.zip';a.click();setTimeout(function(){URL.revokeObjectURL(a.href);document.body.removeChild(a)},1000)})}).catch(function(){toast('下载失败');document.body.removeChild(a)})};
-window.fsBatchDelete=function(){
-  var ids=Object.keys(SELECTED_IDS);
-  if(!ids.length)return;
-  if(!confirm('确定删除选中的 '+ids.length+' 项吗？'))return;
-  api('POST','/api/bbs/files/batch-delete',JSON.stringify({ids:ids})).then(function(r){
-    if(r.ok){toast('已删除 '+ids.length+' 项');SELECTED_IDS={};loadFiles()}
-    else toast('删除失败: '+(r.error||'未知'))})
-}
-window.fsShowMoveDialog=function(){
-  var ids=Object.keys(SELECTED_IDS);
-  if(!ids.length){toast('请先选择文件');return}
-  window._fsMoveIds=ids;window._fsMoveTarget=null;
-  var info=$('fs-move-info');
-  if(info)info.textContent='移动 '+(ids.length>1?ids.length+' 项':'1 项')+' 到…';
-  var btn=$('fs-move-btn');
-  if(btn){btn.disabled=true;btn.textContent='移动到根目录'}
-  $('fs-move-modal').classList.add('show');
-  fsBuildMoveTree()
-}
-function fsBuildMoveTree(){
-  var list=$('fs-move-list');if(!list)return;
-  api('GET','/api/bbs/files/tree').then(function(r){
-    if(!r.ok||!r.folders){list.innerHTML='<div style="padding:12px;color:#999;font-size:13px">加载失败</div>';return}
-    var folders=r.folders;
-    var excludes={};(window._fsMoveIds||[]).forEach(function(id){excludes[id]=true});
-    function markChildren(pid){
-      for(var i=0;i<folders.length;i++){
-        if(folders[i].parent_id===pid&&!excludes[folders[i].id]){
-          excludes[folders[i].id]=true;markChildren(folders[i].id)
-        }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg)
       }
     }
-    (window._fsMoveIds||[]).forEach(function(id){markChildren(id)});
-    var html='<div class="fs-move-item" data-id="" onclick="fsMoveSel(this)">'
-      +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" style="flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> 根目录</div>';
-    html+=fsBuildMoveSubTree(folders,null,1,excludes);
-    list.innerHTML=html
-  }).catch(function(){list.innerHTML='<div style="padding:12px;color:#999;font-size:13px">加载失败</div>'})
+
+    .fs-body {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 0 12px 80px
+    }
+
+    .fs-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 0 16px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 8px
+    }
+
+    [data-theme="dark"] .fs-header {
+      border-color: rgba(255, 255, 255, 0.06)
+    }
+
+    .fs-header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a1a;
+      display: flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    [data-theme="dark"] .fs-header h1 {
+      color: #e0e0e0
+    }
+
+    .fs-user {
+      font-size: 12px;
+      color: #8e8e93;
+      display: flex;
+      align-items: center;
+      gap: 6px
+    }
+
+    .fs-user .name {
+      color: var(--theme-color, #399FFF);
+      cursor: pointer;
+      font-weight: 600
+    }
+
+    .fs-user .name:hover {
+      text-decoration: underline
+    }
+
+    .fs-btn {
+      padding: 6px 12px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      background: transparent;
+      color: #555;
+      transition: all .15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      text-decoration: none;
+      white-space: nowrap
+    }
+
+    .fs-btn:hover {
+      border-color: var(--theme-color, #399FFF);
+      color: var(--theme-color, #399FFF)
+    }
+
+    .fs-btn.danger:hover {
+      border-color: #ff3b30;
+      color: #ff3b30
+    }
+
+    .fs-btn.primary {
+      background: var(--theme-color, #399FFF);
+      color: #fff;
+      border-color: var(--theme-color, #399FFF)
+    }
+
+    .fs-btn.primary:hover {
+      opacity: .85
+    }
+
+    .fs-btn:disabled {
+      opacity: .4;
+      cursor: default;
+      pointer-events: none
+    }
+
+    [data-theme="dark"] .fs-btn {
+      color: #aaa;
+      border-color: rgba(255, 255, 255, 0.12)
+    }
+
+    /* 配额 */
+    .fs-card {
+      background: #fff;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04)
+    }
+
+    [data-theme="dark"] .fs-card {
+      background: #1c1c1e;
+      border-color: rgba(255, 255, 255, 0.06)
+    }
+
+    .fs-qrow {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+      gap: 4px
+    }
+
+    .fs-qlabel {
+      font-size: 13px;
+      color: #8e8e93
+    }
+
+    .fs-qnum {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1a1a1a
+    }
+
+    [data-theme="dark"] .fs-qnum {
+      color: #e0e0e0
+    }
+
+    .fs-qbar {
+      width: 100%;
+      height: 6px;
+      background: rgba(0, 0, 0, 0.06);
+      border-radius: 3px;
+      overflow: hidden
+    }
+
+    [data-theme="dark"] .fs-qbar {
+      background: rgba(255, 255, 255, 0.08)
+    }
+
+    .fs-qfill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--theme-color, #399FFF);
+      transition: width .3s
+    }
+
+    .fs-qfill.warning {
+      background: #ff9500
+    }
+
+    .fs-qfill.danger {
+      background: #ff3b30
+    }
+
+    /* 上传区 */
+    .fs-upload {
+      border: 2px dashed rgba(0, 0, 0, 0.12);
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .15s;
+      margin-bottom: 12px;
+      background: rgba(57, 159, 255, 0.02)
+    }
+
+    [data-theme="dark"] .fs-upload {
+      border-color: rgba(255, 255, 255, 0.12);
+      background: rgba(57, 159, 255, 0.04)
+    }
+
+    .fs-upload:hover,
+    .fs-upload.dragover {
+      border-color: var(--theme-color, #399FFF);
+      background: rgba(57, 159, 255, 0.06)
+    }
+
+    .fs-upload svg {
+      color: #bbb;
+      margin-bottom: 6px
+    }
+
+    .fs-upload .hint {
+      font-size: 13px;
+      color: #999
+    }
+
+    .fs-upload .hint strong {
+      color: var(--theme-color, #399FFF)
+    }
+
+    /* 安全提示 */
+    .fs-notice {
+      font-size: 11px;
+      color: #ccc;
+      text-align: center;
+      padding: 12px 8px 4px;
+      line-height: 1.5
+    }
+
+    [data-theme="dark"] .fs-notice {
+      color: #444
+    }
+
+    /* 上传任务列表 */
+    .fs-upload-tasks {
+      margin-bottom: 10px
+    }
+
+    .ut-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: #fff;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: 8px;
+      margin-bottom: 4px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03)
+    }
+
+    [data-theme="dark"] .ut-item {
+      background: #1c1c1e;
+      border-color: rgba(255, 255, 255, 0.06)
+    }
+
+    .ut-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      gap: 8px;
+      align-items: center
+    }
+
+    .ut-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: #1a1a1a;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    [data-theme="dark"] .ut-name {
+      color: #e0e0e0
+    }
+
+    .ut-size {
+      font-size: 10px;
+      color: #999;
+      flex-shrink: 0
+    }
+
+    .ut-bar {
+      width: 60px;
+      height: 4px;
+      background: rgba(0, 0, 0, 0.06);
+      border-radius: 2px;
+      overflow: hidden;
+      flex-shrink: 0
+    }
+
+    .ut-bar .ut-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width .2s
+    }
+
+    .ut-stat {
+      font-size: 11px;
+      min-width: 32px;
+      text-align: right;
+      flex-shrink: 0
+    }
+
+    /* 工具栏 */
+    .fs-toolbar {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 10px;
+      padding: 6px 0
+    }
+
+    .fs-toolbar-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      width: 100%
+    }
+
+    .fs-toolbar .spacer {
+      flex: 1;
+      min-width: 12px
+    }
+
+    .fs-path {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      color: #555;
+      overflow-x: auto;
+      white-space: nowrap;
+      padding: 2px 0;
+      flex: 1;
+      min-width: 60px
+    }
+
+    [data-theme="dark"] #fs-sort-select {
+      background: rgba(255, 255, 255, 0.06) !important;
+      color: #e0e0e0 !important;
+      border-color: rgba(255, 255, 255, 0.15) !important
+    }
+
+    [data-theme="dark"] #fs-sort-select option {
+      background: #1c1c1e;
+      color: #e0e0e0
+    }
+
+    .fs-path a {
+      color: var(--theme-color, #399FFF);
+      cursor: pointer;
+      text-decoration: none
+    }
+
+    .fs-path a:hover {
+      text-decoration: underline
+    }
+
+    .fs-path span {
+      color: #bbb
+    }
+
+    /* 列表 */
+    .fs-empty {
+      text-align: center;
+      padding: 48px 16px;
+      color: #bbb;
+      font-size: 14px
+    }
+
+    .fs-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #fff;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: 10px;
+      margin-bottom: 6px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+      transition: box-shadow .15s
+    }
+
+    [data-theme="dark"] .fs-item {
+      background: #1c1c1e;
+      border-color: rgba(255, 255, 255, 0.06)
+    }
+
+    .fs-item:hover {
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06)
+    }
+
+    .fs-item .ico {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      background: rgba(57, 159, 255, 0.08);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer
+    }
+
+    .fs-item .ico svg {
+      color: var(--theme-color, #399FFF)
+    }
+
+    .fs-item .ico.folder {
+      background: rgba(255, 149, 0, 0.1)
+    }
+
+    .fs-item .ico.folder svg {
+      color: #ff9500
+    }
+
+    .fs-item .info {
+      flex: 1;
+      min-width: 0
+    }
+
+    .fs-item .info .name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1a1a1a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis
+    }
+
+    [data-theme="dark"] .fs-item .info .name {
+      color: #e0e0e0
+    }
+
+    .fs-item .info .meta {
+      font-size: 11px;
+      color: #999;
+      margin-top: 2px
+    }
+
+    .fs-item .acts {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0
+    }
+
+    /* 复选框 */
+    .fs-cb {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center
+    }
+
+    .fs-cb input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      accent-color: var(--theme-color, #399FFF);
+      margin: 0;
+      pointer-events: auto
+    }
+
+    .fs-cb-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 12px;
+      color: #8e8e93
+    }
+
+    /* 批量操作栏 */
+    .fs-batch-bar {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: rgba(57, 159, 255, 0.06);
+      border: 1px solid rgba(57, 159, 255, 0.15);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: #555
+    }
+
+    .fs-batch-bar.show {
+      display: flex
+    }
+
+    .fs-batch-bar .count {
+      flex: 1;
+      font-weight: 600;
+      color: var(--theme-color, #399FFF)
+    }
+
+    [data-theme="dark"] .fs-batch-bar {
+      background: rgba(57, 159, 255, 0.08);
+      border-color: rgba(57, 159, 255, 0.2);
+      color: #aaa
+    }
+
+    /* 移动选择树 */
+    .fs-move-list {
+      max-height: 300px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: 8px;
+      padding: 4px 0
+    }
+
+    [data-theme="dark"] .fs-move-list {
+      border-color: rgba(255, 255, 255, 0.06)
+    }
+
+    .fs-move-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #555;
+      transition: background .1s
+    }
+
+    .fs-move-item:hover {
+      background: rgba(0, 0, 0, 0.04)
+    }
+
+    [data-theme="dark"] .fs-move-item {
+      color: #aaa
+    }
+
+    [data-theme="dark"] .fs-move-item:hover {
+      background: rgba(255, 255, 255, 0.04)
+    }
+
+    .fs-move-item.sel {
+      background: rgba(57, 159, 255, 0.08);
+      color: var(--theme-color, #399FFF);
+      font-weight: 600
+    }
+
+    /* 已选移动目标 */
+    .fs-move-target {
+      font-size: 12px;
+      color: #999;
+      margin-bottom: 8px;
+      padding: 6px 10px;
+      background: rgba(57, 159, 255, 0.04);
+      border-radius: 6px;
+      border: 1px solid rgba(57, 159, 255, 0.1)
+    }
+
+    /* 重命名内联编辑 */
+    .fs-rename-input {
+      font-size: 14px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border: 1px solid var(--theme-color, #399FFF);
+      border-radius: 4px;
+      outline: none;
+      background: rgba(57, 159, 255, 0.04);
+      color: inherit;
+      width: 100%;
+      box-sizing: border-box
+    }
+
+    /* 多选模式 */
+    .fs-ms-toggle {
+      font-size: 12px;
+      padding: 4px 10px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 6px;
+      cursor: pointer;
+      background: transparent;
+      color: #8e8e93;
+      transition: all .15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px
+    }
+
+    .fs-ms-toggle:hover {
+      border-color: var(--theme-color, #399FFF);
+      color: var(--theme-color, #399FFF)
+    }
+
+    .fs-ms-toggle.on {
+      background: var(--theme-color, #399FFF);
+      color: #fff;
+      border-color: var(--theme-color, #399FFF)
+    }
+
+    [data-theme="dark"] .fs-ms-toggle {
+      color: #aaa;
+      border-color: rgba(255, 255, 255, 0.12)
+    }
+
+    /* 悮浮操作栏 */
+    .fs-float-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: #fff;
+      border-top: 1px solid rgba(0, 0, 0, 0.06);
+      padding: 10px 16px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
+      backdrop-filter: blur(12px)
+    }
+
+    .fs-float-bar.show {
+      display: flex
+    }
+
+    .fs-float-bar .count {
+      font-size: 13px;
+      color: #555;
+      margin-right: auto;
+      font-weight: 600
+    }
+
+    [data-theme="dark"] .fs-float-bar {
+      background: #1c1c1e;
+      border-color: rgba(255, 255, 255, 0.06)
+    }
+
+    [data-theme="dark"] .fs-float-bar .count {
+      color: #aaa
+    }
+
+    @media(max-width:720px) {
+      .fs-float-bar {
+        padding: 8px 10px;
+        gap: 6px;
+        flex-wrap: wrap
+      }
+
+      .fs-float-bar .count {
+        width: 100%;
+        text-align: center;
+        margin-right: 0;
+        margin-bottom: 4px
+      }
+    }
+
+    [data-theme="dark"] .fs-rename-input {
+      background: rgba(57, 159, 255, 0.08);
+      color: #e0e0e0
+    }
+
+    /* 模态框 */
+    .fs-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 300;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center
+    }
+
+    .fs-modal.show {
+      display: flex
+    }
+
+    .fs-modal-box {
+      background: #fff;
+      border-radius: 14px;
+      padding: 24px;
+      width: 90%;
+      max-width: 420px;
+      max-height: 80vh;
+      overflow-y: auto
+    }
+
+    [data-theme="dark"] .fs-modal-box {
+      background: #1c1c1e;
+      color: #e0e0e0
+    }
+
+    .fs-modal-box h3 {
+      font-size: 17px;
+      margin-bottom: 12px
+    }
+
+    .fs-modal-box input,
+    .fs-modal-box select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      background: rgba(255, 255, 255, 0.8);
+      color: #333;
+      margin-bottom: 10px;
+      box-sizing: border-box
+    }
+
+    [data-theme="dark"] .fs-modal-box input,
+    [data-theme="dark"] .fs-modal-box select {
+      background: rgba(255, 255, 255, 0.06);
+      color: #e0e0e0;
+      border-color: rgba(255, 255, 255, 0.15)
+    }
+
+    .fs-modal-acts {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 12px
+    }
+
+    .fs-tab-bar {
+      display: flex;
+      gap: 0;
+      margin-bottom: 12px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06)
+    }
+
+    .fs-tab {
+      padding: 8px 16px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #999;
+      border-bottom: 2px solid transparent;
+      transition: all .15s
+    }
+
+    .fs-tab:hover {
+      color: #555
+    }
+
+    .fs-tab.active {
+      color: var(--theme-color, #399FFF);
+      border-bottom-color: var(--theme-color, #399FFF)
+    }
+
+    .fs-tab-content {
+      display: none
+    }
+
+    .fs-tab-content.active {
+      display: block
+    }
+
+    /* 分享列表 */
+    .fs-share-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: 8px;
+      margin-bottom: 6px
+    }
+
+    [data-theme="dark"] .fs-share-item {
+      border-color: rgba(255, 255, 255, 0.06)
+    }
+
+    .fs-share-item .info {
+      flex: 1;
+      min-width: 0
+    }
+
+    .fs-share-item .info .name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a1a1a
+    }
+
+    [data-theme="dark"] .fs-share-item .info .name {
+      color: #e0e0e0
+    }
+
+    .fs-share-item .info .meta {
+      font-size: 11px;
+      color: #999
+    }
+
+    /* 管理员表格 */
+    .fs-admin-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px
+    }
+
+    .fs-admin-table td {
+      padding: 8px 6px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+      vertical-align: middle
+    }
+
+    .fs-admin-table tr:hover {
+      background: rgba(57, 159, 255, 0.03)
+    }
+
+    .fs-admin-table .uname {
+      color: var(--theme-color, #399FFF);
+      cursor: pointer;
+      font-weight: 600
+    }
+
+    .fs-admin-table .uname:hover {
+      text-decoration: underline
+    }
+
+    /* Toast */
+    .fs-toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.85);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      z-index: 999;
+      opacity: 0;
+      transition: opacity .3s;
+      pointer-events: none
+    }
+
+    .fs-toast.show {
+      opacity: 1
+    }
+
+    /* 登录 */
+    .fs-login {
+      position: fixed;
+      inset: 0;
+      z-index: 150;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(12px);
+      display: none;
+      align-items: center;
+      justify-content: center
+    }
+
+    [data-theme="dark"] .fs-login {
+      background: rgba(26, 27, 46, 0.95)
+    }
+
+    .fs-login.show {
+      display: flex
+    }
+
+    .fs-login-box {
+      text-align: center;
+      padding: 40px;
+      max-width: 340px;
+      width: 90%
+    }
+
+    .fs-login-box h2 {
+      font-size: 22px;
+      margin-bottom: 4px;
+      color: #1a1a1a
+    }
+
+    [data-theme="dark"] .fs-login-box h2 {
+      color: #e0e0e0
+    }
+
+    .fs-login-box p {
+      font-size: 13px;
+      color: #8e8e93;
+      margin-bottom: 16px
+    }
+
+    .fs-login-box input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      border-radius: 10px;
+      font-size: 15px;
+      outline: none;
+      background: rgba(255, 255, 255, 0.8);
+      color: #333;
+      margin-bottom: 10px;
+      box-sizing: border-box
+    }
+
+    [data-theme="dark"] .fs-login-box input {
+      background: rgba(255, 255, 255, 0.06);
+      color: #e0e0e0
+    }
+
+    .fs-login-box .err {
+      color: #ff3b30;
+      font-size: 13px;
+      margin-bottom: 8px;
+      display: none
+    }
+
+    .fs-login-box button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--theme-color, #399FFF);
+      color: #fff;
+      transition: opacity .15s
+    }
+
+    .fs-login-box button:disabled {
+      opacity: .5;
+      cursor: default
+    }
+
+    [data-theme="dark"] #fs-quota-unit {
+      background: rgba(40, 42, 65, 0.8) !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+      color: #ddd !important
+    }
+
+    [data-theme="dark"] #fs-share-pwd,
+    [data-theme="dark"] #fs-share-title {
+      background: rgba(40, 42, 65, 0.8) !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+      color: #ddd !important
+    }
+
+    [data-theme="dark"] #fs-quota-modal .fs-modal-box p {
+      color: #aaa !important
+    }
+
+    [data-theme="dark"] #fs-edit-share-expire,
+    [data-theme="dark"] #fs-share-expire,
+    [data-theme="dark"] #fs-edit-share-pwd {
+      background: rgba(40, 42, 65, 0.8) !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+      color: #ddd !important
+    }
+
+    /* 树形布局 */
+    .fs-layout {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start
+    }
+
+    .fs-sidebar {
+      width: 200px;
+      flex-shrink: 0;
+      background: #fff;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: 10px;
+      padding: 8px 0;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+      overflow-y: auto;
+      max-height: calc(100vh - 200px);
+      position: sticky;
+      top: 80px
+    }
+
+    [data-theme="dark"] .fs-sidebar {
+      background: #1c1c1e;
+      border-color: rgba(255, 255, 255, 0.06)
+    }
+
+    .fs-sidebar-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #999;
+      padding: 6px 12px 4px;
+      text-transform: uppercase
+    }
+
+    .fs-main {
+      flex: 1;
+      min-width: 0
+    }
+
+    .fs-tree {
+      font-size: 13px
+    }
+
+    .tn-item {
+      display: flex;
+      align-items: center;
+      padding: 5px 12px;
+      cursor: pointer;
+      color: #555;
+      transition: background .12s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis
+    }
+
+    .tn-item:hover {
+      background: rgba(0, 0, 0, 0.04)
+    }
+
+    .tn-item.tn-cur {
+      background: rgba(57, 159, 255, 0.08);
+      color: var(--theme-color, #399FFF);
+      font-weight: 600
+    }
+
+    [data-theme="dark"] .tn-item {
+      color: #aaa
+    }
+
+    [data-theme="dark"] .tn-item:hover {
+      background: rgba(255, 255, 255, 0.04)
+    }
+
+    [data-theme="dark"] .tn-item.tn-cur {
+      background: rgba(57, 159, 255, 0.15);
+      color: #5ac8fa
+    }
+
+    @media(max-width:720px) {
+
+      /* ── 整体布局 ── */
+      .fs-body {
+        padding: 10px
+      }
+
+      .fs-header {
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 10px 0
+      }
+
+      .fs-header h1 {
+        font-size: 16px
+      }
+
+      .fs-user {
+        font-size: 12px
+      }
+
+      /* ── 侧边栏树 ── */
+      .fs-layout {
+        flex-direction: column
+      }
+
+      .fs-sidebar {
+        width: 100%;
+        max-height: 160px;
+        position: static;
+        border-radius: 8px
+      }
+
+      .tn-item {
+        white-space: normal;
+        overflow: visible;
+        padding: 6px 10px;
+        font-size: 12px
+      }
+
+      .fs-sidebar-title {
+        font-size: 10px
+      }
+
+      /* ── 工具栏/面包屑 ── */
+      .fs-toolbar {
+        flex-wrap: wrap;
+        gap: 4px
+      }
+
+      .fs-path {
+        font-size: 12px;
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        padding: 2px 0
+      }
+
+      .fs-toolbar .spacer {
+        display: none
+      }
+
+      .fs-toolbar .fs-btn {
+        font-size: 11px;
+        padding: 5px 10px
+      }
+
+      /* ── 文件列表 ── */
+      .fs-item {
+        padding: 8px 10px;
+        gap: 8px
+      }
+
+      .fs-item .ico {
+        width: 28px;
+        height: 28px
+      }
+
+      .fs-item .ico svg {
+        width: 14px;
+        height: 14px
+      }
+
+      .fs-item .info .name {
+        font-size: 13px;
+        white-space: normal;
+        overflow: visible
+      }
+
+      .fs-item .info .meta {
+        font-size: 10px
+      }
+
+      .fs-item .acts {
+        gap: 3px
+      }
+
+      .fs-item .acts .fs-btn {
+        font-size: 10px;
+        padding: 4px 7px
+      }
+
+      /* ── 上传区 ── */
+      .fs-upload {
+        padding: 16px
+      }
+
+      .fs-upload svg {
+        width: 20px;
+        height: 20px
+      }
+
+      .fs-upload .hint {
+        font-size: 12px
+      }
+
+      /* ── 配额条 ── */
+      .fs-qrow {
+        font-size: 12px
+      }
+
+      .fs-qbar {
+        height: 6px
+      }
+
+      /* ── 分享列表 ── */
+      .fs-share-item {
+        flex-wrap: wrap;
+        padding: 8px 10px
+      }
+
+      .fs-share-item .info {
+        width: 100%;
+        margin-bottom: 4px
+      }
+
+      .fs-share-item .info .name {
+        font-size: 12px
+      }
+
+      .fs-share-item .info .meta {
+        font-size: 10px
+      }
+
+      .fs-share-item .fs-btn {
+        font-size: 10px;
+        padding: 4px 8px;
+        flex: 1;
+        text-align: center
+      }
+
+      /* ── 管理员表格 ── */
+      .fs-admin-table,
+      .fs-admin-table tbody,
+      .fs-admin-table tr,
+      .fs-admin-table td {
+        display: block;
+        width: 100%
+      }
+
+      .fs-admin-table tr {
+        padding: 10px 0;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06)
+      }
+
+      .fs-admin-table td {
+        padding: 3px 6px;
+        border: none;
+        text-align: left;
+        font-size: 13px
+      }
+
+      .fs-admin-table td:last-child {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 6px
+      }
+
+      .fs-admin-table td:last-child .fs-btn {
+        font-size: 11px;
+        padding: 5px 10px;
+        flex: 1;
+        min-width: 0;
+        text-align: center
+      }
+
+      /* ── 模态框 ── */
+      .fs-modal-box {
+        padding: 16px;
+        width: 95%;
+        max-width: none
+      }
+
+      .fs-modal-box h3 {
+        font-size: 15px
+      }
+
+      .fs-modal-box input,
+      .fs-modal-box select {
+        font-size: 13px;
+        padding: 8px 10px
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div id="fs-detect" class="fs-overlay">
+      <div class="fs-overlay-box">
+        <div class="fs-spinner"></div>
+        <h2>正在连接服务器</h2>
+        <p>获取云文件存储服务…</p>
+      </div>
+    </div>
+
+    <div id="fs-app" style="display:none">
+      <div class="fs-body">
+        <div class="fs-header">
+          <h1><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg> 云文件存储</h1>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="fs-user" id="fs-user-info">欢迎，<span class="name" id="fs-uname"
+                onclick="window.open('/forum.html?user='+encodeURIComponent(window._fsUID),'_blank')"></span></div>
+            <button class="fs-btn" onclick="fsLogout()">退出</button>
+          </div>
+        </div>
+        <!-- 维护模式公告 -->
+        <div id="fs-maint-banner" style="display:none;background:rgba(255,107,53,0.08);border:1px solid rgba(255,107,53,0.25);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#c84a1c;text-align:center;">
+          系统维护中，暂时无法上传和修改文件，下载不受影响
+        </div>
+        <div id="fs-content"></div>
+      </div>
+    </div>
+
+    <div class="fs-login" id="fs-login">
+      <div class="fs-login-box">
+        <h2><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:4px">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg> 登录</h2>
+        <p>使用 BBS 账号登录云存储</p>
+        <div class="err" id="fs-login-err"></div>
+        <input type="text" id="fs-login-user" placeholder="用户名" autocomplete="off">
+        <input type="password" id="fs-login-pass" placeholder="密码" autocomplete="off">
+        <button id="fs-login-btn" onclick="fsDoLogin()">登录</button>
+      </div>
+    </div>
+
+    <div class="fs-toast" id="fs-toast"></div>
+
+    <!-- 新建文件夹模态框 -->
+    <div class="fs-modal" id="fs-folder-modal">
+      <div class="fs-modal-box">
+        <h3>新建文件夹</h3>
+        <input type="text" id="fs-folder-name" placeholder="文件夹名称" autocomplete="off">
+        <div class="fs-modal-acts"><button class="fs-btn primary" onclick="fsCreateFolder()">创建</button><button
+            class="fs-btn" onclick="fsCloseModal('fs-folder-modal')">取消</button></div>
+      </div>
+    </div>
+
+    <!-- 分享模态框 -->
+    <div class="fs-modal" id="fs-share-modal">
+      <div class="fs-modal-box">
+        <h3>创建分享链接</h3>
+        <p style="font-size:13px;color:#999;margin-bottom:10px" id="fs-share-name"></p>
+        <input type="text" id="fs-share-title" placeholder="分享名称（留空使用原名称）" autocomplete="off"
+          style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;margin-bottom:6px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
+        <p style="font-size:11px;color:#bbb;margin-bottom:10px" id="fs-share-hint"></p>
+        <input type="password" id="fs-share-pwd" placeholder="访问密码（留空=无密码）" autocomplete="off"
+          style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;margin-bottom:10px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
+        <select id="fs-share-expire"
+          style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;margin-bottom:10px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
+          <option value="0">永不过期</option>
+          <option value="3600">1 小时</option>
+          <option value="86400">24 小时</option>
+          <option value="604800" selected>7 天</option>
+          <option value="2592000">30 天</option>
+          <option value="7776000">90 天</option>
+        </select>
+        <div class="fs-modal-acts"><button class="fs-btn primary" onclick="fsDoShare()">创建</button><button
+            class="fs-btn" onclick="fsCloseModal('fs-share-modal')">取消</button></div>
+      </div>
+    </div>
+
+    <!-- 编辑分享模态框 -->
+    <div class="fs-modal" id="fs-edit-share-modal">
+      <div class="fs-modal-box">
+        <h3>编辑分享链接</h3>
+        <p style="font-size:13px;color:#999;margin-bottom:10px" id="fs-edit-share-name"></p>
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <button class="fs-btn" id="fs-edit-pwd-on" onclick="fsEditPwdToggle(true)"
+            style="flex:1;border-color:var(--theme-color,#399FFF);color:var(--theme-color,#399FFF)">有密码</button>
+          <button class="fs-btn" id="fs-edit-pwd-off" onclick="fsEditPwdToggle(false)" style="flex:1">无密码</button>
+        </div>
+        <div style="position:relative;margin-bottom:10px">
+          <input type="password" id="fs-edit-share-pwd" placeholder="修改密码" autocomplete="off"
+            style="width:100%;padding:10px 34px 10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
+          <span onclick="fsTogglePwdVis()"
+            style="position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;color:#999;user-select:none;line-height:1;display:flex;align-items:center"
+            id="fs-pwd-eye">
+            <svg id="fs-eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+              <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+              <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+              <line x1="1" y1="1" x2="23" y2="23" />
+            </svg>
+            <svg id="fs-eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </span>
+        </div>
+        <select id="fs-edit-share-expire"
+          style="width:100%;padding:10px 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;margin-bottom:10px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
+          <option value="-1">不修改过期时间</option>
+          <option value="0">永不过期</option>
+          <option value="3600">1 小时</option>
+          <option value="86400">24 小时</option>
+          <option value="604800">7 天</option>
+          <option value="2592000">30 天</option>
+          <option value="7776000">90 天</option>
+        </select>
+        <div class="fs-modal-acts"><button class="fs-btn primary" onclick="fsDoEditShare()">保存</button><button
+            class="fs-btn" onclick="fsCloseModal('fs-edit-share-modal')">取消</button></div>
+      </div>
+    </div>
+
+    <!-- 移动文件模态框 -->
+    <div class="fs-modal" id="fs-move-modal">
+      <div class="fs-modal-box">
+        <h3>移动文件到</h3>
+        <div class="fs-move-target" id="fs-move-info">正在加载文件夹结构…</div>
+        <div class="fs-move-list" id="fs-move-list"></div>
+        <div class="fs-modal-acts"><button class="fs-btn primary" id="fs-move-btn" onclick="fsDoMove()"
+            disabled>移动</button><button class="fs-btn" onclick="fsCloseModal('fs-move-modal')">取消</button></div>
+      </div>
+    </div>
+
+    <!-- 重命名模态框 -->
+    <div class="fs-modal" id="fs-rename-modal">
+      <div class="fs-modal-box">
+        <h3>重命名</h3>
+        <input type="text" id="fs-rename-input" placeholder="输入新名称" autocomplete="off">
+        <div class="fs-modal-acts"><button class="fs-btn primary" onclick="fsDoRename()">保存</button><button
+            class="fs-btn" onclick="fsCloseModal('fs-rename-modal')">取消</button></div>
+      </div>
+    </div>
+
+  </div><!-- /.container -->
+
+  <!-- 设置配额模态框 -->
+  <div class="fs-modal" id="fs-quota-modal">
+    <div class="fs-modal-box">
+      <h3>设置存储配额</h3>
+      <p style="font-size:13px;color:#999;margin-bottom:6px" id="fs-quota-user"></p>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <input type="number" id="fs-quota-input" placeholder="配额数值" autocomplete="off" min="0"
+          style="flex:1;height:40px;padding:0 12px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
+        <select id="fs-quota-unit"
+          style="height:40px;width:auto;min-width:75px;padding:0 6px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;font-size:14px;outline:none;background:rgba(255,255,255,0.8);color:#333;box-sizing:border-box">
+          <option value="1">B</option>
+          <option value="1024" selected>KB</option>
+          <option value="1048576">MB</option>
+          <option value="1073741824">GB</option>
+        </select>
+      </div>
+      <div class="fs-modal-acts"><button class="fs-btn primary" onclick="fsDoSetQuota()">保存</button><button
+          class="fs-btn" onclick="fsCloseModal('fs-quota-modal')">取消</button></div>
+    </div>
+  </div>
+
+  <script src="/js/navbar.js"></script>
+  <script>window.showFooter = false;</script>
+  <script src="/js/main.js"></script>
+  <script>
+    (function () {
+      window.__navActive = ["工具"];
+      var T = localStorage.getItem('bbs_token') || '', U = localStorage.getItem('bbs_user') || '', UI = localStorage.getItem('bbs_user_id') || '', ROLE = '';
+      var CUR_FOLDER = null, CUR_TREE_ID = null, PATH = [{ id: null, name: '根目录' }], SHARE_ITEM_ID = '', G_FOLDERS = []; window.G_FOLDERS = G_FOLDERS;
+
+      function $(id) { return document.getElementById(id) }
+      function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML }
+      function toast(m) { var t = $('fs-toast'); t.textContent = m; t.classList.add('show'); setTimeout(function () { t.classList.remove('show') }, 2500) }
+      function fmtSize(b) { if (b <= 0) return '0 B'; var u = ['B', 'KB', 'MB', 'GB'], i = 0, s = b; while (s >= 1024 && i < u.length - 1) { s /= 1024; i++ } return (i === 0 ? s : s.toFixed(1)) + ' ' + u[i] }
+      function fmtTime(ts) { if (!ts) return ''; return new Date(ts * 1e3).toLocaleString() }
+      function api(m, p, b) { var o = { method: m, headers: {} }; if (T) o.headers['X-Auth-Token'] = T; if (b) o.body = b; return fetch(p, o).then(function (r) { return r.json().catch(function () { return { ok: false, error: 'bad_response' } }) }) }
+
+      function showLogin() {
+        $('fs-login').classList.add('show');
+        $('fs-login-err').style.display = 'none';
+        $('fs-login-user').value = '';
+        $('fs-login-pass').value = '';
+        setTimeout(function () { $('fs-login-user').focus() }, 100);
+      }
+      window.fsDoLogin = function () {
+        var user = $('fs-login-user').value.trim();
+        var pass = $('fs-login-pass').value.trim();
+        if (!user || !pass) { $('fs-login-err').textContent = '请输入用户名和密码'; $('fs-login-err').style.display = ''; return }
+        $('fs-login-err').style.display = 'none';
+        $('fs-login-btn').disabled = true; $('fs-login-btn').textContent = '登录中…';
+        fetch('/api/bbs/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: user, password: pass }) }).then(function (r) { return r.json().catch(function () { return { ok: false } }) }).then(function (r) {
+          $('fs-login-btn').disabled = false; $('fs-login-btn').textContent = '登录';
+          if (r.ok) {
+            T = r.token; U = r.user; UI = r.user_id || ''; ROLE = r.role || '';
+            localStorage.setItem('bbs_token', T); localStorage.setItem('bbs_user', U); localStorage.setItem('bbs_user_id', UI);
+            $('fs-uname').textContent = U; window._fsUID = UI;
+            $('fs-login').classList.remove('show'); loadView()
+          } else if (r.error === 'auth_failed') {
+            $('fs-login-err').textContent = '用户名或密码错误'; $('fs-login-err').style.display = ''
+          } else {
+            $('fs-login-err').textContent = '登录失败，请重试'; $('fs-login-err').style.display = ''
+          }
+        }).catch(function () {
+          $('fs-login-btn').disabled = false; $('fs-login-btn').textContent = '登录';
+          $('fs-login-err').textContent = '网络错误'; $('fs-login-err').style.display = ''
+        })
+      };
+      $('fs-login-pass').addEventListener('keydown', function (e) { if (e.key === 'Enter') window.fsDoLogin() });
+      // ── URL 导航 ──
+      function _updateNavURL() {
+        var ids = PATH.slice(1).map(function (p) { return p.id }).filter(Boolean);
+        var url = '/Tool/files.html';
+        if (ids.length > 0) url += '/' + ids.join('/') + '/';
+        history.replaceState({ folder: CUR_FOLDER, path: PATH }, '', url);
+      }
+      function _loadNavFromURL() {
+        var m = location.pathname.match(/^\/Tool\/files\.html(?:\/([0-9a-f\/]+))?\/?$/);
+        if (!m || !m[1]) return;
+        var ids = m[1].split('/').filter(Boolean);
+        if (ids.length === 0) return;
+        // 获取文件夹树并导航到目标
+        api('GET', '/api/bbs/files/tree').then(function (r) {
+          if (!r.ok || !r.folders) return;
+          var fmap = {}; for (var i = 0; i < r.folders.length; i++)fmap[r.folders[i].id] = r.folders[i];
+          var path = [{ id: null, name: '根目录' }];
+          var found = true;
+          for (var i = 0; i < ids.length; i++) {
+            var f = fmap[ids[i]];
+            if (f) { path.push({ id: f.id, name: f.name }); CUR_FOLDER = f.id }
+            else { found = false; break }
+          }
+          if (found) { PATH = path; loadFiles(); }
+          else { CUR_FOLDER = null; PATH = [{ id: null, name: '根目录' }]; _updateNavURL(); loadFiles() }
+        });
+      }
+      // 监听浏览器后退/前进
+      window.addEventListener('popstate', function (e) {
+        var st = e.state;
+        if (st && st.folder) { CUR_FOLDER = st.folder; PATH = st.path || [{ id: null, name: '根目录' }]; loadFiles() }
+        else _loadNavFromURL();
+      });
+
+
+      window.fsLogout = function () { T = ''; U = ''; UI = ''; ROLE = ''; localStorage.removeItem('bbs_token'); localStorage.removeItem('bbs_user'); localStorage.removeItem('bbs_user_id'); showLogin() };
+
+      function detect() {
+        // ?share=xxx 直接跳转到分享页面
+        var sp = new URLSearchParams(window.location.search).get('share');
+        if (sp) { window.location.href = '/api/bbs/files/share/' + sp; return }
+        fetch('/api/ping', { cache: 'no-store' }).then(function (r) { if (r.ok) { $('fs-detect').style.display = 'none'; $('fs-app').style.display = ''; checkAuth() } else throw Error() }).catch(function () { $('fs-detect').style.display = 'none' })
+      }
+
+      function checkAuth() {
+        if (T) {
+          api('POST', '/api/bbs/auth', JSON.stringify({ verify: true })).then(function (r) {
+            if (r.ok) {
+              U = r.user || U; UI = r.user_id || UI; ROLE = r.role || ''; window._fsUID = UI;
+              localStorage.setItem('bbs_user', U); localStorage.setItem('bbs_user_id', UI);
+              $('fs-uname').textContent = U; $('fs-login').classList.remove('show'); loadView()
+            }
+            else { T = ''; localStorage.removeItem('bbs_token'); showLogin() }
+          }).catch(function () { showLogin() })
+        }
+        else showLogin()
+      }
+
+      // ── Tab 切换 ──
+      var CURRENT_TAB = 'files';
+      function switchTab(tab) {
+        CURRENT_TAB = tab;
+        document.querySelectorAll('.fs-tab').forEach(function (t) { t.classList.toggle('active', t.dataset.tab === tab) });
+        document.querySelectorAll('.fs-tab-content').forEach(function (t) { t.classList.toggle('active', t.id === 'fs-tab-' + tab) });
+        if (tab === 'files') loadFiles();
+        else if (tab === 'shares') loadShares();
+        else if (tab === 'admin') loadAdmin()
+      }
+      window.switchTab = switchTab;
+      function loadShares() {
+        var c = document.getElementById('fs-tab-shares'); if (!c) return;
+        c.innerHTML = '<div style="text-align:center;padding:40px;color:#bbb;">加载中…</div>';
+        api('GET', '/api/bbs/files/share/list').then(function (r) {
+          if (!r.ok) { c.innerHTML = '<div class="fs-empty">加载失败</div>'; return }
+          if (r.shares.length === 0) { c.innerHTML = '<div class="fs-empty">暂无分享链接</div>'; return }
+          var html = '';
+          for (var i = 0; i < r.shares.length; i++) {
+            var s = r.shares[i];
+            var pwd = s.has_password ? '[加密] ' : '[公开] ';
+            var exp = s.expires_at ? ' ·过期:' + fmtTime(s.expires_at) : (s.expires_at === 0 ? ' ·永不过期' : '');
+            var url = window.location.origin + '/Tool/files.html?share=' + s.code;
+            html += '<div class="fs-share-item">' +
+              '<div class="info"><div class="name">' + pwd + esc(s.name) + '</div><div class="meta">' + fmtTime(s.created_at) + exp + '</div></div>' +
+              '<a class="fs-btn" href="' + url + '" target="_blank">打开</a>' +
+              '<button class="fs-btn" onclick="navigator.clipboard.writeText(\'' + url + '\');toast(\'已复制\')">复制</button>' +
+              '<button class="fs-btn" onclick="fsEditShare(\'' + s.code + '\',\'' + esc(s.name) + '\',' + (s.has_password ? 'true' : 'false') + ',\'' + esc(s.password || '') + '\',\'' + s.type + '\')">编辑</button>' +
+              '<button class="fs-btn danger" onclick="fsDeleteShare(\'' + s.code + '\')">删除</button></div>'
+          }
+          c.innerHTML = html
+        })
+      }
+      window.loadAdmin = function () {
+        var c = document.getElementById('fs-tab-admin'); if (!c) return;
+        c.innerHTML = '<div style="text-align:center;padding:40px;color:#bbb;">加载中…</div>';
+        api('GET', '/api/bbs/files/admin/users').then(function (r) {
+          if (!r.ok || !r.users) { c.innerHTML = '<div class="fs-empty">加载失败</div>'; return }
+          _adminUsers = r.users || [];
+          api('GET', '/api/bbs/files/admin/shares').then(function (sr) {
+            _adminSharesLoaded = sr.ok ? sr.shares : [];
+            _adminRenderUsers()
+          }).catch(function () { _adminSharesLoaded = []; _adminRenderUsers() })
+        })
+      }
+
+      var _adminUsers = [], _adminSharesLoaded = [];
+      function _adminRenderUsers(selectedUid) {
+        var c = document.getElementById('fs-tab-admin'); if (!c) return;
+        var users = _adminUsers;
+        var html = '<div class="fs-layout"><div class="fs-sidebar" style="width:220px"><div class="fs-sidebar-title">用户列表</div><div class="fs-tree" id="adm-user-tree">';
+        var rootCls = !selectedUid ? ' tn-cur' : '';
+        html += '<div class="tn-item' + rootCls + '" onclick="loadAdmin()" style="padding-left:12px;font-weight:600">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--theme-color,#399FFF)" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
+          '<span>全部用户</span></div>';
+        for (var i = 0; i < users.length; i++) {
+          var u = users[i]; var sel = u.id === selectedUid ? ' tn-cur' : '';
+          var pct = u.quota > 0 ? Math.round(u.used / u.quota * 100) : 0;
+          var isOrphan = u.username === null;
+          var unameDisplay = isOrphan ? '[用户不存在-' + u.id + ']' : esc(u.username);
+          var unameStyle = isOrphan ? 'color:#ff3b30' : '';
+          var clickFn = 'fsShowUserFiles(\'' + u.id + '\',\'' + (isOrphan ? '[用户不存在-' + u.id + ']' : esc(u.username)) + '\')';
+          html += '<div class="tn-item' + sel + '" onclick="' + clickFn + '" style="padding-left:12px;' + unameStyle + '" title="文件: ' + u.file_count + ' | 使用: ' + fmtSize(u.used) + ' / ' + fmtSize(u.quota) + ' (' + pct + '%)">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
+            esc(unameDisplay) + '</div>'
+        }
+        html += '</div></div><div class="fs-main">';
+        if (!selectedUid) {
+          html += '<div style="margin-bottom:10px;font-size:14px;font-weight:600;color:#555">用户列表（' + users.length + ' 人）</div>' +
+            '<table class="fs-admin-table"><tbody>';
+          for (var i = 0; i < users.length; i++) {
+            var u = users[i]; var pct = u.quota > 0 ? Math.round(u.used / u.quota * 100) : 0;
+            var pctCls = pct >= 90 ? ' style="color:#ff3b30;font-weight:600"' : (pct >= 75 ? ' style="color:#ff9500"' : '');
+            var isOrphan = u.username === null;
+            var unameDisplay = isOrphan ? '[用户不存在-' + u.id + ']' : esc(u.username);
+            var unameStyle = isOrphan ? ' style="color:#ff3b30"' : '';
+            var escName = isOrphan ? esc('[用户不存在-' + u.id + ']') : esc(u.username);
+            html += '<tr><td><span class="uname"' + unameStyle + ' onclick="fsShowUserFiles(\'' + esc(u.id) + '\',\'' + escName + '\')">' + unameDisplay + '</span></td>' +
+              '<td>' + u.file_count + ' 个文件</td>' +
+              '<td>' + fmtSize(u.used) + ' / ' + fmtSize(u.quota) + ' <span' + pctCls + '>(' + pct + '%)</span></td>' +
+              '<td><button class="fs-btn" onclick="event.stopPropagation();fsShowSetQuota(\'' + esc(u.id) + '\',\'' + escName + '\',' + u.quota + ')">修改配额</button>' +
+              '<button class="fs-btn" onclick="event.stopPropagation();fsShowUserFiles(\'' + esc(u.id) + '\',\'' + escName + '\')">查看文件</button>' +
+              '<button class="fs-btn" onclick="event.stopPropagation();fsShowUserSharesPage(\'' + esc(u.id) + '\',\'' + escName + '\')">分享</button></td></tr>'
+          }
+          html += '</tbody></table>';
+          if (_adminSharesLoaded && _adminSharesLoaded.length > 0) {
+            html += '<h3 style="font-size:15px;margin:20px 0 10px;color:#555;font-weight:600">最近分享（' + _adminSharesLoaded.length + '）</h3>';
+            var showShares = _adminSharesLoaded.slice(0, 30);
+            for (var i = 0; i < showShares.length; i++) {
+              var s = showShares[i]; var pwd = s.has_password ? '[加密] ' : '';
+              var ownerExists = false; for (var _ui = 0; _ui < users.length; _ui++) { if (users[_ui].id === s.owner_id) { ownerExists = true; break } }
+              var ownerDisplay = ownerExists ? esc(s.owner_name || s.owner_id || '?') : '[用户不存在-' + s.owner_id + ']';
+              var ownerStyle = ownerExists ? '' : ' style="color:#ff3b30"';
+              var owner = '<span class="uname"' + ownerStyle + ' onclick="fsShowUserSharesPage(\'' + esc(s.owner_id) + '\',\'' + (ownerExists ? esc(s.owner_name || s.owner_id || '?') : '[用户不存在-' + s.owner_id + ']') + '\')">' + ownerDisplay + '</span>';
+              html += '<div class="fs-share-item"><div class="info"><div class="name">' + pwd + esc(s.name) + '</div><div class="meta">' + owner + ' · ' + fmtTime(s.created_at) + (s.expires_at ? ' · 过期:' + fmtTime(s.expires_at) : '') + '</div></div>' +
+                '<a class="fs-btn" href="/Tool/files.html?share=' + s.code + '" target="_blank">打开</a>' +
+                '<button class="fs-btn danger" onclick="fsAdminDelShare(\'' + s.code + '\')">删除</button></div>'
+            }
+          }
+        }
+        html += '</div></div>';
+        c.innerHTML = html;
+        var treeEl = document.getElementById('adm-user-tree');
+        if (treeEl && selectedUid) { treeEl.querySelectorAll('.tn-cur').forEach(function (e) { e.scrollIntoView({ block: 'nearest' }) }) }
+      }
+      
+      window.fsShowNewFolder = function () { document.getElementById('fs-folder-modal').classList.add('show'); document.getElementById('fs-folder-name').value = ''; setTimeout(function () { document.getElementById('fs-folder-name').focus() }, 100) };
+      window.fsCreateFolder = function () {
+        var name = document.getElementById('fs-folder-name').value.trim(); if (!name) { toast('请输入名称'); return }
+        document.getElementById('fs-folder-modal').classList.remove('show');
+        api('POST', '/api/bbs/files/folder', JSON.stringify({ name: name, parent_id: CUR_FOLDER })).then(function (r) { if (r.ok) { toast('文件夹已创建'); loadFiles() } else toast('创建失败: ' + (r.error || '未知')) })
+      };
+      window.fsShowShare = function (id, name, isFolder) { SHARE_ITEM_ID = id; document.getElementById('fs-share-name').textContent = '分享: ' + name;
+        document.getElementById('fs-share-title').value = name; document.getElementById('fs-share-pwd').value = '';
+        var hint = document.getElementById('fs-share-hint'); if (hint) hint.style.display = (isFolder || name === '文件夹') ? '' : 'none'; document.getElementById('fs-share-modal').classList.add('show') };
+      window.fsDoShare = function () {
+        var pwd = document.getElementById('fs-share-pwd').value.trim(); var sn = document.getElementById('fs-share-title').value.trim();
+        document.getElementById('fs-share-modal').classList.remove('show');
+        api('POST', '/api/bbs/files/share', JSON.stringify({ item_id: SHARE_ITEM_ID, name: sn || null, password: pwd || null, expires_in: parseInt(document.getElementById('fs-share-expire').value) })).then(function (r) {
+          if (r.ok) { var url = window.location.origin + '/Tool/files.html?share=' + r.code; toast('分享链接: ' + url); if (navigator.clipboard) navigator.clipboard.writeText(url); switchTab('shares') }
+          else toast('创建失败: ' + (r.error || '未知'))
+        })
+      };
+      window.fsDownload = function (id, name) {
+        var a = document.createElement('a'); a.style.display = 'none'; document.body.appendChild(a);
+        fetch('/api/bbs/files/' + id + '/download', { headers: T ? { 'X-Auth-Token': T } : {} }).then(function (r) {
+          if (!r.ok) { toast('下载失败'); return }
+          r.blob().then(function (blob) {
+            a.href = URL.createObjectURL(blob); a.download = name || 'download'; a.click();
+            setTimeout(function () { URL.revokeObjectURL(a.href); document.body.removeChild(a) }, 1000)
+          })
+        }).catch(function () { toast('下载失败'); document.body.removeChild(a) })
+      };
+      window.fsDeleteItem = function (id, name) {
+        if (!confirm('确定删除 "' + name + '" 吗？')) return;
+        api('POST', '/api/bbs/files/' + id + '/delete').then(function (r) { if (r.ok) { toast('已删除'); loadFiles(); switchTab('files') } else toast('删除失败') })
+      };
+      window.toast = toast;
+      window.fsNavTo = function (idx) {
+        if (idx >= PATH.length - 1) return;
+        PATH = PATH.slice(0, idx + 1);
+        CUR_FOLDER = PATH[PATH.length - 1].id;
+        loadFiles(); _updateNavURL()
+      };
+      window.fsNavInto = function (id, name) {
+        CUR_FOLDER = id; PATH.push({ id: id, name: name }); loadFiles(); _updateNavURL()
+      };
+      function _resolveFolderPath(folderId) {
+        var fmap = {}; for (var i = 0; i < window.G_FOLDERS.length; i++) fmap[window.G_FOLDERS[i].id] = window.G_FOLDERS[i];
+        var stack = []; var cur = folderId;
+        while (cur && fmap[cur]) { stack.unshift({ id: fmap[cur].id, name: fmap[cur].name }); cur = fmap[cur].parent_id }
+        return stack
+      }
+      window.fsTreeNav = function (id) {
+        var segs = _resolveFolderPath(id); if (segs.length === 0) return;
+        PATH = [{ id: null, name: '根目录' }].concat(segs); CUR_FOLDER = id; loadFiles(); _updateNavURL()
+      };
+      window.fsCloseModal = function (id) { document.getElementById(id).classList.remove('show') };
+      window.fsDeleteShare = function (code) {
+        if (!confirm('确定删除此分享链接？')) return;
+        api('POST', '/api/bbs/files/share/' + code + '/delete').then(function (r) { if (r.ok) { toast('已删除'); loadShares() } else toast('删除失败') })
+      };
+      window.fsEditShare = function (code, name, hasPwd, curPwd, shareType) {
+        window._fsEditCode = code; document.getElementById('fs-edit-share-name').textContent = '编辑: ' + name;
+        document.getElementById('fs-edit-share-pwd').value = curPwd || '';
+        document.getElementById('fs-edit-share-pwd').style.display = hasPwd ? '' : 'none';
+        window._fsEditHasPwd = hasPwd;
+        window.fsEditPwdToggle(hasPwd ? true : false);
+        document.getElementById('fs-edit-share-expire').value = '-1';
+        document.getElementById('fs-edit-share-modal').classList.add('show')
+      };
+      window.fsTogglePwdVis = function () {
+        var inp = document.getElementById('fs-edit-share-pwd');
+        var open = document.getElementById('fs-eye-open');
+        var closed = document.getElementById('fs-eye-closed');
+        if (inp.type === 'password') { inp.type = 'text'; closed.style.display = 'none'; open.style.display = '' }
+        else { inp.type = 'password'; closed.style.display = ''; open.style.display = 'none' }
+      };
+      window.fsEditPwdToggle = function (on) {
+        var pwdOn = document.getElementById('fs-edit-pwd-on'); var pwdOff = document.getElementById('fs-edit-pwd-off'); var pwdInput = document.getElementById('fs-edit-share-pwd');
+        if (pwdOn) { pwdOn.style.borderColor = on ? 'var(--theme-color,#399FFF)' : 'rgba(0,0,0,0.12)'; pwdOn.style.color = on ? 'var(--theme-color,#399FFF)' : '#999' }
+        if (pwdOff) { pwdOff.style.borderColor = on ? 'rgba(0,0,0,0.12)' : 'var(--theme-color,#399FFF)'; pwdOff.style.color = on ? '#999' : 'var(--theme-color,#399FFF)' }
+        if (pwdInput) pwdInput.style.display = on ? '' : 'none'; window._fsEditHasPwd = on
+      };
+      window.fsDoEditShare = function () {
+        var code = window._fsEditCode; if (!code) return;
+        var body = {};
+        if (!window._fsEditHasPwd) { body.password = '' } else { body.password = document.getElementById('fs-edit-share-pwd').value.trim() || '' }
+        var ei = document.getElementById('fs-edit-share-expire').value;
+        if (ei !== '-1') body.expires_in = parseInt(ei);
+        document.getElementById('fs-edit-share-modal').classList.remove('show');
+        api('POST', '/api/bbs/files/share/' + code + '/update', JSON.stringify(body)).then(function (r) { if (r.ok) { toast('已更新'); loadShares() } else toast('更新失败: ' + (r.error || '未知')) })
+      };
+      window.fsShowUserFiles = function (uid, uname) {
+        _adminRenderUsers(uid);
+        window._adminUid = uid; window._adminUname = uname;
+        window._adminPATH = [{ id: null, name: uname + ' 的文件' }]; window._adminCUR = null; window._adminAllFiles = [];
+        Promise.all([
+          api('GET', '/api/bbs/files/admin/files?user_id=' + uid),
+          api('GET', '/api/bbs/files/admin/tree?user_id=' + uid)
+        ]).then(function (resp) {
+          var r = resp[0]; var tr = resp[1];
+          if (!r.ok || !r.files) { var mc = document.getElementById('fs-tab-admin'); if (mc) { var me = mc.querySelector('.fs-main'); if (me) me.innerHTML = '<div class="fs-empty">加载失败</div>' }; return }
+          window._adminAllFiles = r.files;
+          _adminRender(r.files || [], tr.ok ? tr.folders : [])
+        }).catch(function () { toast('网络错误') })
+      };
+      window.fsShowSetQuota = function (uid, uname, q) {
+        document.getElementById('fs-quota-user').textContent = '用户: ' + uname;
+        var units = [{ v: 1073741824, n: 'GB' }, { v: 1048576, n: 'MB' }, { v: 1024, n: 'KB' }, { v: 1, n: 'B' }];
+        var sel = document.getElementById('fs-quota-unit');
+        for (var ui = 0; ui < units.length; ui++) {
+          if (q >= units[ui].v || ui === units.length - 1) { document.getElementById('fs-quota-input').value = q / units[ui].v; sel.value = units[ui].v; break }
+        }
+        document.getElementById('fs-quota-modal').classList.add('show');
+        window._fsQuotaUid = uid
+      };
+      window.fsDoSetQuota = function () {
+        var q = document.getElementById('fs-quota-input').value; var unit = parseInt(document.getElementById('fs-quota-unit').value); var uid = window._fsQuotaUid; if (!uid || !q) return;
+        document.getElementById('fs-quota-modal').classList.remove('show');
+        api('POST', '/api/bbs/files/admin/quota', JSON.stringify({ user_id: uid, quota: Math.round(parseFloat(q) * unit) })).then(function (r) { if (r.ok) { toast('配额已更新'); loadAdmin() } else toast('设置失败: ' + (r.error || '未知')) })
+      };
+      window.fsShowUserSharesPage = function (uid, uname) {
+        var c = document.getElementById('fs-tab-admin'); if (!c) return;
+        c.innerHTML = '<div style="text-align:center;padding:40px;color:#bbb;">加载中…</div>';
+        api('GET', '/api/bbs/files/admin/shares?user_id=' + uid).then(function (r) {
+          if (!r.ok || !r.shares) { c.innerHTML = '<div class="fs-empty">加载失败</div>'; return }
+          var html = '<div style="margin-bottom:10px"><button class="fs-btn" onclick="loadAdmin()">← 返回</button> <strong>' + esc(uname) + '</strong> 的分享链接 (' + r.shares.length + ')</div>';
+          if (r.shares.length === 0) { c.innerHTML = html + '<div class="fs-empty">该用户暂无分享链接</div>'; return }
+          for (var i = 0; i < r.shares.length; i++) {
+            var s = r.shares[i];
+            var pwd = s.has_password ? '[加密] ' : '[公开] ';
+            var exp = s.expires_at ? ' · 过期:' + fmtTime(s.expires_at) : (s.expires_at === 0 ? ' · 永不过期' : '');
+            var url = window.location.origin + '/Tool/files.html?share=' + s.code;
+            html += '<div class="fs-share-item">' +
+              '<div class="info"><div class="name">' + pwd + esc(s.name) + '</div><div class="meta">' + fmtTime(s.created_at) + exp + ' · 类型: ' + (s.type || '文件') + '</div></div>' +
+              '<a class="fs-btn" href="' + url + '" target="_blank">打开</a>' +
+'<button class="fs-btn" onclick="navigator.clipboard.writeText(\'' + url + '\');toast(\'å·²å¤å¶\')">å·²å¤å¶</button>' +
+'<button class="fs-btn danger" onclick="if(confirm(\'\u786e\u5b9a\u5220\u9664\u6b64\u5206\u4eab\uff1f\')){api(\'POST\',\'/api/bbs/files/share/\' + s.code + \'/delete\').then(function(r2){if(r2.ok){toast(\'\u5df2\u5220\u9664\');fsShowUserSharesPage(\'' + uid + '\',\'' + esc(uname) + '\')}else toast(\'\u5220\u9664\u5931\u8d25\')})}">\u5220\u9664</button></div>'
+          }
+          c.innerHTML = html
+        })
+      };
+      window.fsAdminDelShare = function (code) { if (!confirm('确定删除此分享？')) return; api('POST', '/api/bbs/files/share/' + code + '/delete').then(function (r) { if (r.ok) { toast('已删除'); loadAdmin() } else toast('删除失败') }) };
+
+
+      function _adminRender(files, folders) {
+        folders = folders || []; files = files || [];
+        var cmap = {}; for (var i = 0; i < files.length; i++) { var pid = files[i].parent_id || ''; if (!cmap[pid]) cmap[pid] = []; cmap[pid].push(files[i]) }
+        var curId = window._adminCUR;
+        var mainEl = document.querySelector('#fs-tab-admin .fs-main');
+        if (!mainEl) return;
+        var html = '<div style="margin-bottom:10px"><button class="fs-btn" onclick="loadAdmin()">← 返回</button> <strong>' + esc(window._adminUname) + '</strong> 的文件</div>' +
+          '<div class="fs-layout"><div class="fs-sidebar"><div class="fs-sidebar-title">文件夹</div><div class="fs-tree" id="adm-tree">';
+        var rootCls = !curId ? ' tn-cur' : '';
+        html += '<div class="tn-item' + rootCls + '" onclick="_adminNavTo(0)" style="padding-left:12px;font-weight:600">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
+          '<span>根目录</span></div>';
+        html += _adminBuildTree(folders, null, 1) + '</div></div><div class="fs-main">';
+        var p = window._adminPATH;
+        html += '<div class="fs-toolbar"><div class="fs-path">';
+        for (var i = 0; i < p.length; i++) {
+          if (i > 0) html += '<span>/</span>';
+          if (i === p.length - 1) html += '<span>' + esc(p[i].name) + '</span>';
+          else html += '<a onclick="_adminNavTo(' + i + ')">' + esc(p[i].name) + '</a>'
+        }
+        html += '</div><div class="spacer"></div></div>';
+        var items = cmap[curId || ''] || [];
+        if (items.length === 0) html += '<div class="fs-empty">文件夹为空</div>';
+        else {
+          html += '<div class="fs-list">';
+          for (var i = 0; i < items.length; i++) {
+            var f = items[i];
+            var ico = f.type === 'folder' ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#399FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+            var meta = f.type === 'folder' ? '文件夹' : (fmtSize(f.size) + (f.uploaded_at ? ' · ' + fmtTime(f.uploaded_at) : ''));
+            var acts = '';
+            if (f.type === 'folder') {
+              acts = '<button class="fs-btn" data-fid="' + f.id + '" data-act="dlzip">下载ZIP</button>';
+              acts += '<button class="fs-btn" data-fid="' + f.id + '" data-fn="' + esc(f.name) + '" data-act="del">删除</button>';
+            } else {
+              acts = '<button class="fs-btn" data-fid="' + f.id + '" data-fn="' + esc(f.name) + '" data-act="dl">下载</button>';
+              acts += '<button class="fs-btn danger" data-fid="' + f.id + '" data-fn="' + esc(f.name) + '" data-act="del">删除</button>';
+            }
+            html += '<div class="fs-item"><div class="ico ' + (f.type === 'folder' ? 'folder' : '') + '"' + (f.type === 'folder' ? 'onclick="_adminNavInto(\''+f.id+'\',\''+esc(f.name)+'\')"' : '') + '>' + ico + '</div>' +
+              '<div class="info"><div class="name">' + esc(f.name) + '</div><div class="meta">' + meta + '</div></div><div class="acts">' + acts + '</div></div>'
+          }
+          html += '</div>'
+        }
+        html += '</div></div>';
+        mainEl.innerHTML = html
+      }
+// ── 维护状态检查 ──
+function fsCheckMaintenance() {
+  api('GET', '/api/admin/maintenance').then(function(res) {
+    var banner = document.getElementById('fs-maint-banner');
+    if (!banner) return;
+    if (res.ok && res.maintenance && res.maintenance.enabled) {
+      banner.style.display = '';
+    } else {
+      banner.style.display = 'none';
+    }
+  }).catch(function() {});
 }
-function fsBuildMoveSubTree(folders,pid,level,excludes){
-  var h='';var kids=[];
-  for(var i=0;i<folders.length;i++){if(folders[i].parent_id===pid)kids.push(folders[i])}
-  kids.sort(function(a,b){return a.name.localeCompare(b.name)});
-  for(var i=0;i<kids.length;i++){
-    var f=kids[i];if(excludes[f.id])continue;
-    h+='<div class="fs-move-item" data-id="'+f.id+'" style="padding-left:'+(12+level*20)+'px" onclick="fsMoveSel(this)">'
-      +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" style="flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> '
-      +esc(f.name)+'</div>';
-    h+=fsBuildMoveSubTree(folders,f.id,level+1,excludes)}
-  return h
-}
-window.fsMoveSel=function(el){
-  document.querySelectorAll('.fs-move-item').forEach(function(e){e.classList.remove('sel')});
-  el.classList.add('sel');window._fsMoveTarget=el.dataset.id||null;
-  var btn=$('fs-move-btn');
-  if(btn){btn.disabled=false;btn.textContent='移动到 '+(window._fsMoveTarget?el.textContent.trim():'根目录')}
-};
-window.fsDoMove=function(){
-  var ids=window._fsMoveIds;var target=window._fsMoveTarget;
-  if(!ids||!ids.length)return;
-  $('fs-move-modal').classList.remove('show');
-  api('POST','/api/bbs/files/batch-move',JSON.stringify({ids:ids,target_folder_id:target})).then(function(r){
-    if(r.ok){toast('已移动 '+r.moved+' 项');SELECTED_IDS={};loadFiles()}
-    else toast('移动失败: '+(r.error||'未知'))})
-}
-// ── 重命名 ──
-window.fsShowRename=function(id,name){
-  window._fsRenameId=id;$('fs-rename-input').value=name;
-  $('fs-rename-modal').classList.add('show');
-  setTimeout(function(){$('fs-rename-input').focus();$('fs-rename-input').select()},100)
-};
-window.fsDoRename=function(){
-  var id=window._fsRenameId;var name=$('fs-rename-input').value.trim();
-  if(!name||!id){toast('请输入名称');return}
-  $('fs-rename-modal').classList.remove('show');
-  api('POST','/api/bbs/files/'+id+'/rename',JSON.stringify({name:name})).then(function(r){
-    if(r.ok){toast('已重命名');loadFiles()}
-    else toast('重命名失败: '+(r.error||'未知'))})
-};
-// 回车触发重命名
-(function(){var inp=$('fs-rename-input');if(inp)inp.addEventListener('keydown',function(e){if(e.key==='Enter')window.fsDoRename()})})();
-function bindUpload(){
-var zone=$('fs-upload');if(!zone)return;
-var inp=document.createElement('input');inp.type='file';inp.multiple=true;inp.style.display='none';zone.appendChild(inp);
-zone.onclick=function(){inp.click()};
-inp.addEventListener('change',function(){if(inp.files)for(var i=0;i<inp.files.length;i++)addUploadTask(inp.files[i]);inp.value=''});
-zone.addEventListener('dragover',function(e){e.preventDefault();zone.classList.add('dragover')});
-zone.addEventListener('dragleave',function(){zone.classList.remove('dragover')});
-zone.addEventListener('drop',function(e){e.preventDefault();zone.classList.remove('dragover');if(e.dataTransfer.files)for(var i=0;i<e.dataTransfer.files.length;i++)addUploadTask(e.dataTransfer.files[i])})}
-function addUploadTask(file){
-UPLOAD_TASKS.push({id:Date.now()+'_'+Math.random().toString(36).slice(2,6),file:file,name:file.name,size:file.size,progress:0,status:'queued',error:''});
-renderTasks();processQueue()}
-function renderTasks(){
-var c=$('fs-upload-tasks');if(!c)return;
-if(!UPLOAD_TASKS.length){c.innerHTML='';return}
-var h='';
-for(var i=0;i<UPLOAD_TASKS.length;i++){
-var t=UPLOAD_TASKS[i];var st=t.status==='queued'?'排队中':(t.status==='uploading'?t.progress+'%':(t.status==='done'?'完成':'失败'));
-var sc=t.status==='queued'?'#999':(t.status==='uploading'?'#399FFF':(t.status==='done'?'#34c759':'#ff3b30'));
-var bw=t.status==='uploading'?t.progress:(t.status==='done'?100:(t.status==='error'?100:0));
-var bg=t.status==='done'?'#34c759':(t.status==='error'?'#ff3b30':'#399FFF');
-h+='<div class="ut-item"><div class="ut-info"><span class="ut-name">'+esc(t.name)+'</span><span class="ut-size">'+fmtSize(t.size)+'</span></div>'+
-'<div class="ut-bar"><div class="ut-fill" style="width:'+bw+'%;background:'+bg+'"></div></div>'+
-'<div class="ut-stat" style="color:'+sc+'">'+st+'</div>'+
-(t.status==='queued'||t.status==='uploading'?'<button class="fs-btn" style="font-size:10px;padding:2px 6px;color:#ff3b30;border-color:#ff3b30" onclick="cancelUpload(\''+t.id+'\')">取消</button>':'')+'</div>';}
-c.innerHTML=h}
-function processQueue(){
-var active=0;
-for(var i=0;i<UPLOAD_TASKS.length;i++){if(UPLOAD_TASKS[i].status==='uploading')active++}
-for(var i=0;i<UPLOAD_TASKS.length&&active<UPLOAD_CONCURRENCY;i++){
-if(UPLOAD_TASKS[i].status==='queued'){active++;uploadFile(UPLOAD_TASKS[i])}}}
-function uploadFile(task){
-task.status='uploading';renderTasks();
-// 先查配额
-api('GET','/api/bbs/files').then(function(r){
-if(!r.ok){task.status='error';task.error='无法检查空间';renderTasks();processQueue();return}
-var used=r.used||0,quota=r.quota||0;
-if(used+task.file.size>quota){task.status='error';task.error='空间不足';renderTasks();toast('空间不足：'+task.name);processQueue();return}
-var fd=new FormData();fd.append('file',task.file);
-if(CUR_FOLDER)fd.append('folder_id',CUR_FOLDER);
-var xhr=new XMLHttpRequest();
-xhr.open('POST','/api/bbs/files/upload',true);if(T)xhr.setRequestHeader('X-Auth-Token',T);
-xhr.upload.onprogress=function(e){if(e.lengthComputable){task.progress=Math.round(e.loaded/e.total*100);renderTasks()}};
-xhr.onload=function(){try{
-var r2=JSON.parse(xhr.responseText);
-if(r2.ok){task.status='done';task.progress=100}else{task.status='error';task.error=r2.error||'上传失败'}
-}catch(e){task.status='error';task.error='解析失败'}
-renderTasks();processQueue();checkAllDone()};
-xhr.onerror=function(){task.status='error';task.error='网络错误';renderTasks();processQueue()};
-task.xhr=xhr;xhr.send(fd)}).catch(function(){task.status='error';task.error='检查配额失败';renderTasks()})}
-window.cancelUpload=function(id){
-for(var i=0;i<UPLOAD_TASKS.length;i++){if(UPLOAD_TASKS[i].id===id){
-var t=UPLOAD_TASKS[i];if(t.status==='uploading'&&t.xhr){t.xhr.abort()}
-t.status='cancelled';UPLOAD_TASKS.splice(i,1);renderTasks();processQueue();return}}
-toast('未找到上传任务')}
-function checkAllDone(){
-for(var i=0;i<UPLOAD_TASKS.length;i++){if(UPLOAD_TASKS[i].status!=='done'&&UPLOAD_TASKS[i].status!=='error'&&UPLOAD_TASKS[i].status!=='cancelled')return}
-setTimeout(function(){loadFiles();UPLOAD_TASKS=[];renderTasks()},400)}
 
-window.fsNavTo=function(idx){
-if(idx>=PATH.length-1)return;
-PATH=PATH.slice(0,idx+1);
-CUR_FOLDER=PATH[PATH.length-1].id;
-loadFiles();_updateNavURL()};
-window.fsNavInto=function(id,name){
-CUR_FOLDER=id;PATH.push({id:id,name:name});loadFiles();_updateNavURL()};
-// 侧边栏树导航——从根目录重建到目标文件夹的完整路径
-function _resolveFolderPath(folderId){
-var fmap={};for(var i=0;i<G_FOLDERS.length;i++)fmap[G_FOLDERS[i].id]=G_FOLDERS[i];
-var stack=[];var cur=folderId;
-while(cur&&fmap[cur]){stack.unshift({id:fmap[cur].id,name:fmap[cur].name});cur=fmap[cur].parent_id}
-return stack}
-window.fsTreeNav=function(id){
-var segs=_resolveFolderPath(id);if(segs.length===0)return;
-PATH=[{id:null,name:'根目录'}].concat(segs);CUR_FOLDER=id;loadFiles();_updateNavURL()};
+function loadView() {
+        var html = '<div class="fs-tab-bar">' +
+          '<div class="fs-tab active" data-tab="files" onclick="switchTab(\'files\')">文件</div>' +
+          '<div class="fs-tab" data-tab="shares" onclick="switchTab(\'shares\')">分享</div>';
+        if (ROLE === 'admin') html += '<div class="fs-tab" data-tab="admin" onclick="switchTab(\'admin\')">管理</div>';
+        html += '</div><div class="fs-tab-content active" id="fs-tab-files"></div><div class="fs-tab-content" id="fs-tab-shares"></div>';
+        if (ROLE === 'admin') html += '<div class="fs-tab-content" id="fs-tab-admin"></div>';
+        $('fs-content').innerHTML = html;
+        $('fs-uname').textContent = U;
+        fsCheckMaintenance();
+        // 如果 URL 中包含文件夹路径，自动导航到对应目录
+        var _m = location.pathname.match(/^\/Tool\/files\.html(?:\/([0-9a-f\/]+))?\/?$/);
+        if (_m && _m[1]) { _loadNavFromURL() } else { loadFiles() }
+      }
 
-window.fsShowNewFolder=function(){$('fs-folder-modal').classList.add('show');$('fs-folder-name').value='';setTimeout(function(){$('fs-folder-name').focus()},100)};
-window.fsCreateFolder=function(){
-var name=$('fs-folder-name').value.trim();if(!name){toast('请输入名称');return}
-$('fs-folder-modal').classList.remove('show');
-api('POST','/api/bbs/files/folder',JSON.stringify({name:name,parent_id:CUR_FOLDER})).then(function(r){
-if(r.ok){toast('文件夹已创建');loadFiles()}else toast('创建失败: '+(r.error||'未知'))})};
+      // ── 文件浏览 ──
+      function loadFiles() {
+        var c = $('fs-tab-files'); if (!c) return;
+        c.innerHTML = '<div style="text-align:center;padding:40px;color:#bbb;">加载中…</div>';
+        // 并行获取文件列表和文件夹树
+        Promise.all([
+          api('GET', '/api/bbs/files' + '?folder_id=' + (CUR_FOLDER || '') + '&sort_by=' + SORT_BY + '&sort_order=' + SORT_ORDER),
+          api('GET', '/api/bbs/files/tree')
+        ]).then(function (resp) {
+          var r = resp[0]; var treeResp = resp[1];
+          if (!r.ok) { if (r.error === 'unauthorized') { T = ''; showLogin() } else c.innerHTML = '<div class="fs-empty">加载失败</div>'; return }
+          renderFiles(r.files || [], r.quota, r.used, treeResp.ok ? treeResp.folders : [])
+        }).catch(function () { c.innerHTML = '<div class="fs-empty">网络错误</div>' })
+      }
 
-window.fsShowShare=function(id,name,isFolder){SHARE_ITEM_ID=id;$('fs-share-name').textContent='分享: '+name;
-$('fs-share-title').value=name;$('fs-share-pwd').value='';
-var hint=$('fs-share-hint');if(hint)hint.style.display=(isFolder||name==='文件夹')?'':'none';$('fs-share-modal').classList.add('show')};
-window.fsDoShare=function(){
-var pwd=$('fs-share-pwd').value.trim();var sn=$('fs-share-title').value.trim();
-$('fs-share-modal').classList.remove('show');
-api('POST','/api/bbs/files/share',JSON.stringify({item_id:SHARE_ITEM_ID,name:sn||null,password:pwd||null,expires_in:parseInt($('fs-share-expire').value)})).then(function(r){
-if(r.ok){var url='/Tool/files.html?share='+r.code;toast('分享链接: '+window.location.origin+url);if(navigator.clipboard) navigator.clipboard.writeText(window.location.origin+url);switchTab('shares')}
-else toast('创建失败: '+(r.error||'未知'))})};
+      function _buildTree(folders, pid, level) {
+        var h = ''; var kids = [];
+        for (var i = 0; i < folders.length; i++) { if (folders[i].parent_id === pid) kids.push(folders[i]) }
+        kids.sort(function (a, b) { return a.name.localeCompare(b.name) });
+        for (var i = 0; i < kids.length; i++) {
+          var f = kids[i]; var cur = f.id == CUR_FOLDER;
+          if (cur) CUR_TREE_ID = f.id;
+          var cls = cur ? ' tn-cur' : '';
+          var pad = 'padding-left:' + (12 + level * 16) + 'px';
+          var info = (f.file_count ? f.file_count + ' 个文件' : '文件夹');
+          if (f.total_size) info += ', ' + fmtSize(f.total_size);
+          h += '<div class="tn-item' + cls + '" style="' + pad + '" onclick="fsTreeNav(\''+f.id+'\')" title="' + info + '">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
+            '<span>' + esc(f.name) + '</span></div>';
+          h += _buildTree(folders, f.id, level + 1)
+        }
+        return h
+      }
+      function renderFiles(files, quota, used, folders) {
+        folders = folders || []; window.G_FOLDERS = folders;
+        var pct = quota > 0 ? Math.min(100, Math.round(used / quota * 100)) : 0;
+        var cls = pct >= 90 ? 'danger' : (pct >= 75 ? 'warning' : '');
+        var html = '<div class="fs-layout"><div class="fs-sidebar"><div class="fs-sidebar-title">文件夹</div><div class="fs-tree" id="fs-tree">';
+        // 根目录
+        var rootCls = !CUR_FOLDER ? ' tn-cur' : '';
+        html += '<div class="tn-item' + rootCls + '" onclick="fsNavTo(0)" style="padding-left:12px;font-weight:600">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
+          '<span>根目录</span></div>';
+        html += _buildTree(folders, null, 1);
+        html += '</div></div><div class="fs-main">';
 
-window.fsDownload=function(id,name){
-var a=document.createElement('a');a.style.display='none';document.body.appendChild(a);
-fetch('/api/bbs/files/'+id+'/download',{headers:T?{'X-Auth-Token':T}:{}}).then(function(r){
-if(!r.ok){toast('下载失败');return}
-r.blob().then(function(blob){
-a.href=URL.createObjectURL(blob);a.download=name||'download';a.click();
-setTimeout(function(){URL.revokeObjectURL(a.href);document.body.removeChild(a)},1000)})}).catch(function(){toast('下载失败');document.body.removeChild(a)})};
-window.fsDeleteItem=function(id,name){
-if(!confirm('确定删除 "'+name+'" 吗？'))return;
-api('POST','/api/bbs/files/'+id+'/delete').then(function(r){if(r.ok){toast('已删除');loadFiles();switchTab('files')}else toast('删除失败')})};
+        // 配额
+        html += '<div class="fs-card" style="padding:10px 14px;margin-bottom:8px"><div class="fs-qrow"><span class="fs-qlabel">已使用</span><span class="fs-qnum">' + fmtSize(used) + ' / ' + fmtSize(quota) + '</span></div><div class="fs-qbar"><div class="fs-qfill ' + cls + '" style="width:' + pct + '%"></div></div></div>';
 
-window.fsCloseModal=function(id){$(id).classList.remove('show')};
+        // 上传区
+        html += '<div class="fs-upload" id="fs-upload"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><div class="hint">点击或拖拽文件上传（可多选）</div></div>';
+        // 上传任务列表
+        html += '<div class="fs-upload-tasks" id="fs-upload-tasks"></div>';
 
-// ── 分享管理 ──
-function loadShares(){
-var c=$('fs-tab-shares');if(!c)return;
-c.innerHTML='<div style="text-align:center;padding:40px;color:#bbb;">加载中…</div>';
-api('GET','/api/bbs/files/share/list').then(function(r){
-if(!r.ok){c.innerHTML='<div class="fs-empty">加载失败</div>';return}
-if(r.shares.length===0){c.innerHTML='<div class="fs-empty">暂无分享链接</div>';return}
-var html='';
-for(var i=0;i<r.shares.length;i++){
-var s=r.shares[i];
-var pwd=s.has_password?'[加密] ':'[公开] ';
-var exp=s.expires_at?' · 过期:'+fmtTime(s.expires_at):(s.expires_at===0?' · 永不过期':'');
-var url=window.location.origin+'/Tool/files.html?share='+s.code;
-html+='<div class="fs-share-item">'+
-'<div class="info"><div class="name">'+pwd+esc(s.name)+'</div><div class="meta">'+fmtTime(s.created_at)+exp+'</div></div>'+
-'<a class="fs-btn" href="'+url+'" target="_blank">打开</a>'+
-'<button class="fs-btn" onclick="navigator.clipboard.writeText(\''+url+'\');toast(\'已复制\')">复制</button>'+
-'<button class="fs-btn" onclick="fsEditShare(\''+s.code+'\',\''+esc(s.name)+'\','+(s.has_password?'true':'false')+',\''+esc(s.password||'')+'\',\''+s.type+'\')">编辑</button>'+
-'<button class="fs-btn danger" onclick="fsDeleteShare(\''+s.code+'\')">删除</button></div>';}
-c.innerHTML=html})}
+        // 工具栏
+        html += '<div class="fs-toolbar">';
+        html += '<div class="fs-toolbar-row"><div class="fs-path">';
+        for (var i = 0; i < PATH.length; i++) {
+          if (i > 0) html += '<span>/</span>';
+          if (i === PATH.length - 1) html += '<span>' + esc(PATH[i].name) + '</span>';
+          else html += '<a onclick="fsNavTo(' + i + ')">' + esc(PATH[i].name) + '</a>'
+        }
+        html += '</div></div>';
+        html += '<div class="fs-toolbar-row"><select style="font-size:12px;padding:3px 6px;border:1px solid rgba(0,0,0,0.1);border-radius:4px;outline:none;color:#555;background:transparent" onchange="fsSetSort(this.value)" id="fs-sort-select"><option value="name-asc">名称 ↑</option><option value="name-desc">名称 ↓</option><option value="time-asc">时间 ↑</option><option value="time-desc">时间 ↓</option></select>';
+        html += '<button class="fs-btn" id="fs-btn-batch" onclick="fsToggleBatch()">批量操作</button>';
+        html += '<button class="fs-btn" id="fs-btn-batch-del" onclick="fsBatchDelete()" style="display:none">删除</button>';
+        html += '<button class="fs-btn" id="fs-btn-batch-move" onclick="fsShowMoveDialog()" style="display:none">移动到</button>';
+        html += '<button class="fs-btn" id="fs-btn-batch-dl" onclick="fsBatchDownload()" style="display:none">下载</button>';
+        html += '<span id="fs-select-all" style="font-size:11px;color:var(--theme-color,#399FFF);cursor:pointer;display:none" onclick="fsToggleSelectAll()">全选</span>';
+        html += '<span id="fs-select-none" style="font-size:11px;color:#999;cursor:pointer;display:none" onclick="fsToggleSelectAll()">取消全选</span>';
+        html += '<button class="fs-btn" id="fs-btn-newfolder" onclick="fsShowNewFolder()">+ 新建文件夹</button>';
+        html += '<button class="fs-btn" id="fs-btn-share" onclick="var _fn=\'根目录\';for(var _i=0;_i<window.G_FOLDERS.length;_i++){if(window.G_FOLDERS[_i].id===CUR_FOLDER){_fn=window.G_FOLDERS[_i].name;break}}fsShowShare(\''+(CUR_FOLDER||'')+'\',_fn)">分享</button>';
+        html += '<button class="fs-btn" id="fs-btn-zip" onclick="fsDownload(\''+(CUR_FOLDER||'all')+'\',\''+(CUR_FOLDER?'文件夹':'全部文件')+'.zip\')">下载ZIP</button>';
+        html += '</div></div>';
 
-window.fsDeleteShare=function(code){
-if(!confirm('确定删除此分享链接？'))return;
-api('POST','/api/bbs/files/share/'+code+'/delete').then(function(r){if(r.ok){toast('已删除');loadShares()}else toast('删除失败')})};
-window.fsEditShare=function(code,name,hasPwd,curPwd,shareType){
-window._fsEditCode=code;$('fs-edit-share-name').textContent='编辑: '+name;
-$('fs-edit-share-pwd').value=curPwd||'';
-$('fs-edit-share-pwd').style.display=hasPwd?'':'none';
-window._fsEditHasPwd=hasPwd;
-fsEditPwdToggle(hasPwd?true:false);
-$('fs-edit-share-expire').value='-1';
-$('fs-edit-share-modal').classList.add('show')};
-window.fsTogglePwdVis=function(){
-  var inp=$('fs-edit-share-pwd');
-  var open=$('fs-eye-open');
-  var closed=$('fs-eye-closed');
-  if(inp.type==='password'){inp.type='text';closed.style.display='none';open.style.display=''}
-  else{inp.type='password';closed.style.display='';open.style.display='none'}
-};
-window.fsEditPwdToggle=function(on){
-$('fs-edit-pwd-on').style.borderColor=on?'var(--theme-color,#399FFF)':'rgba(0,0,0,0.12)';
-$('fs-edit-pwd-off').style.borderColor=on?'rgba(0,0,0,0.12)':'var(--theme-color,#399FFF)';
-$('fs-edit-pwd-on').style.color=on?'var(--theme-color,#399FFF)':'#999';
-$('fs-edit-pwd-off').style.color=on?'#999':'var(--theme-color,#399FFF)';
-$('fs-edit-share-pwd').style.display=on?'':'none';window._fsEditHasPwd=on};
+        // 文件列表
+        if (files.length === 0) html += '<div class="fs-empty">文件夹为空</div>';
+        else {
+          html += '<div class="fs-list">';
+          for (var i = 0; i < files.length; i++) {
+            var f = files[i];
+            var ico = f.type === 'folder' ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#399FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+            var meta = ''; var acts = '';
+            if (f.type === 'folder') {
+              meta = '文件夹';
+              acts = '<button class="fs-btn" onclick="fsNavInto(\''+f.id+'\',\''+esc(f.name)+'\')">打开</button>' +
+                '<button class="fs-btn" onclick="fsDownload(\''+f.id+'\',\''+esc(f.name)+'.zip\')">下载ZIP</button>' +
+                '<button class="fs-btn" onclick="fsShowShare(\''+f.id+'\',\''+esc(f.name)+'\',true)">分享</button>';
+            } else {
+              meta = fmtSize(f.size) + (f.uploaded_at ? ' · ' + fmtTime(f.uploaded_at) : '');
+              acts = '<button class="fs-btn" onclick="fsDownload(\''+f.id+'\',\''+esc(f.name)+'\')">下载</button>' +
+                '<button class="fs-btn" onclick="fsShowShare(\''+f.id+'\',\''+esc(f.name)+'\')">分享</button>';
+            }
+            acts += '<button class="fs-btn" onclick="fsShowRename(\''+f.id+'\',\''+esc(f.name)+'\')">重命名</button>' +
+              '<button class="fs-btn danger" onclick="fsDeleteItem(\''+f.id+'\',\''+esc(f.name)+'\')">删除</button>';
+            html += '<div class="fs-item"><div class="fs-cb"><input type="checkbox" class="fs-item-cb" data-id="' + f.id + '" onclick="fsToggleSelect(\'' + f.id + '\')" style="display:none"></div><div class="ico ' + (f.type === 'folder' ? 'folder' : '') + '"' + (f.type === 'folder' ? 'onclick="fsNavInto(\'' + f.id + '\',\'' + esc(f.name) + '\')"' : '') + '>' + ico + '</div>' +
+              '<div class="info"><div class="name">' + esc(f.name) + '</div><div class="meta">' + meta + '</div></div><div class="acts">' + acts + '</div></div>';
+          }
+          html += '</div>';
+        }
+        html += '</div></div>';
+        // 安全提示
+        html += '<div class="fs-notice">本存储仅作临时交换使用，不宜作为长期网盘。因不可控因素导致的文件丢失或泄露，网站恕不承担相关责任。</div>';
+        document.getElementById('fs-tab-files').innerHTML = html;
+        // 批量模式悬停选择
+        document.querySelectorAll('#fs-tab-files .fs-item').forEach(function(el){
+          el.addEventListener('mouseenter',function(){
+            if(BATCH_MODE){var cb=this.querySelector('.fs-item-cb');if(cb&&!cb.checked){cb.checked=true;SELECTED_IDS[cb.dataset.id]=true;fsUpdateBatchBar()}}
+          })
+        });
+        // 高亮树中当前项
+        var treeEl = document.getElementById('fs-tree');
+        if (treeEl) { treeEl.querySelectorAll('.tn-cur').forEach(function (e) { e.scrollIntoView({ block: 'nearest' }) }) }
+        bindUpload()
+      }
+      var UPLOAD_TASKS = [], UPLOAD_CONCURRENCY = 8, SORT_BY = "name", SORT_ORDER = "asc";
+      var SELECTED_IDS = {}, BATCH_MODE = false;
+      window.fsToggleBatch = function () {
+        BATCH_MODE = !BATCH_MODE;
+        var btn = document.getElementById('fs-btn-batch');
+        if (btn) btn.textContent = BATCH_MODE ? '取消' : '批量操作';
+        var sortEl = document.getElementById('fs-sort-select'); if (sortEl) sortEl.style.display = BATCH_MODE ? 'none' : '';
+        var newBtn = document.getElementById('fs-btn-newfolder'); if (newBtn) newBtn.style.display = BATCH_MODE ? 'none' : '';
+        var shareBtn = document.getElementById('fs-btn-share'); if (shareBtn) shareBtn.style.display = BATCH_MODE ? 'none' : '';
+        var zipBtn = document.getElementById('fs-btn-zip'); if (zipBtn) zipBtn.style.display = BATCH_MODE ? 'none' : '';
+        var delBtn = document.getElementById('fs-btn-batch-del'); if (delBtn) delBtn.style.display = BATCH_MODE ? '' : 'none';
+        var moveBtn = document.getElementById('fs-btn-batch-move'); if (moveBtn) moveBtn.style.display = BATCH_MODE ? '' : 'none';
+        var dlBtn = document.getElementById('fs-btn-batch-dl'); if (dlBtn) dlBtn.style.display = BATCH_MODE ? '' : 'none';
+        var sa = document.getElementById('fs-select-all'); if (sa) sa.style.display = BATCH_MODE ? '' : 'none';
+        var sn = document.getElementById('fs-select-none'); if (sn) sn.style.display = 'none';
+        var cbs = document.querySelectorAll('.fs-item-cb'); cbs.forEach(function (c) { c.style.display = BATCH_MODE ? '' : 'none'; c.checked = false });
+        if (!BATCH_MODE) { SELECTED_IDS = {}; fsUpdateBatchBar() }
+      };
+      window.fsSetSort = function (val) {
+        var parts = val.split('-'); SORT_BY = parts[0]; SORT_ORDER = parts[1];
+        loadFiles()
+      };
+      window.fsToggleSelect = function (id) {
+        if (SELECTED_IDS[id]) { delete SELECTED_IDS[id] } else { SELECTED_IDS[id] = true }
+        fsUpdateBatchBar();
+        var cbs = document.querySelectorAll('.fs-item-cb[data-id="' + id + '"]');
+        cbs.forEach(function (c) { c.checked = !!SELECTED_IDS[id] })
+      };
+      window.fsToggleSelectAll = function () {
+        var items = document.querySelectorAll('.fs-item-cb');
+        var allChecked = true;
+        items.forEach(function (c) { if (!c.checked) allChecked = false });
+        items.forEach(function (c) {
+          c.checked = !allChecked;
+          if (c.checked) SELECTED_IDS[c.dataset.id] = true; else delete SELECTED_IDS[c.dataset.id]
+        });
+        var sa = document.getElementById('fs-select-all'); var sn = document.getElementById('fs-select-none');
+        if (sa) sa.style.display = allChecked ? '' : 'none';
+        if (sn) sn.style.display = allChecked ? 'none' : '';
+        fsUpdateBatchBar()
+      };
+      function fsUpdateBatchBar() {
+        var bar = document.getElementById('fs-batch-bar');
+        var cnt = Object.keys(SELECTED_IDS).length;
+        if (bar) { var ct = bar.querySelector('.count'); if (ct) ct.textContent = '已选 ' + cnt + ' 项'; bar.classList.toggle('show', cnt > 0) }
+        var bm = document.getElementById('fs-batch-bar-move'); if (bm) bm.disabled = cnt === 0;
+        var bd = document.getElementById('fs-batch-bar-del'); if (bd) bd.disabled = cnt === 0;
+        var bdl = document.getElementById('fs-btn-batch-dl'); if (bdl) bdl.disabled = cnt === 0
+      }
+      window.fsBatchDownload = function () {
+        var ids = Object.keys(SELECTED_IDS);
+        if (!ids.length) { toast('请先选择文件'); return }
+        var a = document.createElement('a'); a.style.display = 'none'; document.body.appendChild(a);
+        fetch('/api/bbs/files/batch-download', { method: 'POST', headers: { 'X-Auth-Token': T, 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids }) }).then(function (r) {
+          if (!r.ok) { toast('下载失败'); return }
+          r.blob().then(function (blob) { a.href = URL.createObjectURL(blob); a.download = 'batch_download.zip'; a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); document.body.removeChild(a) }, 1000) })
+        }).catch(function () { toast('下载失败'); document.body.removeChild(a) })
+      };
+      window.fsBatchDelete = function () {
+        var ids = Object.keys(SELECTED_IDS);
+        if (!ids.length) return;
+        if (!confirm('确定删除选中的 ' + ids.length + ' 项吗？')) return;
+        api('POST', '/api/bbs/files/batch-delete', JSON.stringify({ ids: ids })).then(function (r) {
+          if (r.ok) { toast('已删除 ' + ids.length + ' 项'); SELECTED_IDS = {}; loadFiles() }
+          else toast('删除失败: ' + (r.error || '未知'))
+        })
+      };
+      window.fsShowMoveDialog = function () {
+        var ids = Object.keys(SELECTED_IDS);
+        if (!ids.length) { toast('请先选择文件'); return }
+        window._fsMoveIds = ids; window._fsMoveTarget = null;
+        var info = document.getElementById('fs-move-info');
+        if (info) info.textContent = '移动 ' + (ids.length > 1 ? ids.length + ' 项' : '1 项') + ' 到…';
+        var btn = document.getElementById('fs-move-btn');
+        if (btn) { btn.disabled = true; btn.textContent = '移动到根目录' }
+        document.getElementById('fs-move-modal').classList.add('show');
+        fsBuildMoveTree()
+      };
+      function fsBuildMoveTree() {
+        var list = document.getElementById('fs-move-list'); if (!list) return;
+        api('GET', '/api/bbs/files/tree').then(function (r) {
+          if (!r.ok || !r.folders) { list.innerHTML = '<div style="padding:12px;color:#999;font-size:13px">加载失败</div>'; return }
+          var folders = r.folders;
+          var excludes = {}; (window._fsMoveIds || []).forEach(function (id) { excludes[id] = true });
+          function markChildren(pid) {
+            for (var i = 0; i < folders.length; i++) {
+              if (folders[i].parent_id === pid && !excludes[folders[i].id]) {
+                excludes[folders[i].id] = true; markChildren(folders[i].id)
+              }
+            }
+          }
+          (window._fsMoveIds || []).forEach(function (id) { markChildren(id) });
+          var html = '<div class="fs-move-item" data-id="" onclick="fsMoveSel(this)">'
+            + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" style="flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> 根目录</div>';
+          html += fsBuildMoveSubTree(folders, null, 1, excludes);
+          list.innerHTML = html
+        }).catch(function () { list.innerHTML = '<div style="padding:12px;color:#999;font-size:13px">加载失败</div>' })
+      };
+      function fsBuildMoveSubTree(folders, pid, level, excludes) {
+        var h = ''; var kids = [];
+        for (var i = 0; i < folders.length; i++) { if (folders[i].parent_id === pid) kids.push(folders[i]) }
+        kids.sort(function (a, b) { return a.name.localeCompare(b.name) });
+        for (var i = 0; i < kids.length; i++) {
+          var f = kids[i]; if (excludes[f.id]) continue;
+          h += '<div class="fs-move-item" data-id="' + f.id + '" style="padding-left:' + (12 + level * 20) + 'px" onclick="fsMoveSel(this)">'
+            + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" style="flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> '
+            + esc(f.name) + '</div>';
+          h += fsBuildMoveSubTree(folders, f.id, level + 1, excludes)
+        }
+        return h
+      };
+      window.fsMoveSel = function (el) {
+        document.querySelectorAll('.fs-move-item').forEach(function (e) { e.classList.remove('sel') });
+        el.classList.add('sel'); window._fsMoveTarget = el.dataset.id || null;
+        var btn = document.getElementById('fs-move-btn');
+        if (btn) { btn.disabled = false; btn.textContent = '移动到 ' + (window._fsMoveTarget ? el.textContent.trim() : '根目录') }
+      };
+      window.fsDoMove = function () {
+        var ids = window._fsMoveIds; var target = window._fsMoveTarget;
+        if (!ids || !ids.length) return;
+        document.getElementById('fs-move-modal').classList.remove('show');
+        api('POST', '/api/bbs/files/batch-move', JSON.stringify({ ids: ids, target_folder_id: target })).then(function (r) {
+          if (r.ok) { toast('已移动 ' + r.moved + ' 项'); SELECTED_IDS = {}; loadFiles() }
+          else toast('移动失败: ' + (r.error || '未知'))
+        })
+      };
+      window.fsShowRename = function (id, name) {
+        window._fsRenameId = id; document.getElementById('fs-rename-input').value = name;
+        document.getElementById('fs-rename-modal').classList.add('show');
+        setTimeout(function () { document.getElementById('fs-rename-input').focus(); document.getElementById('fs-rename-input').select() }, 100)
+      };
+      window.fsDoRename = function () {
+        var id = window._fsRenameId; var name = document.getElementById('fs-rename-input').value.trim();
+        if (!name || !id) { toast('请输入名称'); return }
+        document.getElementById('fs-rename-modal').classList.remove('show');
+        api('POST', '/api/bbs/files/' + id + '/rename', JSON.stringify({ name: name })).then(function (r) {
+          if (r.ok) { toast('已重命名'); loadFiles() }
+          else toast('重命名失败: ' + (r.error || '未知'))
+        })
+      };
 
-window.fsDoEditShare=function(){
-var code=window._fsEditCode;if(!code)return;
-var body={};
-if(!window._fsEditHasPwd){body.password=''}  // 明确设为无密码
-else{body.password=$('fs-edit-share-pwd').value.trim()||''}
-var ei=$('fs-edit-share-expire').value;
-if(ei!='-1')body.expires_in=parseInt(ei);
-$('fs-edit-share-modal').classList.remove('show');
-api('POST','/api/bbs/files/share/'+code+'/update',JSON.stringify(body)).then(function(r){
-if(r.ok){toast('已更新');loadShares()}else toast('更新失败: '+(r.error||'未知'))})};
+      function bindUpload() {
+        var zone = document.getElementById('fs-upload'); if (!zone) return;
+        var inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true; inp.style.display = 'none'; zone.appendChild(inp);
+        var dirInp = document.createElement('input'); dirInp.type = 'file'; dirInp.webkitdirectory = true; dirInp.style.display = 'none'; zone.appendChild(dirInp);
+        zone.onclick = function (e) { if (e.target === zone) inp.click() };
+        inp.addEventListener('change', function () { if (inp.files) for (var i = 0; i < inp.files.length; i++)addUploadTask(inp.files[i]); inp.value = '' });
+        dirInp.addEventListener('change', function () { if (dirInp.files) for (var i = 0; i < dirInp.files.length; i++)addUploadTask(dirInp.files[i]); dirInp.value = '' });
+        zone.addEventListener('dragover', function (e) { e.preventDefault(); zone.classList.add('dragover') });
+        zone.addEventListener('dragleave', function () { zone.classList.remove('dragover') });
+        zone.addEventListener('drop', function (e) { e.preventDefault(); zone.classList.remove('dragover'); if (e.dataTransfer && e.dataTransfer.items) { for (var i = 0; i < e.dataTransfer.items.length; i++) { var item = e.dataTransfer.items[i]; if (item.webkitGetAsEntry) { var entry = item.webkitGetAsEntry(); if (entry) traverseEntry(entry, '') } } } else if (e.dataTransfer.files) { for (var i = 0; i < e.dataTransfer.files.length; i++)addUploadTask(e.dataTransfer.files[i]) } })
+      }
+      function traverseEntry(entry, path) {
+        if (entry.isFile) {
+          entry.file(function (file) { file._folderPath = path; addUploadTask(file) })
+        } else if (entry.isDirectory) {
+          var reader = entry.createReader();
+          reader.readEntries(function (entries) { for (var i = 0; i < entries.length; i++)traverseEntry(entries[i], path ? path + '/' + entry.name : entry.name) })
+        }
+      }
+      function addUploadTask(file) {
+        var folderPath = file._folderPath || '';
+        var displayName = folderPath ? folderPath + '/' + file.name : file.name;
+        UPLOAD_TASKS.push({ id: Date.now() + '_' + Math.random().toString(36).slice(2, 6), file: file, name: displayName, size: file.size, progress: 0, status: 'queued', error: '', folderPath: folderPath, retries: 0, maxRetries: 3 });
+        renderTasks(); processQueue()
+      }
+      function renderTasks() {
+        var c = document.getElementById('fs-upload-tasks'); if (!c) return;
+        if (!UPLOAD_TASKS.length) { c.innerHTML = ''; return }
+        var h = '';
+        for (var i = 0; i < UPLOAD_TASKS.length; i++) {
+          var t = UPLOAD_TASKS[i]; var st = t.status === 'queued' ? '排队中' : (t.status === 'uploading' ? t.progress + '%' : (t.status === 'done' ? '完成' : '失败'));
+          var sc = t.status === 'queued' ? '#999' : (t.status === 'uploading' ? '#399FFF' : (t.status === 'done' ? '#34c759' : '#ff3b30'));
+          var bw = t.status === 'uploading' ? t.progress : (t.status === 'done' ? 100 : (t.status === 'error' ? 100 : 0));
+          var bg = t.status === 'done' ? '#34c759' : (t.status === 'error' ? '#ff3b30' : '#399FFF');
+          h += '<div class="ut-item"><div class="ut-info"><span class="ut-name">' + esc(t.name) + '</span><span class="ut-size">' + fmtSize(t.size) + '</span></div>' +
+            '<div class="ut-bar"><div class="ut-fill" style="width:' + bw + '%;background:' + bg + '"></div></div>' +
+            '<div class="ut-stat" style="color:' + sc + '">' + st + '</div>' +
+            (t.status === 'queued' || t.status === 'uploading' ? '<button class="fs-btn" style="font-size:10px;padding:2px 6px;color:#ff3b30;border-color:#ff3b30" onclick="cancelUpload(\''+t.id+'\')">取消</button>' : '') +
+            (t.status === 'error' ? '<button class="fs-btn" style="font-size:10px;padding:2px 6px" onclick="retryUpload(\''+t.id+'\')">重试</button>' : '') +'</div>';
+        }
+        c.innerHTML = h
+      }
+      var _folderCache = {};
+      function processQueue() {
+        var active = 0;
+        for (var i = 0; i < UPLOAD_TASKS.length; i++) { if (UPLOAD_TASKS[i].status === 'uploading') active++ }
+        for (var i = 0; i < UPLOAD_TASKS.length && active < UPLOAD_CONCURRENCY; i++) {
+          if (UPLOAD_TASKS[i].status === 'queued') { active++; uploadFile(UPLOAD_TASKS[i]) }
+        }
+      }
+      var _folderPending = {};
+      function _ensureFolder(path, callback) {
+        if (_folderCache[path]) { callback(_folderCache[path]); return }
+        if (_folderPending[path]) { _folderPending[path].push(callback); return }
+        _folderPending[path] = [callback];
+        var segs = path.split('/'); var idx = 0;
+        function _next(pid) {
+          if (idx >= segs.length) {
+            _folderCache[path] = pid;
+            var cbs = _folderPending[path] || []; delete _folderPending[path];
+            for (var ci = 0; ci < cbs.length; ci++) cbs[ci](pid);
+            return
+          }
+          var name = segs[idx]; idx++;
+          api('POST', '/api/bbs/files/folder', JSON.stringify({ name: name, parent_id: pid })).then(function (r) {
+            if (r.ok) { _next(r.folder_id) } else {
+              var cbs = _folderPending[path] || []; delete _folderPending[path];
+              for (var ci = 0; ci < cbs.length; ci++) cbs[ci](null);
+            }
+          }).catch(function () {
+            var cbs = _folderPending[path] || []; delete _folderPending[path];
+            for (var ci = 0; ci < cbs.length; ci++) cbs[ci](null);
+          })
+        }
+        _next(CUR_FOLDER || null)
+      }
+      function uploadFile(task) {
+        task.status = 'uploading'; renderTasks();
+        var fd = new FormData(); fd.append('file', task.file);
+        function _startUpload(targetFolder) {
+          if (targetFolder) fd.append('folder_id', targetFolder);
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/bbs/files/upload', true); if (T) xhr.setRequestHeader('X-Auth-Token', T);
+          xhr.upload.onprogress = function (e) { if (e.lengthComputable) { task.progress = Math.round(e.loaded / e.total * 100); renderTasks() } };
+          xhr.onload = function () {
+            try {
+              var r2 = JSON.parse(xhr.responseText);
+              if (r2.ok) { task.status = 'done'; task.progress = 100; loadFiles(); }
+              else {
+                task.status = 'error'; task.error = r2.error || '上传失败';
+                if (task.retries < task.maxRetries) { task.retries++; task.status = 'queued'; setTimeout(function () { processQueue() }, 1000) }
+              }
+            } catch (e) {
+              task.status = 'error'; task.error = '解析失败';
+              if (task.retries < task.maxRetries) { task.retries++; task.status = 'queued'; setTimeout(function () { processQueue() }, 1000) }
+            }
+            renderTasks(); processQueue(); checkAllDone()
+          };
+          xhr.onerror = function () {
+            task.status = 'error'; task.error = '网络错误';
+            if (task.retries < task.maxRetries) {
+              task.retries++; task.status = 'queued'; setTimeout(function () { processQueue() }, 1000)
+            }
+            renderTasks(); processQueue()
+          };
+          task.xhr = xhr; xhr.send(fd)
+        }
+        api('GET', '/api/bbs/files').then(function (r) {
+          if (!r.ok) { task.status = 'error'; task.error = '无法检查空间'; renderTasks(); processQueue(); return }
+          var used = r.used || 0, quota = r.quota || 0;
+          if (used + task.file.size > quota) { task.status = 'error'; task.error = '空间不足'; renderTasks(); toast('空间不足: ' + task.name); processQueue(); return }
+          if (task.folderPath) {
+            _ensureFolder(task.folderPath, function (folderId) {
+              if (folderId) _startUpload(folderId);
+              else { task.status = 'error'; task.error = '创建文件夹结构失败'; renderTasks(); processQueue() }
+            })
+          } else {
+            _startUpload(CUR_FOLDER || null)
+          }
+        }).catch(function () { task.status = 'error'; task.error = '检查配额失败'; renderTasks() })
+      }
+      window.cancelUpload = function (id) {
+        for (var i = 0; i < UPLOAD_TASKS.length; i++) {
+          if (UPLOAD_TASKS[i].id === id) {
+            var t = UPLOAD_TASKS[i]; if (t.status === 'uploading' && t.xhr) { t.xhr.abort() }
+            t.status = 'cancelled'; UPLOAD_TASKS.splice(i, 1); renderTasks(); processQueue(); return
+          }
+        }
+        toast('未找到上传任务')
+      }
+      window.retryUpload = function (id) {
+        for (var i = 0; i < UPLOAD_TASKS.length; i++) {
+          if (UPLOAD_TASKS[i].id === id && UPLOAD_TASKS[i].status === 'error') {
+            UPLOAD_TASKS[i].retries = 0; UPLOAD_TASKS[i].status = 'queued'; renderTasks(); processQueue(); return
+          }
+        }
+      }
+      function checkAllDone() {
+        for (var i = 0; i < UPLOAD_TASKS.length; i++) { if (UPLOAD_TASKS[i].status !== 'done' && UPLOAD_TASKS[i].status !== 'error' && UPLOAD_TASKS[i].status !== 'cancelled') return }
+        setTimeout(function () { loadFiles(); UPLOAD_TASKS = []; renderTasks() }, 400)
+      }
+      (function () { var inp = document.getElementById('fs-rename-input'); if (inp) inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') window.fsDoRename() }) })();
+    function _adminBuildTree(folders, pid, level) {
+      var h = ''; var kids = [];
+      for (var i = 0; i < folders.length; i++) { if (folders[i].parent_id === pid) kids.push(folders[i]) }
+      kids.sort(function (a, b) { return a.name.localeCompare(b.name) });
+      for (var i = 0; i < kids.length; i++) {
+        var f = kids[i]; var cur = f.id == window._adminCUR;
+        var cls = cur ? ' tn-cur' : '';
+        var pad = 'padding-left:' + (12 + level * 16) + 'px';
+        h += '<div class="tn-item' + cls + '" style="' + pad + '" onclick="_adminTreeNav(\''+f.id+'\')">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
+          '<span>' + esc(f.name) + '</span></div>';
+        h += _adminBuildTree(folders, f.id, level + 1)
+      }
+      return h
+    }
+    function _adminResolvePath(folderId) {
+      var fmap = {}; var fl = window._adminAllFiles;
+      for (var i = 0; i < fl.length; i++) { if (fl[i].type === 'folder') fmap[fl[i].id] = fl[i] }
+      var stack = []; var cur = folderId;
+      while (cur && fmap[cur]) { stack.unshift({ id: fmap[cur].id, name: fmap[cur].name }); cur = fmap[cur].parent_id }
+      return stack
+    }
+    window._adminNavTo = function (idx) {
+      var p = window._adminPATH; if (idx >= p.length - 1) return;
+      window._adminPATH = p.slice(0, idx + 1);
+      window._adminCUR = window._adminPATH[window._adminPATH.length - 1].id;
+      api('GET', '/api/bbs/files/admin/tree?user_id=' + window._adminUid).then(function (tr) {
+        _adminRender(window._adminAllFiles, tr.ok ? tr.folders : [])
+      })
+    };
+    window._adminNavInto = function (id, name) {
+      window._adminCUR = id; window._adminPATH.push({ id: id, name: name });
+      api('GET', '/api/bbs/files/admin/tree?user_id=' + window._adminUid).then(function (tr) {
+        _adminRender(window._adminAllFiles, tr.ok ? tr.folders : [])
+      })
+    };
+    window._adminTreeNav = function (id) {
+      var segs = _adminResolvePath(id); if (segs.length === 0) return;
+      window._adminPATH = [{ id: null, name: window._adminUname + ' 的文件' }].concat(segs);
+      window._adminCUR = id;
+      api('GET', '/api/bbs/files/admin/tree?user_id=' + window._adminUid).then(function (tr) {
+        _adminRender(window._adminAllFiles, tr.ok ? tr.folders : [])
+      })
+    };
+    // 管理员文件树点击事件
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-act]'); if (!btn) return;
+      var id = btn.dataset.fid; var fn = btn.dataset.fn || '';
+      if (btn.dataset.act === 'dl') { fsDownload(id, fn); }
+      else if (btn.dataset.act === 'dlzip') { fsDownload(id, fn + '.zip'); }
+      else if (btn.dataset.act === 'del') { if (confirm('确定删除 "' + fn + '" 吗？')) fsDeleteItem(id, fn); }
+    });;
 
-	// ── 管理面板 ──
-	var _adminUsers=[],_adminSharesLoaded=[];
-	window.loadAdmin=function(){
-	var c=$('fs-tab-admin');if(!c)return;
-	c.innerHTML='<div style="text-align:center;padding:40px;color:#bbb;">加载中…</div>';
-	api('GET','/api/bbs/files/admin/users').then(function(r){
-	if(!r.ok||!r.users){c.innerHTML='<div class="fs-empty">加载失败</div>';return}
-	_adminUsers=r.users||[];
-	api('GET','/api/bbs/files/admin/shares').then(function(sr){
-	_adminSharesLoaded=sr.ok?sr.shares:[];
-	_adminRenderUsers()
-	}).catch(function(){_adminSharesLoaded=[];_adminRenderUsers()})})}
-	function _adminRenderUsers(selectedUid){
-	var c=$('fs-tab-admin');if(!c)return;
-	var users=_adminUsers;
-	var html='<div class="fs-layout"><div class="fs-sidebar" style="width:220px"><div class="fs-sidebar-title">用户列表</div><div class="fs-tree" id="adm-user-tree">';
-	var rootCls=!selectedUid?' tn-cur':'';
-	html+='<div class="tn-item'+rootCls+'" onclick="loadAdmin()" style="padding-left:12px;font-weight:600">'+
-	'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--theme-color,#399FFF)" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>'+
-	'<span>全部用户</span></div>';
-	for(var i=0;i<users.length;i++){
-	var u=users[i];var sel=u.id===selectedUid?' tn-cur':'';
-	var pct=u.quota>0?Math.round(u.used/u.quota*100):0;
-	var isOrphan=u.username===null;
-	var unameDisplay=isOrphan?'[用户不存在-'+u.id+']':esc(u.username);
-	var unameStyle=isOrphan?'color:#ff3b30':'';
-	var clickFn='fsShowUserFiles(\''+u.id+'\',\''+(isOrphan?'[用户不存在-'+u.id+']':esc(u.username))+'\')';
-	html+='<div class="tn-item'+sel+'" onclick="'+clickFn+'" style="padding-left:12px;'+unameStyle+'" title="文件: '+u.file_count+' | 使用: '+fmtSize(u.used)+' / '+fmtSize(u.quota)+' ('+pct+'%)">'+
-	'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'+
-	esc(unameDisplay)+'</div>';}
-	html+='</div></div><div class="fs-main">';
-	if(!selectedUid){
-	html+='<div style="margin-bottom:10px;font-size:14px;font-weight:600;color:#555">用户列表（'+users.length+' 人）</div>'+
-	'<table class="fs-admin-table"><tbody>';
-		for(var i=0;i<users.length;i++){
-	var u=users[i];var pct=u.quota>0?Math.round(u.used/u.quota*100):0;
-	var pctCls=pct>=90?' style="color:#ff3b30;font-weight:600"':(pct>=75?' style="color:#ff9500"':'');
-	var isOrphan=u.username===null;
-	var unameDisplay=isOrphan?'[用户不存在-'+u.id+']':esc(u.username);
-	var unameStyle=isOrphan?' style="color:#ff3b30"':'';
-	var escName=isOrphan?esc('[用户不存在-'+u.id+']'):esc(u.username);
-	html+='<tr><td><span class="uname"'+unameStyle+' onclick="fsShowUserFiles(\''+esc(u.id)+'\',\''+escName+'\')">'+unameDisplay+'</span></td>'
-	+'<td>'+u.file_count+' 个文件</td>'
-	+'<td>'+fmtSize(u.used)+' / '+fmtSize(u.quota)+' <span'+pctCls+'>('+pct+'%)</span></td>'
-	+'<td><button class="fs-btn" onclick="event.stopPropagation();fsShowSetQuota(\''+esc(u.id)+'\',\''+escName+'\','+u.quota+')">>修改配额</button>'
-	+'<button class="fs-btn" onclick="event.stopPropagation();fsShowUserFiles(\''+esc(u.id)+'\',\''+escName+'\')">查看文件</button>'
-	+'<button class="fs-btn" onclick="event.stopPropagation();fsShowUserSharesPage(\''+esc(u.id)+'\',\''+escName+'\')">分享</button></td></tr>';}
-	html+='</tbody></table>';
-	if(_adminSharesLoaded&&_adminSharesLoaded.length>0){
-	html+='<h3 style="font-size:15px;margin:20px 0 10px;color:#555;font-weight:600">最近分享（'+_adminSharesLoaded.length+'）</h3>';
-	var showShares=_adminSharesLoaded.slice(0,30);
-	for(var i=0;i<showShares.length;i++){
-	var s=showShares[i];var pwd=s.has_password?'[加密] ':'';
-	var ownerExists=false;for(var _ui=0;_ui<users.length;_ui++){if(users[_ui].id===s.owner_id){ownerExists=true;break}}
-	var ownerDisplay=ownerExists?esc(s.owner_name||s.owner_id||'?'):'[用户不存在-'+s.owner_id+']';
-	var ownerStyle=ownerExists?'':' style="color:#ff3b30"';
-	var owner='<span class="uname"'+ownerStyle+' onclick="fsShowUserSharesPage(\''+esc(s.owner_id)+'\',\''+(ownerExists?esc(s.owner_name||s.owner_id||'?'):'[用户不存在-'+s.owner_id+']')+'\')">'+ownerDisplay+'</span>';
-	html+='<div class="fs-share-item"><div class="info"><div class="name">'+pwd+esc(s.name)+'</div><div class="meta">'+owner+' · '+fmtTime(s.created_at)+(s.expires_at?' · 过期:'+fmtTime(s.expires_at):'')+'</div></div>'+
-	'<a class="fs-btn" href="/Tool/files.html?share='+s.code+'" target="_blank">打开</a>'+
-	'<button class="fs-btn danger" onclick="fsAdminDelShare(\''+s.code+'\')">删除</button></div>';}}
-	}
-	html+='</div></div>';
-	c.innerHTML=html;
-	var treeEl=$('adm-user-tree');
-	if(treeEl&&selectedUid){treeEl.querySelectorAll('.tn-cur').forEach(function(e){e.scrollIntoView({block:'nearest'})})}}
+    // ── 管理工具函数 ──
+    window.fsShowSetQuota = function (uid, uname, q) {
+      $('fs-quota-user').textContent = '用户: ' + uname;
+      var units = [{ v: 1073741824, n: 'GB' }, { v: 1048576, n: 'MB' }, { v: 1024, n: 'KB' }, { v: 1, n: 'B' }];
+      var sel = $('fs-quota-unit');
+      for (var ui = 0; ui < units.length; ui++) {
+        if (q >= units[ui].v || ui === units.length - 1) { $('fs-quota-input').value = q / units[ui].v; sel.value = units[ui].v; break }
+      }
+      $('fs-quota-modal').classList.add('show');
+      window._fsQuotaUid = uid
+    };
+    window.fsDoSetQuota = function () {
+      var q = $('fs-quota-input').value; var unit = parseInt($('fs-quota-unit').value); var uid = window._fsQuotaUid; if (!uid || !q) return;
+      $('fs-quota-modal').classList.remove('show');
+      api('POST', '/api/bbs/files/admin/quota', JSON.stringify({ user_id: uid, quota: Math.round(parseFloat(q) * unit) })).then(function (r) {
+        if (r.ok) { toast('配额已更新'); loadAdmin() } else toast('设置失败: ' + (r.error || '未知'))
+      })
+    };
 
-	// ── 用户文件浏览（供侧边栏点击） ──
-	window.fsShowUserFiles=function(uid,uname){
-	_adminRenderUsers(uid); // 高亮侧边栏
-	window._adminUid=uid;window._adminUname=uname;
-	window._adminPATH=[{id:null,name:uname+' \xe7\x9a\x84\xe6\x96\x87\xe4\xbb\xb6'}];window._adminCUR=null;window._adminAllFiles=[];
-	Promise.all([
-	api('GET','/api/bbs/files/admin/files?user_id='+uid),
-	api('GET','/api/bbs/files/admin/tree?user_id='+uid)
-	]).then(function(resp){
-	var r=resp[0];var tr=resp[1];
-	if(!r.ok||!r.files){var mc=$('fs-tab-admin');if(mc){var me=mc.querySelector('.fs-main');if(me)me.innerHTML='<div class="fs-empty">\xe5\x8a\xa0\xe8\xbd\xbd\xe5\xa4\xb1\xe8\xb4\xa5</div>'};return}
-	window._adminAllFiles=r.files;
-	_adminRender(r.files||[],tr.ok?tr.folders:[])
-	}).catch(function(){toast('\xe7\xbd\x91\xe7\xbb\x9c\xe9\x94\x99\xe8\xaf\xaf')})};
-	function _adminRender(files,folders){
-	folders=folders||[];files=files||[];
-	var cmap={};for(var i=0;i<files.length;i++){var pid=files[i].parent_id||'';if(!cmap[pid])cmap[pid]=[];cmap[pid].push(files[i])}
-	var curId=window._adminCUR;
-	// 在 fs-main 中渲染
-	var mainEl=document.querySelector('#fs-tab-admin .fs-main');
-	if(!mainEl)return;
-	var html='<div style="margin-bottom:10px"><button class="fs-btn" onclick="loadAdmin()">\xe2\x86\x90 返回</button> <strong>'+esc(window._adminUname)+'</strong> 的文件</div>'+
-	'<div class="fs-layout"><div class="fs-sidebar"><div class="fs-sidebar-title">文件夹</div><div class="fs-tree" id="adm-tree">';
-	var rootCls=!curId?' tn-cur':'';
-	html+='<div class="tn-item'+rootCls+'" onclick="_adminNavTo(0)" style="padding-left:12px;font-weight:600">'+
-	'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'+
-	'<span>根目录</span></div>';
-	html+=_adminBuildTree(folders,null,1)+'</div></div><div class="fs-main">';
-	// 面包屑
-	html+='<div class="fs-toolbar"><div class="fs-path">';
-	var p=window._adminPATH;
-	for(var i=0;i<p.length;i++){
-	if(i>0)html+='<span>/</span>';
-	if(i===p.length-1)html+='<span>'+esc(p[i].name)+'</span>';
-	else html+='<a onclick="_adminNavTo('+i+')">'+esc(p[i].name)+'</a>'}
-	html+='</div><div class="spacer"></div></div>';
-	// 文件列表
-	var items=cmap[curId||'']||[];
-	if(items.length===0)html+='<div class="fs-empty">文件夹\xe4\xb8\xba\xe7\xa9\xba</div>';
-	else{
-	html+='<div class="fs-list">';
-	for(var i=0;i<items.length;i++){
-	var f=items[i];
-	var ico=f.type==='folder'?'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>':'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#399FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-	var meta=f.type==='folder'?'文件夹':(fmtSize(f.size)+(f.uploaded_at?' \xc2\xb7 '+fmtTime(f.uploaded_at):''));
-	var acts='';
-	if(f.type==='folder'){
-	acts='<button class="fs-btn" data-fid="'+f.id+'" data-act="dlzip">下载ZIP</button>';
-	acts+='<button class="fs-btn" data-fid="'+f.id+'" data-fn="'+esc(f.name)+'" data-act="del">删除</button>';}
-	else{
-	acts='<button class="fs-btn" data-fid="'+f.id+'" data-fn="'+esc(f.name)+'" data-act="dl">下载</button>';
-	acts+='<button class="fs-btn danger" data-fid="'+f.id+'" data-fn="'+esc(f.name)+'" data-act="del">删除</button>';}
-	html+='<div class="fs-item"><div class="ico '+(f.type==='folder'?'folder':'')+'"'+(f.type==='folder'?'onclick="_adminNavInto(\''+f.id+'\',\''+esc(f.name)+'\')"':'')+'>'+ico+'</div>'+
-	'<div class="info"><div class="name">'+esc(f.name)+'</div><div class="meta">'+meta+'</div></div><div class="acts">'+acts+'</div></div>';}
-	html+='</div>';}
-	html+='</div></div>';
-	mainEl.innerHTML=html};
-	function _adminBuildTree(folders,pid,level){
-	var h='';var kids=[];
-	for(var i=0;i<folders.length;i++){if(folders[i].parent_id===pid)kids.push(folders[i])}
-	kids.sort(function(a,b){return a.name.localeCompare(b.name)});
-	for(var i=0;i<kids.length;i++){
-	var f=kids[i];var cur=f.id==window._adminCUR;
-	var cls=cur?' tn-cur':'';
-	var pad='padding-left:'+(12+level*16)+'px';
-	h+='<div class="tn-item'+cls+'" style="'+pad+'" onclick="_adminTreeNav(\''+f.id+'\')">'+
-	'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'+
-	'<span>'+esc(f.name)+'</span></div>';
-	h+=_adminBuildTree(folders,f.id,level+1)}
-	return h}
-	function _adminResolvePath(folderId){
-	var fmap={};var fl=window._adminAllFiles;
-	for(var i=0;i<fl.length;i++){if(fl[i].type==='folder')fmap[fl[i].id]=fl[i]}
-	var stack=[];var cur=folderId;
-	while(cur&&fmap[cur]){stack.unshift({id:fmap[cur].id,name:fmap[cur].name});cur=fmap[cur].parent_id}
-	return stack}
-	window._adminNavTo=function(idx){
-	var p=window._adminPATH;if(idx>=p.length-1)return;
-	window._adminPATH=p.slice(0,idx+1);
-	window._adminCUR=window._adminPATH[window._adminPATH.length-1].id;
-	api('GET','/api/bbs/files/admin/tree?user_id='+window._adminUid).then(function(tr){
-	_adminRender(window._adminAllFiles,tr.ok?tr.folders:[])})};
-	window._adminNavInto=function(id,name){
-	window._adminCUR=id;window._adminPATH.push({id:id,name:name});
-	api('GET','/api/bbs/files/admin/tree?user_id='+window._adminUid).then(function(tr){
-	_adminRender(window._adminAllFiles,tr.ok?tr.folders:[])})};
-	window._adminTreeNav=function(id){
-	var segs=_adminResolvePath(id);if(segs.length===0)return;
-	window._adminPATH=[{id:null,name:window._adminUname+' \xe7\x9a\x84\xe6\x96\x87\xe4\xbb\xb6'}].concat(segs);
-	window._adminCUR=id;
-	api('GET','/api/bbs/files/admin/tree?user_id='+window._adminUid).then(function(tr){
-	_adminRender(window._adminAllFiles,tr.ok?tr.folders:[])})};
-	// \xe7\xae\xa1\xe7\x90\x86\xe5\x91\x98\xe6\x96\x87\xe4\xbb\xb6\xe6\xa0\x91\xe7\x82\xb9\xe5\x87\xbb\xe4\xba\x8b\xe4\xbb\xb6
-	document.addEventListener('click',function(e){
-	var btn=e.target.closest('[data-act]');if(!btn)return;
-	var id=btn.dataset.fid;var fn=btn.dataset.fn||'';
-	if(btn.dataset.act==='dl'){fsDownload(id,fn);}
-	else if(btn.dataset.act==='dlzip'){fsDownload(id,fn+'.zip');}
-	else if(btn.dataset.act==='del'){if(confirm('\xe7\xa1\xae\xe5\xae\x9a\xe5\x88\xa0\xe9\x99\xa4 "'+fn+'" \xe5\x90\x97\xef\xbc\x9f'))fsDeleteItem(id,fn);}
-	});;
+    window.fsShowUserSharesPage = function (uid, uname) {
+      var c = $('fs-tab-admin'); if (!c) return;
+      c.innerHTML = '<div style="text-align:center;padding:40px;color:#bbb;">加载中…</div>';
+      api('GET', '/api/bbs/files/admin/shares?user_id=' + uid).then(function (r) {
+        if (!r.ok || !r.shares) { c.innerHTML = '<div class="fs-empty">加载失败</div>'; return }
+        var html = '<div style="margin-bottom:10px"><button class="fs-btn" onclick="loadAdmin()">←返回</button> <strong>' + esc(uname) + '</strong> 的分享链接 (' + r.shares.length + ')</div>';
+        if (r.shares.length === 0) { c.innerHTML = html + '<div class="fs-empty">该用户暂无分享链接</div>'; return }
+        for (var i = 0; i < r.shares.length; i++) {
+          var s = r.shares[i];
+          var pwd = s.has_password ? '[加密] ' : '[公开] ';
+          var exp = s.expires_at ? ' ·过期:' + fmtTime(s.expires_at) : (s.expires_at === 0 ? ' ·永不过期' : '');
+          var url = window.location.origin + '/Tool/files.html?share=' + s.code;
+          html += '<div class="fs-share-item">' +
+            '<div class="info"><div class="name">' + pwd + esc(s.name) + '</div><div class="meta">' + fmtTime(s.created_at) + exp + ' ·类型: ' + (s.type || '文件') + '</div></div>' +
+            '<a class="fs-btn" href="' + url + '" target="_blank">打开</a>' +
+            '<button class="fs-btn" onclick="navigator.clipboard.writeText(\'' + url + '\');toast(\'已复制\')">复制</button>' +
+            '<button onclick="if(confirm(\'确定删除此分享？\')){api(\'POST\',\'/api/bbs/files/share/\' + s.code + \'/delete\').then(function(r2){if(r2.ok){toast(\'已删除\');fsShowUserSharesPage(\'\' + uid + \'\',\'' + esc(uname) + '\')}else toast(\'删除失败\')})}"else toast(\'删除失败\')})}">删除</button></div>';
+        }
+        c.innerHTML = html
+      })
+    };
+    window.fsAdminDelShare = function (code) { if (!confirm('确定删除此分享？')) return; api('POST', '/api/bbs/files/share/' + code + '/delete').then(function (r) { if (r.ok) { toast('已删除'); loadAdmin() } else toast('删除失败') }) };
 
-	// ── 管理工具函数 ──
-	window.fsShowSetQuota=function(uid,uname,q){
-	$('fs-quota-user').textContent='\xe7\x94\xa8\xe6\x88\xb7: '+uname;
-	var units=[{v:1073741824,n:'GB'},{v:1048576,n:'MB'},{v:1024,n:'KB'},{v:1,n:'B'}];
-	var sel=$('fs-quota-unit');
-	for(var ui=0;ui<units.length;ui++){
-	if(q>=units[ui].v||ui===units.length-1){$('fs-quota-input').value=q/units[ui].v;sel.value=units[ui].v;break}}
-	$('fs-quota-modal').classList.add('show');
-	window._fsQuotaUid=uid};
-	window.fsDoSetQuota=function(){
-	var q=$('fs-quota-input').value;var unit=parseInt($('fs-quota-unit').value);var uid=window._fsQuotaUid;if(!uid||!q)return;
-	$('fs-quota-modal').classList.remove('show');
-	api('POST','/api/bbs/files/admin/quota',JSON.stringify({user_id:uid,quota:Math.round(parseFloat(q)*unit)})).then(function(r){
-	if(r.ok){toast('\xe9\x85\x8d\xe9\xa2\x9d\xe5\xb7\xb2\xe6\x9b\xb4\xe6\x96\xb0');loadAdmin()}else toast('\xe8\xae\xbe\xe7\xbd\xae\xe5\xa4\xb1\xe8\xb4\xa5: '+(r.error||'\xe6\x9c\xaa\xe7\x9f\xa5'))})};
-
-	window.fsShowUserSharesPage=function(uid,uname){
-	var c=$('fs-tab-admin');if(!c)return;
-	c.innerHTML='<div style="text-align:center;padding:40px;color:#bbb;">\xe5\x8a\xa0\xe8\xbd\xbd\xe4\xb8\xad\xe2\x80\xa6</div>';
-	api('GET','/api/bbs/files/admin/shares?user_id='+uid).then(function(r){
-	if(!r.ok||!r.shares){c.innerHTML='<div class="fs-empty">\xe5\x8a\xa0\xe8\xbd\xbd\xe5\xa4\xb1\xe8\xb4\xa5</div>';return}
-	var html='<div style="margin-bottom:10px"><button class="fs-btn" onclick="loadAdmin()">\xe2\x86\x90 \xe8\xbf\x94\xe5\x9b\x9e</button> <strong>'+esc(uname)+'</strong> \xe7\x9a\x84\xe5\x88\x86\xe4\xba\xab\xe9\x93\xbe\xe6\x8e\xa5 ('+r.shares.length+')</div>';
-	if(r.shares.length===0){c.innerHTML=html+'<div class="fs-empty">\xe8\xaf\xa5\xe7\x94\xa8\xe6\x88\xb7\xe6\x9a\x82\xe6\x97\xa0\xe5\x88\x86\xe4\xba\xab\xe9\x93\xbe\xe6\x8e\xa5</div>';return}
-	for(var i=0;i<r.shares.length;i++){
-	var s=r.shares[i];
-	var pwd=s.has_password?'[\xe5\x8a\xa0\xe5\xaf\x86] ':'[\xe5\x85\xac\xe5\xbc\x80] ';
-	var exp=s.expires_at?' \xc2\xb7 \xe8\xbf\x87\xe6\x9c\x9f:'+fmtTime(s.expires_at):(s.expires_at===0?' \xc2\xb7 \xe6\xb0\xb8\xe4\xb8\x8d\xe8\xbf\x87\xe6\x9c\x9f':'');
-	var url=window.location.origin+'/Tool/files.html?share='+s.code;
-	html+='<div class="fs-share-item">'+
-	'<div class="info"><div class="name">'+pwd+esc(s.name)+'</div><div class="meta">'+fmtTime(s.created_at)+exp+' \xc2\xb7 \xe7\xb1\xbb\xe5\x9e\x8b: '+(s.type||'\xe6\x96\x87\xe4\xbb\xb6')+'</div></div>'+
-	'<a class="fs-btn" href="'+url+'" target="_blank">\xe6\x89\x93\xe5\xbc\x80</a>'+
-	'<button class="fs-btn" onclick="navigator.clipboard.writeText(\''+url+'\');toast(\'\xe5\xb7\xb2\xe5\xa4\x8d\xe5\x88\xb6\')">\xe5\xa4\x8d\xe5\x88\xb6</button>'+
-	'<button class="fs-btn danger" onclick="if(confirm(\'\xe7\xa1\xae\xe5\xae\x9a\xe5\x88\xa0\xe9\x99\xa4\xe6\xad\xa4\xe5\x88\x86\xe4\xba\xab\xef\xbc\x9f\')){api(\'POST\',\'/api/bbs/files/share/'+s.code+'/delete\').then(function(r2){if(r2.ok){toast(\'\xe5\xb7\xb2\xe5\x88\xa0\xe9\x99\xa4\');fsShowUserSharesPage(\''+uid+'\',\''+esc(uname)+'\')}else toast(\'\xe5\x88\xa0\xe9\x99\xa4\xe5\xa4\xb1\xe8\xb4\xa5\')})}">\xe5\x88\xa0\xe9\x99\xa4</button></div>';}
-	c.innerHTML=html})};
-	window.fsAdminDelShare=function(code){if(!confirm('\xe7\xa1\xae\xe5\xae\x9a\xe5\x88\xa0\xe9\x99\xa4\xe6\xad\xa4\xe5\x88\x86\xe4\xba\xab\xef\xbc\x9f'))return;api('POST','/api/bbs/files/share/'+code+'/delete').then(function(r){if(r.ok){toast('\xe5\xb7\xb2\xe5\x88\xa0\xe9\x99\xa4');loadAdmin()}else toast('\xe5\x88\xa0\xe9\x99\xa4\xe5\xa4\xb1\xe8\xb4\xa5')})};
-
-// ── 启动 ──
-detect();
-})();
-</script>
+    // ── 启动 ──
+    detect();
+}) ();
+  </script>
 </body>
+
 </html>

@@ -40,6 +40,8 @@
     }
     .bbs-lightbox .close:hover { background: rgba(255,255,255,0.25); }
     .bbs-img-frame img { cursor: pointer; }
+    [data-theme="dark"] .bbs-lightbox { background: rgba(0,0,0,0.92); }
+    [data-theme="dark"] .bbs-lightbox .close { background: rgba(255,255,255,0.08); }
   </style>
 </head>
 <body>
@@ -63,9 +65,10 @@
         <div class="bbs-user-area">
           <div id="bbs-admin-actions" style="display:none;font-size:12px;">
             <button class="bbs-login-btn" onclick="bbsOpenControlCenter()" title="控制中心"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> 控制中心</button>
+            <button class="bbs-login-btn" id="bbs-review-btn" onclick="bbsOpenReviewPanel()" title="内容审核" style="display:none;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> 审核 <span id="bbs-review-count" style="display:none;background:#ff9500;color:#fff;font-size:10px;min-width:15px;height:15px;border-radius:7px;align-items:center;justify-content:center;font-weight:600;line-height:1;padding:0 3px;box-sizing:border-box;margin-left:2px;"></span></button>
           </div>
           <span id="bbs-notif-bell" style="display:none;position:relative;cursor:pointer;margin:0 4px;padding:4px;" onclick="bbsOpenNotifications()" title="通知">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;color:#888;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;" class="bbs-bell-icon"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             <span id="bbs-notif-count" style="position:absolute;top:-2px;right:-4px;background:#ff3b30;color:#fff;font-size:10px;min-width:15px;height:15px;border-radius:7px;display:none;align-items:center;justify-content:center;font-weight:600;line-height:1;padding:0 3px;box-sizing:border-box;"></span>
           </span>
           <div id="bbs-user-badge" class="bbs-user-badge" style="display:none;">
@@ -181,7 +184,7 @@
   <div class="bbs-post-header">
     <div class="bbs-post-header-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>控制中心</div>
     <div class="bbs-post-header-actions">
-      <span onclick="bbsCloseControlCenter()" style="cursor:pointer;font-size:22px;color:#999;line-height:1;padding:4px;border-radius:4px;transition:color 0.15s;" onmouseover="this.style.color='#333'" onmouseout="this.style.color='#999'" title="关闭"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
+      <span onclick="bbsCloseControlCenter()" class="bbs-cc-close" title="关闭"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
     </div>
   </div>
   <div class="bbs-post-body">
@@ -306,13 +309,34 @@
         <svg id="bbs-eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
       </span>
     </div>
-    <div style="font-size:13px;color:#888;margin-bottom:4px;">类型：</div>
-    <select id="bbs-user-form-role">
-      <option value="user">普通用户</option>
-      <option value="admin">管理员</option>
-    </select>
-    <div style="font-size:13px;color:#888;margin-bottom:4px;">标签：</div>
-    <input type="text" id="bbs-user-form-tags" placeholder="用英文逗号分隔，下划线开头仅管理员可见" autocomplete="off">
+    <div style="margin-top:6px;border-top:1px solid rgba(0,0,0,0.06);padding-top:8px;">
+      <div onclick="var n=this.nextElementSibling;n.style.display=n.style.display==='none'?'':'none';this.querySelector('.bbs-chevron').textContent=n.style.display==='none'?'▶':'▼'" style="font-size:13px;color:#888;cursor:pointer;user-select:none;display:flex;align-items:center;gap:4px;">
+        <span class="bbs-chevron">▶</span> 其他设置
+      </div>
+      <div style="display:none;margin-top:8px;">
+        <div style="font-size:13px;color:#888;margin-bottom:4px;">类型：</div>
+        <select id="bbs-user-form-role">
+          <option value="user">普通用户</option>
+          <option value="admin">管理员</option>
+        </select>
+        <div style="font-size:13px;color:#888;margin-bottom:4px;margin-top:4px;">标签：</div>
+        <input type="text" id="bbs-user-form-tags" placeholder="逗号分隔，_开头隐藏" autocomplete="off">
+        <div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap;">
+          <label style="font-size:13px;color:#555;display:flex;align-items:center;gap:4px;cursor:pointer;">
+            <input type="checkbox" id="bbs-user-form-muted-post" style="accent-color:#ff3b30;"> 禁止发帖
+          </label>
+          <label style="font-size:13px;color:#555;display:flex;align-items:center;gap:4px;cursor:pointer;">
+            <input type="checkbox" id="bbs-user-form-muted-reply" style="accent-color:#ff3b30;"> 禁止评论
+          </label>
+          <label style="font-size:13px;color:#555;display:flex;align-items:center;gap:4px;cursor:pointer;">
+            <input type="checkbox" id="bbs-user-form-review-post" checked> 发帖需审
+          </label>
+          <label style="font-size:13px;color:#555;display:flex;align-items:center;gap:4px;cursor:pointer;">
+            <input type="checkbox" id="bbs-user-form-review-reply" checked> 评论需审
+          </label>
+        </div>
+      </div>
+    </div>
     <div class="bbs-modal-actions">
       <button class="bbs-modal-primary" onclick="bbsSaveUser()">保存</button>
       <button class="bbs-modal-secondary" onclick="bbsCloseUserForm()">取消</button>
@@ -544,7 +568,7 @@
       if (showPanel) {
         var list = document.getElementById('bbs-notif-list');
         if (!res.notifications || res.notifications.length === 0) {
-          list.innerHTML = '<div style="color:#999;text-align:center;padding:60px 0;">暂无通知</div>';
+          list.innerHTML = '<div class="bbs-empty" style="padding:60px 0;">暂无通知</div>';
           return;
         }
         var html = '';
@@ -619,6 +643,8 @@
           document.getElementById('bbs-username').textContent = USER;
           if (ROLE === 'admin') {
             document.getElementById('bbs-admin-actions').style.display = '';
+            document.getElementById('bbs-review-btn').style.display = '';
+            bbsLoadReviewCount();
           }
           document.getElementById('bbs-notif-bell').style.display = '';
           bbsLoadNotifs(false);
@@ -652,7 +678,12 @@
         var ac = res.maintenance.auto_close_at;
         if (ac && ac > 0) {
           var d = new Date(ac * 1000);
-          txt += '（预计 ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2) + ' 恢复）';
+          var now = new Date();
+          if (d.toDateString() === now.toDateString()) {
+            txt += '（预计今日 ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2) + ' 恢复）';
+          } else {
+            txt += '（预计 ' + d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2) + ' ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2) + ' 恢复）';
+          }
         }
         banner.textContent = txt;
         banner.style.display = '';
@@ -677,6 +708,24 @@
       }
     });
   }, 60000);
+
+  // 审核未读数轮询
+  function bbsLoadReviewCount() {
+    api('GET', '/api/bbs/reviews/pending').then(function(res) {
+      if (!res.ok) return;
+      var total = (res.pending_topics || 0) + (res.pending_replies || 0);
+      var badge = document.getElementById('bbs-review-count');
+      if (total > 0) {
+        badge.style.display = 'inline-flex';
+        badge.textContent = total > 99 ? '99+' : total;
+      } else {
+        badge.style.display = 'none';
+      }
+    }).catch(function() {});
+  }
+  setInterval(function() {
+    if (ROLE === 'admin') bbsLoadReviewCount();
+  }, 120000);
 
   // ── 登录 ──
 
@@ -797,9 +846,15 @@
         var tHidden = (hiddenTagsMap && hiddenTagsMap[t.author_id]) || null;
         var badges = authorBadges(t.author_id, t.author_role, t.author_tags, tHidden);
         var preview = t.content_preview ? highlightText(t.content_preview, SEARCH_QUERY) : '';
-        html += '<div class="bbs-topic-item" onclick="bbsOpenTopic(\'' + t.id + '\')">' +
+        var reviewBadge = '';
+        if (t.review_status === 'pending') {
+          reviewBadge = '<span class="bbs-role-badge review-pending">待审核</span>';
+        } else if (t.review_status === 'rejected') {
+          reviewBadge = '<span class="bbs-role-badge review-rejected">未通过</span>';
+        }
+        html += '<div class="bbs-topic-item' + (t.review_status === 'rejected' ? ' bbs-topic-rejected' : '') + (t.review_status === 'pending' ? ' bbs-topic-pending' : '') + '" onclick="bbsOpenTopic(\'' + t.id + '\')">' +
           '<div class="bbs-topic-main">' +
-          '<div class="bbs-topic-title">' + highlightText(t.title, SEARCH_QUERY) + '</div>' +
+          '<div class="bbs-topic-title">' + reviewBadge + highlightText(t.title, SEARCH_QUERY) + '</div>' +
           (preview ? '<div class="bbs-topic-preview">' + preview + '</div>' : '') +
           '<div class="bbs-topic-meta">' +
           '<span class="bbs-author-link" onclick="event.stopPropagation();bbsOpenUser(\'' + escapeHtml(t.author_id || '') + '\')">' + highlightText(aname, SEARCH_QUERY) + '</span>' + badges +
@@ -962,6 +1017,20 @@
       if (topic.author_id && r.author_id && r.author_id === topic.author_id) {
         rBadges += '<span class="bbs-role-badge author">贴主</span>';
       }
+      // 回复审核状态
+      var rReviewBadge = '';
+      var rReviewActions = '';
+      if (r.review_status === 'pending') {
+        rReviewBadge = '<span class="bbs-role-badge review-pending" style="font-size:9px;padding:1px 5px;margin-left:3px;">待审</span>';
+        if (ROLE === 'admin') {
+          rReviewActions = '<span style="margin-left:6px;font-size:11px;white-space:nowrap;">' +
+            '<span onclick="event.stopPropagation();bbsReviewReply(\'' + topic.id + '\',\'' + (r.id || '') + '\',\'approve\')" style="cursor:pointer;color:#34c759;padding:2px 5px;">通过</span>' +
+            '<span onclick="event.stopPropagation();bbsReviewReply(\'' + topic.id + '\',\'' + (r.id || '') + '\',\'reject\')" style="cursor:pointer;color:#ff3b30;padding:2px 5px;">拒绝</span>' +
+            '</span>';
+        }
+      } else if (r.review_status === 'rejected') {
+        rReviewBadge = '<span class="bbs-role-badge review-rejected" style="font-size:9px;padding:1px 5px;margin-left:3px;">未通过</span>';
+      }
       var canDelReply = TOKEN && (ROLE === 'admin' || r.author_id === USER_ID);
       var replyBtn = TOKEN ? '<span class="bbs-reply-to-btn" onclick="bbsSetReplyTo(\'' + topic.id + '\',\'' + (r.id || '') + '\',\'' + escapeHtml(rAuthor).replace(/'/g, "\'") + '\')">回复</span>' : '';
       var delBtn = canDelReply ? '<span class="bbs-reply-del" onclick="bbsDeleteReply(\'' + topic.id + '\',\'' + (r.id || '') + '\')" title="删除"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>' : '';
@@ -975,9 +1044,11 @@
         }
       }
       var cls = isChild ? ' bbs-reply-child' : '';
+      if (r.review_status === 'pending') cls += ' bbs-reply-pending';
+      else if (r.review_status === 'rejected') cls += ' bbs-reply-rejected';
       return '<div class="bbs-reply-item' + cls + '" id="r_' + (r.id || '') + '">' +
-        '<div class="bbs-reply-author"><span class="bbs-author-link" onclick="bbsOpenUser(\'' + escapeHtml(r.author_id || '') + '\')">' + escapeHtml(rAuthor) + '</span>' + rBadges + '</div>' +
-        delBtn + replyBtn +
+        '<div class="bbs-reply-author"><span class="bbs-author-link" onclick="bbsOpenUser(\'' + escapeHtml(r.author_id || '') + '\')">' + escapeHtml(rAuthor) + '</span>' + rBadges + rReviewBadge + '</div>' +
+        delBtn + replyBtn + rReviewActions +
         (isChild ? refHtml : '') +
         '<div class="bbs-reply-content">' + renderAtMentions(renderMarkdown(r.content), topic.user_map) + '</div>' +
         '<div class="bbs-reply-time">' + rt + '</div>' +
@@ -1025,11 +1096,30 @@
         '</div>';
     }
 
+      // 审核状态标记和审核按钮
+      var reviewBadgeDetail = '';
+      var reviewActionsDetail = '';
+      if (topic._review_status === 'pending') {
+        reviewBadgeDetail = '<span class="bbs-role-badge review-pending" style="margin-left:6px;">待审核</span>';
+      } else if (topic._review_status === 'rejected') {
+        reviewBadgeDetail = '<span class="bbs-role-badge review-rejected" style="margin-left:6px;">未通过</span>';
+      }
+      if (ROLE === 'admin' && topic._review_status && topic._review_status !== 'approved') {
+        reviewActionsDetail = '<span style="margin-left:8px;font-size:12px;">' +
+          '<button class="bbs-cc-btn" onclick="bbsReviewTopic(\'' + topic.id + '\',\'approve\')" style="border-color:#34c759;color:#34c759;padding:2px 10px;font-size:11px;">通过</button>' +
+          '<button class="bbs-cc-btn" onclick="bbsReviewTopic(\'' + topic.id + '\',\'reject\')" style="border-color:#ff3b30;color:#ff3b30;padding:2px 10px;font-size:11px;margin-left:4px;">拒绝</button>' +
+          '</span>';
+      } else if (ROLE === 'admin' && topic._review_status === 'approved') {
+        reviewActionsDetail = '<span style="margin-left:8px;font-size:11px;color:#999;">已通过' +
+          (topic._reviewed_by_name ? '（' + escapeHtml(topic._reviewed_by_name) + '）' : '') +
+          '<button class="bbs-cc-btn" onclick="bbsReviewTopic(\'' + topic.id + '\',\'pending\')" style="border-color:#ff9500;color:#ff9500;padding:2px 10px;font-size:11px;margin-left:6px;">标记待审</button></span>';
+      }
+
     detailEl.innerHTML =
       '<div class="bbs-detail">' +
       '<div class="bbs-detail-header">' +
       '<button class="bbs-detail-back" onclick="bbsCloseDetail()">← 返回列表</button>' +
-      '<div class="bbs-detail-title">' + escapeHtml(topic.title) + '</div>' +
+      '<div class="bbs-detail-title">' + escapeHtml(topic.title) + reviewBadgeDetail + reviewActionsDetail + '</div>' +
       '<div class="bbs-detail-meta">' +
       '<span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> <span class="bbs-author-link" onclick="event.stopPropagation();bbsOpenUser(\'' + escapeHtml(topic.author_id || '') + '\')">' + escapeHtml(topic.author_name || '账号不存在') + '</span>' + topicBadges + '</span>' +
       '<span>' + time + '</span>' +
@@ -1088,6 +1178,12 @@
       if (res && res.ok) {
         var roleLabel = res.role === 'admin' ? '管理员' : '用户';
         var badgesHtml = '<span class="bbs-role-badge ' + res.role + '">' + roleLabel + '</span>';
+        if (res.muted_post) {
+          badgesHtml += '<span class="bbs-role-badge" style="background:rgba(255,59,48,0.12);color:#ff3b30;">禁言</span>';
+        }
+        if (res.muted_reply) {
+          badgesHtml += '<span class="bbs-role-badge" style="background:rgba(255,149,0,0.12);color:#ff9500;">禁评</span>';
+        }
         if (res.tags && res.tags.length > 0) {
           for (var ti = 0; ti < res.tags.length; ti++) {
             badgesHtml += '<span class="bbs-role-badge custom">' + escapeHtml(res.tags[ti]) + '</span>';
@@ -1463,7 +1559,9 @@
         bbsOpenTopic(tid);
       } else if (res.error === 'unauthorized') {
         handleUnauthorized();
-      } else if (res.error === 'maintenance') {
+      } else if (res.error === 'muted') {
+          showToast(res.message || '你已被禁言');
+        } else if (res.error === 'maintenance') {
         showToast(res.message || '论坛维护中');
       } else {
         showToast('回复失败');
@@ -1490,6 +1588,8 @@
           bbsOpenTopic(topicId);
         } else if (res.error === 'unauthorized') {
           handleUnauthorized();
+        } else if (res.error === 'muted') {
+          showToast(res.message || '你已被禁言');
         } else if (res.error === 'maintenance') {
           showToast(res.message || '论坛维护中');
         } else {
@@ -1513,6 +1613,8 @@
           handleUnauthorized();
         } else if (res.error === 'forbidden') {
           showToast('无权删除');
+        } else if (res.error === 'muted') {
+          showToast(res.message || '你已被禁言');
         } else if (res.error === 'maintenance') {
           showToast(res.message || '论坛维护中');
         } else {
@@ -1532,6 +1634,8 @@
           handleUnauthorized();
         } else if (res.error === 'forbidden') {
           showToast('无权删除此帖子');
+        } else if (res.error === 'muted') {
+          showToast(res.message || '你已被禁言');
         } else if (res.error === 'maintenance') {
           showToast(res.message || '论坛维护中');
         } else {
@@ -1819,9 +1923,14 @@
         var autoClose = res.maintenance.auto_close_at;
         if (autoClose && autoClose > 0) {
           var d = new Date(autoClose * 1000);
-          document.getElementById('bbs-maint-end-display').textContent = '预计结束：'
-            + d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2)
-            + ' ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
+          var now = new Date();
+          var timeStr;
+          if (d.toDateString() === now.toDateString()) {
+            timeStr = '今日 ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
+          } else {
+            timeStr = d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2) + ' ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
+          }
+          document.getElementById('bbs-maint-end-display').textContent = '预计结束：' + timeStr;
         } else {
           document.getElementById('bbs-maint-end-display').textContent = '不自动结束';
         }
@@ -1942,6 +2051,68 @@
     });
   };
 
+  // ── 审核系统 ──
+
+  window.bbsReviewTopic = function(tid, action) {
+    api('POST', '/api/bbs/reviews/topic/' + tid, { action: action }).then(function(res) {
+      if (res.ok) {
+        showToast(action === 'approve' ? '已通过' : '已拒绝');
+        bbsOpenTopic(tid);
+      } else {
+        showToast('操作失败: ' + (res.error || '未知错误'));
+      }
+    });
+  };
+
+  window.bbsReviewReply = function(tid, rid, action) {
+    api('POST', '/api/bbs/reviews/topic/' + tid + '/reply/' + rid, { action: action }).then(function(res) {
+      if (res.ok) {
+        showToast(action === 'approve' ? '回复已通过' : '回复已拒绝');
+        bbsOpenTopic(tid);
+      } else {
+        showToast('操作失败: ' + (res.error || '未知错误'));
+      }
+    });
+  };
+
+  window.bbsOpenReviewPanel = function() {
+    bbsCloseControlCenter();
+    var listEl = document.getElementById('bbs-topic-list');
+    var detailEl = document.getElementById('bbs-detail');
+    listEl.style.display = 'none';
+    detailEl.style.display = '';
+    document.getElementById('bbs-fab').classList.add('hidden');
+    detailEl.innerHTML = '<div class="bbs-loading"><div class="bbs-loading-spinner"></div>加载审核列表…</div>';
+    api('GET', '/api/bbs/reviews/pending').then(function(res) {
+      if (!res.ok) {
+        detailEl.innerHTML = '<div class="bbs-detail"><button class="bbs-detail-back" onclick="bbsCloseDetail()">← 返回</button><div style="text-align:center;padding:48px;color:#bbb;">加载失败</div></div>';
+        return;
+      }
+      var html = '<div class="bbs-detail"><button class="bbs-detail-back" onclick="bbsCloseDetail()">← 返回</button>' +
+        '<div class="bbs-detail-title" style="font-size:16px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> 内容审核 <span style="font-size:13px;color:#999;font-weight:400;">待审核帖子 ' + (res.pending_topics || 0) + ' · 待审核回复 ' + (res.pending_replies || 0) + '</span></div>';
+      if (!res.topics || res.topics.length === 0) {
+        html += '<div style="text-align:center;padding:48px;color:#bbb;font-size:14px;">✅ 没有待审核的内容</div>';
+      } else {
+        html += '<div class="bbs-topic-list" style="margin-top:12px;">';
+        for (var i = 0; i < res.topics.length; i++) {
+          var t = res.topics[i];
+          var timeStr = new Date(t.created_at * 1000).toLocaleString();
+          var typeLabel = t.review_type === 'reply' ? '（回复待审' + (t.pending_reply_count > 0 ? '×' + t.pending_reply_count : '') + '）' : '';
+          html += '<div class="bbs-topic-item" onclick="bbsOpenTopic(\'' + t.id + '\')">' +
+            '<div class="bbs-topic-main">' +
+            '<div class="bbs-topic-title"><span class="bbs-role-badge review-pending" style="font-size:10px;">待审核</span> ' + escapeHtml(t.title) + ' ' + (t.review_type === 'reply' ? '<span style="font-size:11px;color:#ff9500;">' + typeLabel + '</span>' : '') + '</div>' +
+            '<div class="bbs-topic-meta"><span>' + escapeHtml(t.author_name) + '</span><span>·</span><span>' + timeStr + '</span></div>' +
+            '</div></div>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+      detailEl.innerHTML = html;
+    }).catch(function() {
+      detailEl.innerHTML = '<div class="bbs-detail"><button class="bbs-detail-back" onclick="bbsCloseDetail()">← 返回</button><div style="text-align:center;padding:48px;color:#bbb;">加载失败</div></div>';
+    });
+  };
+
   // ── 用户管理 ──
 
   function _randId() {
@@ -1955,7 +2126,7 @@
     api('GET', '/api/admin/users').then(function(res) {
       if (!res.ok || !res.users) { showToast('加载用户列表失败'); return; }
       var html = '<table class="bbs-cc-users-table">'
-        + '<tr><th>用户名</th><th>ID</th><th>角色</th><th>标签</th><th></th></tr>';
+        + '<tr><th>用户名</th><th>ID</th><th>角色</th><th>状态</th><th>标签</th><th></th></tr>';
       for (var i = 0; i < res.users.length; i++) {
         var u = res.users[i];
         var tagsHtml = (u.tags || []).map(function(t) {
@@ -1965,8 +2136,21 @@
           return escapeHtml(t);
         }).join(', ');
         var roleLabel = u.role === 'admin' ? '管理员' : '用户';
+        var statusHtml = '';
+        if (u.muted_post) statusHtml += '<span style="color:#ff3b30;font-size:11px;">禁言</span>';
+        if (u.muted_reply) { if (statusHtml) statusHtml += ' '; statusHtml += '<span style="color:#ff9500;font-size:11px;">禁评</span>'; }
+        if (u.review_post === false) {
+          if (statusHtml) statusHtml += ' ';
+          statusHtml += '<span style="color:#34c759;font-size:11px;">免审帖</span>';
+        }
+        if (u.review_reply === false) {
+          if (statusHtml) statusHtml += ' ';
+          statusHtml += '<span style="color:#34c759;font-size:11px;">免审评</span>';
+        }
+        if (!statusHtml) statusHtml = '<span style="color:#999;font-size:11px;">正常</span>';
         html += '<tr><td><span class="bbs-author-link" onclick="event.stopPropagation();bbsOpenUser(\'' + u.id + '\')">' + escapeHtml(u.username) + '</span></td><td style="font-size:11px;color:#999;">'
           + escapeHtml(u.id) + '</td><td>' + roleLabel + '</td>'
+          + '<td>' + statusHtml + '</td>'
           + '<td>' + tagsHtml + '</td>'
           + '<td class="bbs-cc-users-actions">'
           + '<button onclick="bbsEditUser(\'' + u.id + '\')">编辑</button>'
@@ -1986,6 +2170,10 @@
     document.getElementById('bbs-user-form-password').placeholder = '密码';
     document.getElementById('bbs-user-form-role').value = 'user';
     document.getElementById('bbs-user-form-tags').value = '';
+    document.getElementById('bbs-user-form-muted-post').checked = false;
+    document.getElementById('bbs-user-form-muted-reply').checked = false;
+    document.getElementById('bbs-user-form-review-post').checked = true;
+    document.getElementById('bbs-user-form-review-reply').checked = true;
     document.getElementById('bbs-user-form-error').style.display = 'none';
     // ID 输入
     var randId = _randId();
@@ -2010,6 +2198,10 @@
       document.getElementById('bbs-user-form-password').placeholder = '留空则不修改密码';
       document.getElementById('bbs-user-form-role').value = user.role || 'user';
       document.getElementById('bbs-user-form-tags').value = (user.tags || []).join(', ');
+      document.getElementById('bbs-user-form-muted-post').checked = !!user.muted_post;
+      document.getElementById('bbs-user-form-muted-reply').checked = !!user.muted_reply;
+      document.getElementById('bbs-user-form-review-post').checked = user.review_post !== false;
+      document.getElementById('bbs-user-form-review-reply').checked = user.review_reply !== false;
       document.getElementById('bbs-user-form-error').style.display = 'none';
       // ID 行（显示当前 ID，可修改）
       document.getElementById('bbs-user-form-new-id').value = user.id;
@@ -2033,6 +2225,10 @@
     }
 
     var body = { username: username, role: role, tags: tags };
+    body.muted_post = document.getElementById('bbs-user-form-muted-post').checked;
+    body.muted_reply = document.getElementById('bbs-user-form-muted-reply').checked;
+    body.review_post = document.getElementById('bbs-user-form-review-post').checked;
+    body.review_reply = document.getElementById('bbs-user-form-review-reply').checked;
     if (password) body.password = password;
 
     if (_editingUserId) {
@@ -2204,6 +2400,8 @@
           loadTopics();
         } else if (res.error === 'unauthorized') {
           handleUnauthorized();
+        } else if (res.error === 'muted') {
+          showToast(res.message || '你已被禁言');
         } else if (res.error === 'maintenance') {
           showToast(res.message || '论坛维护中');
           document.getElementById('bbs-post-modal').style.display = 'none';
